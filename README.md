@@ -55,6 +55,7 @@ You can use the Visual Studio 2022 project files, make sure that you copy the SD
 - You might need to install the SDL2 libraries:
 >sudo apt-get install libsdl2-dev<br>
 >sudo apt-get install libsdl2-ttf-dev
-- use the makefile
+- create a folder named linux where the application will be created to
+- run the makefile
 >make
 
