@@ -36,4 +36,6 @@ https://github.com/raduvarga/UA-Midi-Control
 
 ---
 
+https://github.com/franqulator/cuefinger
+
 Copyright © 2024 by Frank Brempel

@@ -141,6 +141,7 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="misc.h" />
     <ClInclude Include="network_win.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="simdjson.h" />
     <ClInclude Include="vector2d.h" />
     <ClInclude Include="wrapper.h" />
@@ -156,6 +157,12 @@
     <ClCompile Include="simdjson.cpp" />
     <ClCompile Include="vector2d.cpp" />
     <ClCompile Include="wrapper.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="cuefinger.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="app.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

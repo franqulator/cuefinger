@@ -3751,6 +3751,8 @@ int main(int argc, char* argv[]) {
 #endif
 
 	string path = string(SDL_GetBasePath());
+	size_t l = path.find_last_of("\\/", path.length() - 2);
+	path = path.substr(0, l + 1);
 	initLocalPath(path);
 
 	clearLog(APP_NAME + " " + APP_VERSION);
@@ -3790,10 +3792,10 @@ int main(int argc, char* argv[]) {
 			return 1;       
 		}
 
-		g_settings.x=rc.x;
-		g_settings.y=rc.y;
-		g_settings.w=rc.w;
-		g_settings.h=rc.h;
+		g_settings.x = rc.w / 4;
+		g_settings.y = rc.h / 4;
+		g_settings.w=rc.w / 2;
+		g_settings.h=rc.h / 2;
 	}
 
 	if (!g_settings.extended_logging) toLog("Extended logging is deactivated.\nYou can activate it in settings.json but keep in mind that it will slow down performance.");
