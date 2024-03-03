@@ -1,4 +1,4 @@
-Cuefinger 1.0 beta
+# Cuefinger 1.0 beta
 
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
@@ -18,42 +18,42 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ---
 
-Credits
+## Credits
 
-Idea & code
+Idea & code<br>
 Frank Brempel
 
-Graphics
+Graphics<br>
 Michael Brempel
 
-Cuefinger uses SDL2 and simdjson
-www.libsdl.org
-simdjson.org
+Cuefinger uses SDL2 and simdjson<br>
+www.libsdl.org<br>
+simdjson.org<br>
 
-Thanks to
-Antonio Radu Varga whose project UA-Midi-Control helped me to get started
+Thanks to<br>
+Antonio Radu Varga whose project UA-Midi-Control helped me to get started<br>
 https://github.com/raduvarga/UA-Midi-Control
 
 ---
 
-To run Cuefinger on Linux you might have to install the SDL2 runtimes:
+### To run Cuefinger on Linux you might have to install the SDL2 runtimes:
 - Open Terminal
-sudo apt-get install libsdl2-2.0
-sudo apt-get install libsdl-ttf2.0-0
+> sudo apt-get install libsdl2-2.0<br>
+> sudo apt-get install libsdl-ttf2.0-0
 
 ---
 
-How to compile on Windows 10/11:
-You need SDL2 developer package (https://github.com/libsdl-org/SDL/releases/tag/release-2.30.0).
+### How to compile on Windows 10/11:
+You need SDL2 developer package (https://github.com/libsdl-org/SDL/releases/tag/release-2.30.0).<br>
 You can use the Visual Studio 2022 project files, make sure that you copy the SDL2 include and bin into the project folder or change the include and lib paths in the gfx2d_sdl.h
 
-How to compile on Linux:
+### How to compile on Linux:
 - Open the Terminal in the project folder:
 - You might need to install the SDL2 libraries:
-sudo apt-get install libsdl2-dev zum kompilieren
-sudo apt-get install libsdl2-ttf-dev
+>sudo apt-get install libsdl2-dev<br>
+>sudo apt-get install libsdl2-ttf-dev
 - use the makefile
-make
+>make
 
 
 ---
