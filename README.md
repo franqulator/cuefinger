@@ -3,6 +3,9 @@
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
 
+In a recording studio this gives the studio musician the possibility to access the cue mix via a linux or windows tablet.
+Multiple connections from different divices at the same time are possible. E.g using an UA Apollo interface with 4 cue busses together with 4 tablet-pcs makes it possible for 4 musicians to each control their individual cue mix.
+
 Cuefinger 1 is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -55,7 +58,3 @@ You can use the Visual Studio 2022 project files, make sure that you copy the SD
 - use the makefile
 >make
 
-
----
-
-Copyright © 2024 by Frank Brempel
