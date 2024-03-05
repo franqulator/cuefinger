@@ -28,7 +28,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 GFXEngine *gfx = NULL;
 
 SDL_Window *g_window=NULL;
-SDL_TimerID g_timer_network1=0;
+SDL_TimerID g_timer_network_serverlist = 0;
+SDL_TimerID g_timer_network_timeout = 0;
+SDL_TimerID g_timer_network_send_timeout_msg = 0;
 
 Settings g_settings;
 
@@ -43,25 +45,25 @@ bool g_redraw = true;
 bool g_serverlist_defined = false;
 
 //Channel Layout (werden in UpdateLayout-Funktion berechnet)
-const float MIN_BTN_WIDTH = 60;
-const float MAX_BTN_WIDTH = 120;
-const float SPACE_X = 2;
-const float SPACE_Y = 2;
-float g_channel_offset_x = 20;
-float g_channel_offset_y = 40;
-float g_fader_label_height = 20;
+const float MIN_BTN_WIDTH = 60.0f;
+const float MAX_BTN_WIDTH = 160.0f;
+const float SPACE_X = 2.0f;
+const float SPACE_Y = 2.0f;
+float g_channel_offset_x = 20.0f;
+float g_channel_offset_y = 40.0f;
+float g_fader_label_height;
 float g_fadertracker_width;
 float g_fadertracker_height;
-float g_pantracker_width = 3;
-float g_pantracker_height = 28;
-float g_channel_height = 400;
-float g_channel_width = 100;
-float g_channel_pan_height = 30;
+float g_pantracker_width = 3.0f;
+float g_pantracker_height = 28.0f;
+float g_channel_height = 400.0f;
+float g_channel_width = 100.0f;
+float g_channel_pan_height = 30.0f;
 float g_faderrail_width;
 float g_channel_slider_height;
 
-float g_btn_width = 120;
-float g_btn_height = 60;
+float g_btn_width = 120.0f;
+float g_btn_height = 60.0f;
 float g_channel_btn_size;
 
 float g_channel_label_fontsize;
@@ -102,7 +104,7 @@ GFXSurface *g_gsPan;
 GFXSurface *g_gsPanPointer;
 GFXSurface *g_gsLabel[4];
 
-Uint32 g_server_refresh_start_time = -UA_SERVER_RESFRESH_TIME;
+unsigned long long g_server_refresh_start_time = -UA_SERVER_RESFRESH_TIME;
 UADevice g_ua_devices[MAX_UA_DEVICES];
 
 string json_workaround_secure_unicode_characters(string input)
@@ -144,10 +146,10 @@ string unescape_to_utf8(string input)
 int CalculateMinChannelsPerPage() {
 	int w, h;
 	SDL_GetWindowSize(g_window, &w, &h);
-	float mixer_width = (float)w - 2 * (MIN_BTN_WIDTH * 1.2 + SPACE_X);
-	float mixer_height = round((float)h / 1.02);
+	float mixer_width = (float)w - 2.0f * (MIN_BTN_WIDTH * 1.2f + SPACE_X);
+	float mixer_height = round((float)h / 1.02f);
 
-	float max_channel_width = mixer_height / 3;
+	float max_channel_width = mixer_height / 3.0f;
 	int channels = floor(mixer_width / max_channel_width);
 
 	return channels < 1 ? 1 : channels;
@@ -156,10 +158,10 @@ int CalculateMinChannelsPerPage() {
 int CalculateAverageChannelsPerPage() {
 	int w, h;
 	SDL_GetWindowSize(g_window, &w, &h);
-	float mixer_width = (float)w - 2 * (MIN_BTN_WIDTH * 1.2 + SPACE_X);
-	float mixer_height = round((float)h / 1.02);
+	float mixer_width = (float)w - 2.0f * (MIN_BTN_WIDTH * 1.2f + SPACE_X);
+	float mixer_height = round((float)h / 1.02f);
 
-	float max_channel_width = mixer_height / 5;
+	float max_channel_width = mixer_height / 5.0f;
 	int channels = floor(mixer_width / max_channel_width);
 
 	return channels < 1 ? 1 : channels;
@@ -168,10 +170,10 @@ int CalculateAverageChannelsPerPage() {
 int CalculateMaxChannelsPerPage() {
 	int w, h;
 	SDL_GetWindowSize(g_window, &w, &h);
-	float mixer_width = (float)w - 2 * (MIN_BTN_WIDTH * 1.2 + SPACE_X);
-	float mixer_height = round((float)h / 1.02);
+	float mixer_width = (float)w - 2.0f * (MIN_BTN_WIDTH * 1.2f + SPACE_X);
+	float mixer_height = round((float)h / 1.02f);
 
-	float max_channel_width = mixer_height / 9;
+	float max_channel_width = mixer_height / 9.0f;
 	int channels = floor(mixer_width / max_channel_width);
 
 	return channels < 1 ? 1 : channels;
@@ -189,6 +191,13 @@ int CalculateChannelsPerPage() {
 	return CalculateAverageChannelsPerPage();
 }
 
+void UpdateMaxPages() {
+	int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
+	if (g_page >= max_pages) {
+		g_page = max_pages;
+	}
+}
+
 void UpdateLayout() {
 
 	int channels_per_page = CalculateChannelsPerPage();
@@ -203,68 +212,60 @@ void UpdateLayout() {
 		g_btn_height = smaller_btn_height;
 	*/
 
-	g_btn_width = (win_width / (2 + channels_per_page)) / 1.2;
+	g_btn_width = (win_width / (2.0f + channels_per_page)) / 1.2f;
 	if (g_btn_width < MIN_BTN_WIDTH)
 		g_btn_width = MIN_BTN_WIDTH;
 	if (g_btn_width > MAX_BTN_WIDTH)
 		g_btn_width = MAX_BTN_WIDTH;
 
-	g_btn_height = win_height / 10;
+	g_btn_height = win_height / 10.0f;
 
 	if (g_btn_height > g_btn_width)
 		g_btn_height = g_btn_width;
 
-	g_btn_width = round(g_btn_width);
-	g_btn_height = round(g_btn_height);
+	g_channel_width = ((win_width - 2.0f * (g_btn_width * 1.2f + SPACE_X)) / channels_per_page);
+	g_channel_height = win_height / 1.02f;
 
-	g_channel_width = round(((win_width - 2 * (g_btn_width * 1.2 + SPACE_X)) / channels_per_page));
-	g_channel_height = round(win_height / 1.02);
+	g_channel_offset_x = (win_width - channels_per_page * g_channel_width) / 2.0f;
+	g_channel_offset_y = (win_height - g_channel_height) / 2.0f;
 
-	g_channel_offset_x = round((win_width - channels_per_page * g_channel_width) / 2);
-	g_channel_offset_y = round((win_height - g_channel_height) / 2);
+	g_channel_btn_size = g_channel_width * 0.4f;
+	if (g_channel_btn_size > g_channel_height / 10.0f)
+		g_channel_btn_size = g_channel_height / 10.0f;
 
-	g_channel_btn_size = g_channel_width * 0.4;
-	if (g_channel_btn_size > g_channel_height / 10)
-		g_channel_btn_size = round(g_channel_height / 10);
+	g_fadertracker_height = g_channel_height / 7.0f;
+	g_fadertracker_width = g_channel_width / 1.5f;
+	if (g_fadertracker_width > g_fadertracker_height / 1.5f)
+		g_fadertracker_width = g_fadertracker_height / 1.5f;
 
-	g_fadertracker_height = g_channel_height / 7;
-	g_fadertracker_width = g_channel_width / 1.5;
-	if (g_fadertracker_width > g_fadertracker_height / 1.5)
-		g_fadertracker_width = g_fadertracker_height / 1.5;
+	g_faderrail_width = 11.0f;
+	if (g_channel_width * 0.07f < g_faderrail_width)
+		g_faderrail_width = g_channel_width * 0.07f;
 
-	g_faderrail_width = 11;
-	if (g_channel_width * 0.07 < g_faderrail_width)
-		g_faderrail_width = g_channel_width * 0.07;
+	g_fader_label_height = max(28.0f, g_channel_height / 18);
 
-	g_fader_label_height = 40;
+	g_channel_pan_height = g_channel_width;
+	if (g_channel_pan_height > g_channel_height / 8.0f)
+		g_channel_pan_height = g_channel_height / 8.0f;
 
-	g_channel_pan_height = round(g_channel_width);
-	if (g_channel_pan_height > g_channel_height / 8)
-		g_channel_pan_height = round(g_channel_height / 8);
-
-	g_pantracker_height = round(g_channel_pan_height * 1.1);
+	g_pantracker_height = g_channel_pan_height * 1.1f;
 	if (g_pantracker_height > g_channel_width)
 		g_pantracker_height = g_channel_width;
 	
 	//reload labelfont if size changed
-	if (g_channel_label_fontsize != g_fader_label_height * 0.5)
+	if (g_channel_label_fontsize != g_fader_label_height * 0.5f)
 	{
-		g_channel_label_fontsize = g_fader_label_height * 0.5;
+		g_channel_label_fontsize = g_fader_label_height * 0.5f;
 
 		if (g_fntLabel) {
 			gfx->DeleteFont(g_fntLabel);
 			g_fntLabel = NULL;
 		}
 
-		g_fntLabel = gfx->CreateFontFromFile(getLocalPath("data/ChelseaMarket-Regular.ttf"), (g_fader_label_height * 0.5) * 96 / 100);
+		g_fntLabel = gfx->CreateFontFromFile(getLocalPath("data/ChelseaMarket-Regular.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
 	}
 
-	float new_main_fontsize = 17;
-	if (new_main_fontsize > g_btn_height / 3)
-		new_main_fontsize = g_btn_height / 3;
-	if (new_main_fontsize > g_btn_width / 8)
-		new_main_fontsize = g_btn_width / 8;
-
+	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
 	//reload mainfont if size changed
 	if (g_main_fontsize != new_main_fontsize) {
 		g_main_fontsize = new_main_fontsize;
@@ -274,13 +275,10 @@ void UpdateLayout() {
 			g_fntMain = NULL;
 		}
 
-		g_fntMain = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), g_main_fontsize * 96 / 100);
+		g_fntMain = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f));
 	}
 
-	float new_faderscale_fontsize = g_channel_btn_size / 4;
-	if(new_faderscale_fontsize > g_channel_label_fontsize)
-		new_faderscale_fontsize = g_channel_label_fontsize;
-
+	float new_faderscale_fontsize = min(g_channel_btn_size / 4.0f, g_channel_label_fontsize);
 	if (g_faderscale_fontsize != new_faderscale_fontsize) {
 		g_faderscale_fontsize = new_faderscale_fontsize;
 
@@ -289,13 +287,10 @@ void UpdateLayout() {
 			g_fntFaderScale = NULL;
 		}
 
-		g_fntFaderScale = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), g_faderscale_fontsize * 96 / 100);
+		g_fntFaderScale = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
 	}
 
-	float new_btnbold_fontsize = g_channel_btn_size / 2;
-	if(new_btnbold_fontsize > g_channel_label_fontsize)
-		new_btnbold_fontsize = g_channel_label_fontsize;
-
+	float new_btnbold_fontsize = g_channel_btn_size / 3;
 	if (g_btnbold_fontsize != new_btnbold_fontsize) {
 		g_btnbold_fontsize = new_btnbold_fontsize;
 
@@ -304,13 +299,10 @@ void UpdateLayout() {
 			g_fntChannelBtn = NULL;
 		}
 
-		g_fntChannelBtn = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), g_btnbold_fontsize * 96 / 100);
+		g_fntChannelBtn = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
 	}
 
-	float new_offline_fontsize = win_width / 6;
-
-	if (new_offline_fontsize > win_height / 3)
-		new_offline_fontsize = win_height / 3;
+	float new_offline_fontsize = min(win_width / 6, win_height / 3);
 
 	//reload font if size changed
 	if (g_offline_fontsize != new_offline_fontsize) {
@@ -321,57 +313,57 @@ void UpdateLayout() {
 			g_fntOffline = NULL;
 		}
 
-		g_fntOffline = gfx->CreateFontFromFile(getLocalPath("data/Changa-VariableFont_wght.ttf"), g_offline_fontsize * 96 / 100);
+		g_fntOffline = gfx->CreateFontFromFile(getLocalPath("data/Changa-VariableFont_wght.ttf"), (int)round(g_offline_fontsize * 96.0f / 100.0f));
 	}
 
 	//btnleiste links
-	g_btnInfo->rc.x=g_channel_offset_x - round(g_btn_width * 1.13 + SPACE_X);
-	g_btnInfo->rc.y=g_channel_offset_y;
-	g_btnInfo->rc.w=g_btn_width;
-	g_btnInfo->rc.h=g_btn_height;
+	g_btnInfo->rc.x = round(g_channel_offset_x - g_btn_width * 1.18f + SPACE_X);
+	g_btnInfo->rc.y = round(g_channel_offset_y);
+	g_btnInfo->rc.w = round(g_btn_width);
+	g_btnInfo->rc.h = round(g_btn_height);
 
-	float sends_offset_y = (win_height - g_channel_offset_y - (g_btn_height + SPACE_Y) * g_sends_count) / 2;
+	float sends_offset_y = (win_height - g_channel_offset_y - (g_btn_height + SPACE_Y) * g_sends_count) / 2.0f;
 	for (int n = 0; n < g_sends_count; n++)
 	{
-		g_btnSends[n].rc.x=g_channel_offset_x - round(g_btn_width * 1.13 + SPACE_X);
-		g_btnSends[n].rc.y=sends_offset_y + (g_btn_height + SPACE_Y) * n;
-		g_btnSends[n].rc.w=g_btn_width;
-		g_btnSends[n].rc.h=g_btn_height;
+		g_btnSends[n].rc.x = round(g_channel_offset_x - g_btn_width * 1.18f + SPACE_X);
+		g_btnSends[n].rc.y = round(sends_offset_y + (g_btn_height + SPACE_Y) * n);
+		g_btnSends[n].rc.w = round(g_btn_width);
+		g_btnSends[n].rc.h = round(g_btn_height);
 	}
 
-	g_btnMix->rc.x=g_channel_offset_x - round(g_btn_width * 1.13 + SPACE_X);
-	g_btnMix->rc.y=win_height - g_channel_offset_y - g_btn_height;
-	g_btnMix->rc.w=g_btn_width;
-	g_btnMix->rc.h=g_btn_height;
+	g_btnMix->rc.x = round(g_channel_offset_x - g_btn_width * 1.18f + SPACE_X);
+	g_btnMix->rc.y = round(win_height - g_channel_offset_y - g_btn_height);
+	g_btnMix->rc.w = round(g_btn_width);
+	g_btnMix->rc.h = round(g_btn_height);
 
 	//btnleiste rechts
 	for (int n = 0; n < g_connection_btns; n++)
 	{
-		g_btnConnect[n].rc.x=win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
-		g_btnConnect[n].rc.y=g_channel_offset_y + n * (g_btn_height + SPACE_Y);
-		g_btnConnect[n].rc.w=g_btn_width;
-		g_btnConnect[n].rc.h=g_btn_height;
+		g_btnConnect[n].rc.x = round(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f);
+		g_btnConnect[n].rc.y = round(g_channel_offset_y + n * (g_btn_height + SPACE_Y));
+		g_btnConnect[n].rc.w = round(g_btn_width);
+		g_btnConnect[n].rc.h = round(g_btn_height);
 	}
 
-	g_btnSelectChannels->rc.x=win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
-	g_btnSelectChannels->rc.y=win_height / 2 - (g_btn_height + SPACE_Y / 2);
-	g_btnSelectChannels->rc.w=g_btn_width;
-	g_btnSelectChannels->rc.h=g_btn_height;
+	g_btnSelectChannels->rc.x = round(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f);
+	g_btnSelectChannels->rc.y = round(win_height / 2.0f - (g_btn_height + SPACE_Y / 2.0f));
+	g_btnSelectChannels->rc.w = round(g_btn_width);
+	g_btnSelectChannels->rc.h = round(g_btn_height);
 
-	g_btnChannelWidth->rc.x=win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
-	g_btnChannelWidth->rc.y=win_height - g_channel_offset_y - 3 * g_btn_height - g_main_fontsize - SPACE_Y * 3;
-	g_btnChannelWidth->rc.w=g_btn_width;
-	g_btnChannelWidth->rc.h=g_btn_height;
+	g_btnChannelWidth->rc.x = round(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f);
+	g_btnChannelWidth->rc.y = round(win_height - g_channel_offset_y - 3.0f * g_btn_height - g_main_fontsize - SPACE_Y * 3.0f);
+	g_btnChannelWidth->rc.w = round(g_btn_width);
+	g_btnChannelWidth->rc.h = round(g_btn_height);
 
-	g_btnPageLeft->rc.x=win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
-	g_btnPageLeft->rc.y=win_height - g_channel_offset_y - 2 * g_btn_height - SPACE_Y;
-	g_btnPageLeft->rc.w=g_btn_width;
-	g_btnPageLeft->rc.h=g_btn_height;
+	g_btnPageLeft->rc.x = round(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f);
+	g_btnPageLeft->rc.y = round(win_height - g_channel_offset_y - 2.0f * g_btn_height - SPACE_Y);
+	g_btnPageLeft->rc.w = round(g_btn_width);
+	g_btnPageLeft->rc.h = round(g_btn_height);
 
-	g_btnPageRight->rc.x=win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
-	g_btnPageRight->rc.y=win_height - g_channel_offset_y - g_btn_height;
-	g_btnPageRight->rc.w=g_btn_width;
-	g_btnPageRight->rc.h=g_btn_height;
+	g_btnPageRight->rc.x = round(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f);
+	g_btnPageRight->rc.y = round(win_height - g_channel_offset_y - g_btn_height);
+	g_btnPageRight->rc.w = round(g_btn_width);
+	g_btnPageRight->rc.h = round(g_btn_height);
 }
 
 Button::Button(int _id, std::string _text, int _x, int _y, int _w, int _h,
@@ -434,10 +426,11 @@ void Button::DrawButton(int color)
 		clr = RGB(100, 100, 100);
 	}
 
-	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, this->text, GFX_CENTER, this->rc.w);
-	Vector2D szTxt = Vector2D(this->rc.w, sz.getY());
+	float max_width = (float)this->rc.w * 0.9;
+	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, this->text, GFX_CENTER | GFX_AUTOBREAK, max_width);
+	Vector2D szText(max_width, this->rc.h);
 	gfx->SetColor(g_fntMain, clr);
-	gfx->Write(g_fntMain, this->rc.x, this->rc.y + this->rc.h / 2 - sz.getY() / 2, this->text, GFX_CENTER, &szTxt);
+	gfx->Write(g_fntMain, this->rc.x + ((float)this->rc.w - max_width) / 2.0f, this->rc.y + this->rc.h / 2 - sz.getY() / 2, this->text, GFX_CENTER | GFX_AUTOBREAK, &szText);
 }
 
 Touchpoint::Touchpoint() {
@@ -592,7 +585,7 @@ void Channel::LoadSends(int sendIndex, string us_sendId)
 }
 void Channel::SubscribeSend(bool subscribe, int n)
 {
-	if(n >= 0 && n < this->sendCount && this->sends[n].ua_id != "") {
+	if(n >= 0 && n < this->sendCount && this->sends[n].ua_id.length()) {
 
 		if (this->sends[n].subscribed != subscribe) {
 
@@ -890,7 +883,7 @@ bool UADevice::IsChannelVisible(int type, int index, bool only_selected)
 		b_stereo_hide = channels[index].stereo;
 	}
 
-	return (this->ua_id != "" && !channels[index].hidden && !b_stereo_hide
+	return (this->ua_id.length() && !channels[index].hidden && !b_stereo_hide
 		&& channels[index].enabledByUser && channels[index].active);
 }
 bool UADevice::LoadChannels(int type, int channelIndex, string us_inputId)
@@ -961,7 +954,7 @@ void UADevice::SubscribeChannel(bool subscribe, int type, int n)
 
 	if(n >= 0 && n < *channelsCount)
 	{
-		if (channels[n].ua_id != "")
+		if (channels[n].ua_id.length())
 		{
 			bool subscribeMix = subscribe && g_btnMix->checked;
 
@@ -1087,7 +1080,7 @@ void UpdateSubscriptions() {
 	int channels_per_page = CalculateChannelsPerPage();
 
 	for (int i = 0; i < MAX_UA_DEVICES; i++) {
-		if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
+		if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
 			for (int n = 0; n < g_ua_devices[i].inputsCount; n++) {
 				bool subscribe = false;
 				if (g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked)) {
@@ -1108,7 +1101,7 @@ int GetAllChannelsCount(bool countWithHidden)
 
 	for (int i = 0; i < MAX_UA_DEVICES; i++)
 	{
-		if (g_ua_devices[i].ua_id != "")
+		if (g_ua_devices[i].ua_id.length())
 		{
 			if (countWithHidden)
 				channelCount += g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_ALL_ENABLED_AND_ACTIVE);
@@ -1135,7 +1128,7 @@ Channel *GetChannelPtr(int deviceIndex, int inputIndex)
 
 UADevice *GetDevicePtrByUAId(string ua_device_id)
 {
-	if (ua_device_id == "")
+	if (ua_device_id.length() == 0)
 		return NULL;
 
 	for (int n = 0; n < MAX_UA_DEVICES; n++)
@@ -1150,7 +1143,7 @@ UADevice *GetDevicePtrByUAId(string ua_device_id)
 
 Send *GetSendPtrByUAIds(Channel *channel, string ua_send_id)
 {
-	if (!channel || ua_send_id == "")
+	if (!channel || ua_send_id.length() == 0)
 		return NULL;
 
 	for (int n = 0; n < channel->sendCount; n++)
@@ -1166,7 +1159,7 @@ Send *GetSendPtrByUAIds(Channel *channel, string ua_send_id)
 
 int GetSendIndexByUAIds(Channel *channel, string ua_send_id)
 {
-	if (!channel || ua_send_id == "")
+	if (!channel || ua_send_id.length() == 0)
 		return -1;
 
 	for (int n = 0; n < channel->sendCount; n++)
@@ -1186,7 +1179,7 @@ Channel *GetChannelPtrByUAIds(string ua_device_id, string ua_input_id)
 	if (!dev)
 		return NULL;
 
-	if (ua_input_id == "")
+	if (ua_input_id.length() == 0)
 		return NULL;
 
 	if (!dev->inputs || dev->inputsCount < 1)
@@ -1211,7 +1204,7 @@ ChannelIndex GetChannelIdByTouchpointId(bool _is_mouse, SDL_TouchFingerEvent *to
 
 	for (int i = 0; i < MAX_UA_DEVICES; i++)
 	{
-		if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
+		if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
 		{
 			for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 			{
@@ -1253,7 +1246,7 @@ ChannelIndex GetChannelIdByPosition(Vector2D pt) // client-position; e.g. touch 
 
 			for (int i = 0; i < MAX_UA_DEVICES; i++)
 			{
-				if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
+				if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
 				{
 					int visibleChannelsCount = g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_VISIBLE);
 					if (channelIndex >= visibleChannelsCount)
@@ -1279,7 +1272,7 @@ ChannelIndex GetChannelIdByPosition(Vector2D pt) // client-position; e.g. touch 
 
 
 			//überprüfen ob channel existiert
-			if (g_ua_devices[deviceIndex].ua_id == "")
+			if (g_ua_devices[deviceIndex].ua_id.length() == 0)
 			{
 				deviceIndex = -1;
 				channelIndex = -1;
@@ -1333,7 +1326,7 @@ static int UA_PingServer(void *param)
 
 			UpdateConnectButtons();
 			
-			if(g_settings.extended_logging) toLog("UA-Server found on " + g_ua_server_list[g_ua_server_list_index]);
+			toLog("UA-Server found on " + g_ua_server_list[g_ua_server_list_index]);
 		}
 
 		tcpClient->Disconnect();
@@ -1401,51 +1394,65 @@ void CleanUpSendButtons()
 
 void SetRedrawWindow(bool redraw)
 {
-//	if(SDL_GetTicks() - g_redraw_timer > 20) // max. 50 fps
-/*	if(g_redraw_done)
-	{
-		SDL_Event event;
-		event.type=SDL_WINDOWEVENT;
-		event.window.event=SDL_WINDOWEVENT_EXPOSED;
-		SDL_PushEvent(&event);
-		g_redraw_timer = SDL_GetTicks();
-		g_redraw_done = false;
-	}*/
-
 	const lock_guard<mutex> lock(g_mutex_redraw);
 	g_redraw = redraw;
 }
 
 bool GetRedrawWindow()
 {
-	//	if(SDL_GetTicks() - g_redraw_timer > 20) // max. 50 fps
-	/*	if(g_redraw_done)
-		{
-			SDL_Event event;
-			event.type=SDL_WINDOWEVENT;
-			event.window.event=SDL_WINDOWEVENT_EXPOSED;
-			SDL_PushEvent(&event);
-			g_redraw_timer = SDL_GetTicks();
-			g_redraw_done = false;
-		}*/
-
 	const lock_guard<mutex> lock(g_mutex_redraw);
 	return g_redraw;
 }
 
-Uint32 TimerCallbackRefreshServerList(Uint32 interval, void *param) //g_timer_network1
+Uint32 TimerCallbackRefreshServerList(Uint32 interval, void *param) //g_timer_network_serverlist
 {
 	if (!IS_UA_SERVER_REFRESHING)
 	{
-	//	SDL_Delay(50); //wait until draw has happened
 		SetRedrawWindow(true);
-		g_timer_network1 = 0;
-	//	SDL_RemoveTimer(g_timer_network1);
+		SDL_RemoveTimer(g_timer_network_serverlist);
+		g_timer_network_serverlist = 0;
 		return 0;
 	}
 
 	SetRedrawWindow(true);
 	return 1;
+}
+
+Uint32 TimerCallbackNetworkTimeout(Uint32 interval, void* param) //g_timer_network_timeout
+{
+	g_msg = "Network timeout";
+	toLog(g_msg);
+	Disconnect();
+
+	SetRedrawWindow(true);
+	SDL_RemoveTimer(g_timer_network_timeout);
+	g_timer_network_timeout = 0;
+
+	return 1;
+}
+
+Uint32 TimerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_timer_network_timeout
+{
+	UA_TCPClientSend("get /devices/0/Name/"); // just ask for sth to check if the connection is alive
+	SDL_RemoveTimer(g_timer_network_send_timeout_msg);
+	g_timer_network_send_timeout_msg = 0;
+
+	return 1;
+}
+
+void SetNetworkTimeout() {
+#ifndef SIMULATION
+
+	if (g_timer_network_send_timeout_msg != 0) {
+		SDL_RemoveTimer(g_timer_network_send_timeout_msg);
+	}
+	g_timer_network_send_timeout_msg = SDL_AddTimer(5000, TimerCallbackNetworkSendTimeoutMsg, NULL);
+
+	if (g_timer_network_timeout != 0) {
+		SDL_RemoveTimer(g_timer_network_timeout);
+	}
+	g_timer_network_timeout = SDL_AddTimer(10000, TimerCallbackNetworkTimeout, NULL);
+#endif
 }
 
 #ifdef SIMULATION
@@ -1479,10 +1486,10 @@ bool UA_GetServerList()
 
 	CleanUpConnectionButtons();
 
-	g_server_refresh_start_time = SDL_GetTicks(); //10sec
+	g_server_refresh_start_time = GetTickCount64(); //10sec
 
-	if(g_timer_network1 == 0)
-		g_timer_network1 = SDL_AddTimer(1000, TimerCallbackRefreshServerList, NULL);
+	if(g_timer_network_serverlist == 0)
+		g_timer_network_serverlist = SDL_AddTimer(1000, TimerCallbackRefreshServerList, NULL);
 
 	SetRedrawWindow(true);
 
@@ -1518,6 +1525,8 @@ void UA_TCPClientProc(int msg, string data)
 	}
 	case MSG_TEXT:
 	{
+		SetNetworkTimeout();
+
 		string tcp_msg = json_workaround_secure_unicode_characters(data);
 
 		if(g_settings.extended_logging) toLog("UA <- " + tcp_msg);
@@ -1556,7 +1565,7 @@ void UA_TCPClientProc(int msg, string data)
 			//daten anhand path_parameter verarbeiten
 			if (path_parameter[0] == "devices") // devices laden
 			{
-				if (path_parameter[1] == "")
+				if (path_parameter[1].length() == 0)
 				{
 					int i = 0;
 					const dom::object obj = element["data"]["children"];
@@ -1574,7 +1583,7 @@ void UA_TCPClientProc(int msg, string data)
 				/*	Disconnect();
 					for (int sel = 0; sel < g_connection_btns; sel++) {
 						if (g_btnConnect[sel].checked) {
-							Connect(sel);
+							Connect(sel); // thread unsafe!
 						}
 					}
 				}*/
@@ -1640,7 +1649,7 @@ void UA_TCPClientProc(int msg, string data)
 
 					SetRedrawWindow(true);
 				}
-				else if (path_parameter[2] == "inputs" && path_parameter[3] == "") // inputs laden
+				else if (path_parameter[2] == "inputs" && path_parameter[3].length() == 0) // inputs laden
 				{
 					UADevice *dev = GetDevicePtrByUAId(path_parameter[1]);
 					if (dev)
@@ -1663,7 +1672,7 @@ void UA_TCPClientProc(int msg, string data)
 					//	dev->SubscribeChannels(UA_INPUT);
 					}
 				}
-				else if (path_parameter[2] == "auxs" && path_parameter[3] == "") // aux laden
+				else if (path_parameter[2] == "auxs" && path_parameter[3].length() == 0) // aux laden
 				{
 					UADevice *dev = GetDevicePtrByUAId(path_parameter[1]);
 					if (dev)
@@ -1693,7 +1702,7 @@ void UA_TCPClientProc(int msg, string data)
 					{
 						if (path_parameter[4] == "sends")//input sends
 						{
-							if (path_parameter[5] == "")//inputs send enumeration
+							if (path_parameter[5].length() == 0)//inputs send enumeration
 							{
 								const dom::object obj = element["data"]["children"];
 
@@ -1825,6 +1834,7 @@ void UA_TCPClientProc(int msg, string data)
 								// kanal in selektion übernehmen, wenn name mit ! beginnt
 								if (channel->IsOverriddenShow(true)) {
 									channel->selected_to_show = true;
+									UpdateSubscriptions();
 								}
 								// kanal ausblenden wenn name mit # beginnt
 								else if (channel->IsOverriddenHide(true)) {
@@ -1833,6 +1843,7 @@ void UA_TCPClientProc(int msg, string data)
 									if (g_page >= max_pages) {
 										g_page = max_pages;
 									}
+									UpdateSubscriptions();
 								}
 
 								SetRedrawWindow(true);
@@ -1884,6 +1895,7 @@ void UA_TCPClientProc(int msg, string data)
 								// kanal in selektion übernehmen, wenn name mit ! beginnt
 								if (channel->IsOverriddenShow()) {
 									channel->selected_to_show = true;
+									UpdateSubscriptions();
 								}
 								// kanal ausblenden wenn name mit # beginnt
 								else if (channel->IsOverriddenHide()) {
@@ -1892,6 +1904,7 @@ void UA_TCPClientProc(int msg, string data)
 									if (g_page >= max_pages) {
 										g_page = max_pages;
 									}
+									UpdateSubscriptions();
 								}
 
 								SetRedrawWindow(true);
@@ -1981,8 +1994,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	if (!channel)
 		return;
 
-	float SPACE_X = 2;
-	float SPACE_Y = 2;
+	float SPACE_X = 2.0f;
+	float SPACE_Y = 2.0f;
 
 	double level = 0;
 	bool mute = false;
@@ -2257,21 +2270,22 @@ void Draw() {
 	g_btnPageRight->DrawButton(BTN_COLOR_GREEN);
 	g_btnSelectChannels->DrawButton(BTN_COLOR_GREEN);
 
-	float SPACE_X = 2;
-	float SPACE_Y = 2;
+	float SPACE_X = 2.0f;
+	float SPACE_Y = 2.0f;
 
 	string str_page = "Page: " + to_string(g_page +1);
 
 	gfx->SetColor(g_fntMain, RGB(200, 200, 200));
-	gfx->Write(g_fntMain, win_width - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.63), win_height - g_channel_offset_y - 2 * g_btn_height - SPACE_Y * 2 - g_main_fontsize, str_page, GFX_CENTER);
+	gfx->Write(g_fntMain, g_btnPageLeft->rc.x + g_btnPageLeft->rc.w / 2,
+		g_btnPageLeft->rc.y - SPACE_Y * 2.0f - g_main_fontsize, str_page, GFX_CENTER);
 
-	if (g_ua_server_connected == "") { //offline
+	if (g_ua_server_connected.length() == 0) { //offline
 		sz = gfx->GetTextBlockSize(g_fntOffline, "Offline");
 		gfx->SetColor(g_fntOffline, RGB(100, 100, 100));
 		gfx->Write(g_fntOffline, win_width/2, (win_height - sz.getY())/2, "Offline", GFX_CENTER);
 
 		string refresh_txt = ".refreshing serverlist.";
-		Uint32 time = SDL_GetTicks()/1000;
+		unsigned long long time = GetTickCount64() / 1000;
 
 		for (int n = 0; n < (time % 4); n++)
 			refresh_txt = "." + refresh_txt + ".";
@@ -2280,8 +2294,11 @@ void Draw() {
 		if (!g_serverlist_defined) {
 			if (IS_UA_SERVER_REFRESHING)
 				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, refresh_txt, GFX_CENTER);
-			else
-				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, "Click to refresh the serverlist", GFX_CENTER);
+			else {
+				string text = (g_connection_btns == 0 ? "No servers found\n" : "");
+				text += "Click to refresh the serverlist";
+				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, text, GFX_CENTER);
+			}
 		}
 	}
 	else {
@@ -2294,7 +2311,7 @@ void Draw() {
 			GFX_NONE, 1.0, 0, NULL, &stretch);
 
 		for (int i = 0; i < MAX_UA_DEVICES; i++) {
-			if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
+			if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
 				for (int n = 0; n < g_ua_devices[i].inputsCount; n++) {
 					if (!g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
 						continue;
@@ -2304,7 +2321,7 @@ void Draw() {
 						float y = g_channel_offset_y;
 
 						//channel seperator
-						gfx->DrawShape(GFX_RECTANGLE, BLACK, x + g_channel_width - SPACE_X / 2, 0, SPACE_X, win_height, GFX_NONE, 0.7);
+						gfx->DrawShape(GFX_RECTANGLE, BLACK, x + g_channel_width - SPACE_X / 2.0f, 0, SPACE_X, win_height, GFX_NONE, 0.7f);
 
 						DrawChannel(ChannelIndex(i, n), x, y, g_channel_width, g_channel_height);
 
@@ -2316,7 +2333,7 @@ void Draw() {
 		}
 	}
 
-	if (g_msg != "") {
+	if (g_msg.length()) {
 		sz = gfx->GetTextBlockSize(g_fntMain, g_msg);
 		gfx->SetColor(g_fntMain, WHITE);
 		gfx->SetShadow(g_fntMain, BLACK, 1.0);
@@ -2337,7 +2354,7 @@ void Connect(int connection_index)
 {
 	g_page = 0;
 
-	if (g_ua_server_list[connection_index] == "")
+	if (g_ua_server_list[connection_index].length() == 0)
 		return;
 
 	g_ua_server_connected = g_ua_server_list[connection_index];
@@ -2371,7 +2388,7 @@ void Connect(int connection_index)
 {
 	g_page = 0;
 
-	if (g_ua_server_list[connection_index] == "")
+	if (g_ua_server_list[connection_index].length() == 0)
 		return;
 
 	g_ua_server_connected = g_ua_server_list[connection_index];
@@ -2384,8 +2401,7 @@ void Connect(int connection_index)
 
 		g_tcpClient = new TCPClient(g_ua_server_list[connection_index].c_str(), UA_TCP_PORT, &UA_TCPClientProc);
 
-		if(g_settings.extended_logging)
-			toLog("UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
+		toLog("UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
 
 		UA_TCPClientSend("get /devices");
 
@@ -2399,14 +2415,15 @@ void Connect(int connection_index)
 
 		g_msg = "";
 
+		SetNetworkTimeout();
+
 		SetRedrawWindow(true);
 	}
 	catch (char *error)
 	{
 		g_msg = "Connection failed on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT + ": " + string(error);
 
-		if(g_settings.extended_logging)
-			toLog("UA:  " + g_msg);
+		toLog("UA:  " + g_msg);
 
 		Disconnect();
 	}
@@ -2415,6 +2432,10 @@ void Connect(int connection_index)
 
 void Disconnect()
 {
+	if (g_timer_network_timeout != 0) {
+		SDL_RemoveTimer(g_timer_network_timeout);
+	}
+
 	g_btnSelectChannels->enabled=false;
 	g_btnChannelWidth->enabled=false;
 	g_btnPageLeft->enabled=false;
@@ -2426,7 +2447,7 @@ void Disconnect()
 
 	if (g_tcpClient)
 	{
-		if(g_settings.extended_logging) toLog("UA:  Disconnect from " + g_ua_server_list[0] + ":" + UA_TCP_PORT);
+		toLog("UA:  Disconnect from " + g_ua_server_list[0] + ":" + UA_TCP_PORT);
 
 		g_tcpClient->Disconnect();
 		delete g_tcpClient;
@@ -2440,7 +2461,7 @@ void Disconnect()
 
 	for (int n = 0; n < MAX_UA_DEVICES; n++)
 	{
-		if (g_ua_devices[n].ua_id != "")
+		if (g_ua_devices[n].ua_id.length())
 		{
 			g_ua_devices[n].Release();
 		}
@@ -2571,11 +2592,11 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 						int state = (int)!channel->mute;
 						for (int i = 0; i < MAX_UA_DEVICES; i++)
 						{
-							if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 							{
 								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 									{
 										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 										{
@@ -2604,11 +2625,11 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 								int state = (int)!channel->sends[v].bypass;
 								for (int i = 0; i < MAX_UA_DEVICES; i++)
 								{
-									if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+									if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 									{
 										for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 										{
-											if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+											if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 											{
 												if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 												{
@@ -2648,11 +2669,11 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 						int state = (int)!channel->solo;
 						for (int i = 0; i < MAX_UA_DEVICES; i++)
 						{
-							if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 							{
 								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 									{
 										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 										{
@@ -2717,11 +2738,11 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 				{
 					for (int i = 0; i < MAX_UA_DEVICES; i++)
 					{
-						if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+						if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 						{
 							for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 							{
-								if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+								if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 								{
 									if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 									{
@@ -2842,11 +2863,11 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 									int state = (int)channel->mute;
 									for (int i = 0; i < MAX_UA_DEVICES; i++)
 									{
-										if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+										if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 										{
 											for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 											{
-												if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+												if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 												{
 													if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
 													{
@@ -2881,11 +2902,11 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 											int state = (int)channel->sends[v].bypass;
 											for (int i = 0; i < MAX_UA_DEVICES; i++)
 											{
-												if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+												if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 												{
 													for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 													{
-														if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+														if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 														{
 															if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
 															{
@@ -2938,11 +2959,11 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 									int state = (int)channel->solo;
 									for (int i = 0; i < MAX_UA_DEVICES; i++)
 									{
-										if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+										if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 										{
 											for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 											{
-												if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+												if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 												{
 													if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
 													{
@@ -3051,11 +3072,11 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 					{
 						for (int i = 0; i < MAX_UA_DEVICES; i++)
 						{
-							if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 							{
 								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 									{
 										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 										{
@@ -3132,11 +3153,11 @@ void OnTouchUp(bool is_mouse, SDL_TouchFingerEvent *touchinput)
 			{
 				for (int i = 0; i < MAX_UA_DEVICES; i++)
 				{
-					if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+					if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 					{
 						for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 						{
-							if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+							if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 							{
 								if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 								{
@@ -3230,8 +3251,8 @@ void CreateSendButtons(int sz)
 {
 	if (sz > 0)
 	{
-		float SPACE_X = 2;
-		float SPACE_Y = 2;
+		float SPACE_X = 2.0f;
+		float SPACE_Y = 2.0f;
 
 		CleanUpSendButtons();
 
@@ -3269,7 +3290,7 @@ void UpdateConnectButtons()
 	CleanUpConnectionButtons();
 
 	int sz = 0;
-	while (g_ua_server_list[sz] != "")
+	while (g_ua_server_list[sz].length())
 	{
 		sz++;
 
@@ -3279,14 +3300,14 @@ void UpdateConnectButtons()
 
 	g_btnConnect = new Button[sz];
 
-	float SPACE_X = 2;
-	float SPACE_Y = 2;
+	float SPACE_X = 2.0f;
+	float SPACE_Y = 2.0f;
 
-	while (g_connection_btns < sz && g_ua_server_list[g_connection_btns] != "")
+	while (g_connection_btns < sz && g_ua_server_list[g_connection_btns].length())
 	{
 		string btn_text = "Connect to\n" + g_ua_server_list[g_connection_btns];
 		g_btnConnect[g_connection_btns].id = ID_BTN_CONNECT + g_connection_btns;
-		g_btnConnect[g_connection_btns].rc.x = w - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13);
+		g_btnConnect[g_connection_btns].rc.x = w - g_channel_offset_x + round(SPACE_X + g_btn_width * 0.13f);
 		g_btnConnect[g_connection_btns].rc.y = g_channel_offset_y + g_connection_btns * (g_btn_height + SPACE_Y);
 		g_btnConnect[g_connection_btns].rc.w = g_btn_width;
 		g_btnConnect[g_connection_btns].rc.h = g_btn_height;
@@ -3306,7 +3327,7 @@ void UpdateConnectButtons()
 	SetRedrawWindow(true);
 
 	//wenn keine verbindung, verbinde automatisch mit dem ersten server
-	if (g_connection_btns>0 && connected_btn_text=="")
+	if (g_connection_btns == 1 && connected_btn_text.length() == 0)
 	{
 		SDL_Event event;
 		memset(&event, 0, sizeof(SDL_Event));
@@ -3316,62 +3337,62 @@ void UpdateConnectButtons()
 	}
 }
 
-bool LoadGfx()
-{
-	g_gsButtonYellow[0] = gfx->LoadGfx(getLocalPath("data/btn_yellow_off.gfx"));
-	if (!g_gsButtonYellow[0])
+GFXSurface* LoadImage(string filename) {
+	GFXSurface *gs = gfx->LoadGfx(getLocalPath("data/" + filename));
+	if (!gs)
+		return NULL;
+
+	// usually GFXEngine keeps a copy of the image in RAM but here it's not needed, so delete it manually
+	delete[] gs->bgra;
+	gs->bgra = NULL;
+
+	return gs;
+}
+
+bool LoadImages() {
+
+	if(!(g_gsButtonYellow[0] = LoadImage("btn_yellow_off.gfx")))
 		return false;
-	g_gsButtonYellow[1] = gfx->LoadGfx(getLocalPath("data/btn_yellow_on.gfx"));
-	if (!g_gsButtonYellow[1])
+	if (!(g_gsButtonYellow[1] = LoadImage("btn_yellow_on.gfx")))
 		return false;
-	g_gsButtonRed[0] = gfx->LoadGfx(getLocalPath("data/btn_red_off.gfx"));
-	if (!g_gsButtonRed[0])
+
+	if (!(g_gsButtonRed[0] = LoadImage("btn_red_off.gfx")))
 		return false;
-	g_gsButtonRed[1] = gfx->LoadGfx(getLocalPath("data/btn_red_on.gfx"));
-	if (!g_gsButtonRed[1])
+	if (!(g_gsButtonRed[1] = LoadImage("btn_red_on.gfx")))
 		return false;
-	g_gsButtonGreen[0] = gfx->LoadGfx(getLocalPath("data/btn_green_off.gfx"));
-	if (!g_gsButtonGreen[0])
+
+	if (!(g_gsButtonGreen[0] = LoadImage("btn_green_off.gfx")))
 		return false;
-	g_gsButtonGreen[1] = gfx->LoadGfx(getLocalPath("data/btn_green_on.gfx"));
-	if (!g_gsButtonGreen[1])
+	if (!(g_gsButtonGreen[1] = LoadImage("btn_green_on.gfx")))
 		return false;
-	g_gsButtonBlue[0] = gfx->LoadGfx(getLocalPath("data/btn_blue_off.gfx"));
-	if (!g_gsButtonBlue[0])
+
+	if (!(g_gsButtonBlue[0] = LoadImage("btn_blue_off.gfx")))
 		return false;
-	g_gsButtonBlue[1] = gfx->LoadGfx(getLocalPath("data/btn_blue_on.gfx"));
-	if (!g_gsButtonBlue[1])
+	if (!(g_gsButtonBlue[1] = LoadImage("btn_blue_on.gfx")))
 		return false;
-	g_gsChannelBg = gfx->LoadGfx(getLocalPath("data/channelbg.gfx"));
-	if (!g_gsChannelBg)
+
+	if (!(g_gsChannelBg = LoadImage("channelbg.gfx")))
 		return false;
-	g_gsBgRight = gfx->LoadGfx(getLocalPath("data/bg_right.gfx"));
-	if (!g_gsBgRight)
+
+	if (!(g_gsBgRight = LoadImage("bg_right.gfx")))
 		return false;
-	g_gsFaderrail = gfx->LoadGfx(getLocalPath("data/faderrail.gfx"));
-	if (!g_gsFaderrail)
+
+	if (!(g_gsFaderrail = LoadImage("faderrail.gfx")))
 		return false;
-	g_gsFader = gfx->LoadGfx(getLocalPath("data/fader.gfx"));
-	if (!g_gsFader)
+
+	if (!(g_gsFader = LoadImage("fader.gfx")))
 		return false;
-	g_gsPan = gfx->LoadGfx(getLocalPath("data/poti.gfx"));
-	if (!g_gsPan)
+
+	if (!(g_gsPan = LoadImage("poti.gfx")))
 		return false;
-	g_gsPanPointer = gfx->LoadGfx(getLocalPath("data/poti_pointer.gfx"));
-	if (!g_gsPanPointer)
+
+	if (!(g_gsPanPointer = LoadImage("poti_pointer.gfx")))
 		return false;
-	g_gsLabel[0] = gfx->LoadGfx(getLocalPath("data/label1.gfx"));
-	if (!g_gsLabel[0])
-		return false;
-	g_gsLabel[1] = gfx->LoadGfx(getLocalPath("data/label2.gfx"));
-	if (!g_gsLabel[1])
-		return false;
-	g_gsLabel[2] = gfx->LoadGfx(getLocalPath("data/label3.gfx"));
-	if (!g_gsLabel[2])
-		return false;
-	g_gsLabel[3] = gfx->LoadGfx(getLocalPath("data/label4.gfx"));
-	if (!g_gsLabel[3])
-		return false;
+
+	for (int n = 0; n < 4; n++) {
+		if (!(g_gsLabel[n] = LoadImage("label" + to_string(n + 1) + ".gfx")))
+			return false;
+	}
 
 	return true;
 }
@@ -3414,7 +3435,7 @@ string GetFileName(string postfix)
 
 bool LoadServerSettings(string server_name, Button *btnSend)
 {
-	if (server_name == "" || !btnSend)
+	if (server_name.length() == 0 || !btnSend)
 		return false;
 
 	bool result = true;
@@ -3430,7 +3451,6 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 
 		if (!g_settings.lock_to_mix.length() && btnSend->text == selected_send)
 		{
-			char btn_txt[32];
 			for (int i = 0; i < g_sends_count; i++)
 			{
 				if (g_btnSends[i].id == btnSend->id)
@@ -3452,6 +3472,10 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 		if (g_settings.lock_to_mix == "MIX") {
 			g_btnMix->enabled = true;
 			g_btnMix->checked = true;
+			for (int i = 0; i < g_sends_count; i++) {
+				g_btnSends[i].enabled = false;
+				g_btnSends[i].checked = false;
+			}
 		}
 		else {
 			g_btnMix->enabled = false;
@@ -3466,7 +3490,7 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 
 bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-select & group-setting f�r das jeweilige device
 {
-	if (server_name == "" || !ua_dev)
+	if (server_name.length() == 0 || !ua_dev)
 		return false;
 
 	string filename = GetFileName(server_name);
@@ -3479,7 +3503,7 @@ bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-s
 
 		for (int n = 0; n < ua_dev->inputsCount; n++)
 		{
-			if (ua_dev->ua_id == "" || !ua_dev->inputs)
+			if (ua_dev->ua_id.length() == 0 || !ua_dev->inputs)
 				break;
 
 			try
@@ -3510,7 +3534,7 @@ bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-s
 
 bool SaveServerSettings(string server_name)
 {
-	if (server_name == "")
+	if (server_name.length() == 0)
 		return false;
 
 	string filename = GetFileName(server_name);
@@ -3521,7 +3545,7 @@ bool SaveServerSettings(string server_name)
 	{
 		fprintf(fh, "{\n");
 
-		if (g_ua_server_connected != "")
+		if (g_ua_server_connected.length())
 		{
 			fprintf(fh, "\"ua_server\": {\n");
 			fprintf(fh, "\"name\": \"%s\",\n", g_ua_server_connected.c_str());
@@ -3547,7 +3571,7 @@ bool SaveServerSettings(string server_name)
 			bool set_komma = false;
 			for (int n = 0; n < MAX_UA_DEVICES; n++)
 			{
-				if (g_ua_devices[n].ua_id == "")
+				if (g_ua_devices[n].ua_id.length() == 0)
 					continue;
 
 				if(set_komma)
@@ -3824,7 +3848,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	SDL_SetWindowMinimumSize(g_window, 320, 240);
-	if (LoadGfx())
+	if (LoadImages())
 	{
 		UpdateLayout();
 
@@ -3904,7 +3928,7 @@ int main(int argc, char* argv[]) {
 
 						SDL_Point pt = { e.button.x, e.button.y };
 
-						if(g_msg != "") {
+						if(g_msg.length()) {
 							g_msg = "";
 							SetRedrawWindow(true);
 						}
@@ -3956,12 +3980,9 @@ int main(int argc, char* argv[]) {
 								g_btnSelectChannels->checked = !g_btnSelectChannels->checked;
 								if (!g_btnSelectChannels->checked) {
 									UpdateLayout();
-									UpdateSubscriptions();
 								}
-								int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
-								if (g_page >= max_pages) {
-									g_page = max_pages;
-								}
+								UpdateMaxPages();
+								UpdateSubscriptions();
 								SetRedrawWindow(true);
 								handled = true;
 							}
@@ -3975,21 +3996,14 @@ int main(int argc, char* argv[]) {
 									g_settings.channel_width = 1;
 								
 								UpdateLayout();
-
 								UpdateChannelWidthButton();
-
-								int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
-								if (g_page >= max_pages) {
-									g_page = max_pages;
-								}
-
+								UpdateMaxPages();
 								UpdateSubscriptions();
 								SetRedrawWindow(true);
 								handled = true;
 							}
 							if (g_btnPageLeft->IsClicked(&pt)) {
-								if (g_page > 0)
-								{
+								if (g_page > 0) {
 									g_page--;
 									UpdateSubscriptions();
 									SetRedrawWindow(true);
@@ -4017,7 +4031,7 @@ int main(int argc, char* argv[]) {
 								rc.y = 0;
 								SDL_GetWindowSize(g_window, &rc.w, &rc.h);
 								rc.w -= 2 * g_channel_offset_x;
-								if (g_ua_server_connected == "" && SDL_PointInRect(&pt, &rc))//offline
+								if (g_ua_server_connected.length() == 0 && SDL_PointInRect(&pt, &rc))//offline
 								{
 									if (!IS_UA_SERVER_REFRESHING)
 									{
@@ -4152,7 +4166,7 @@ int main(int argc, char* argv[]) {
 				}
 				case SDL_MOUSEWHEEL:
 				{
-					if(g_msg != "") {
+					if(g_msg.length()) {
 						g_msg = "";
 						g_btnInfo->checked = false;
 						SetRedrawWindow(true);
@@ -4213,11 +4227,11 @@ int main(int argc, char* argv[]) {
 								{
 									for (int i = 0; i < MAX_UA_DEVICES; i++)
 									{
-										if (g_ua_devices[i].ua_id != "" && g_ua_devices[i].inputs)
+										if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
 										{
 											for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
 											{
-												if (g_ua_devices[i].inputs[n].ua_id != "" && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+												if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
 												{
 													if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
 													{
@@ -4276,12 +4290,12 @@ int main(int argc, char* argv[]) {
 					case SDLK_ESCAPE:
 					{
 						SDL_SetWindowFullscreen(g_window, 0);
-						UpdateLayout();
-						UpdateSubscriptions();
 						break;
 					}
 					case SDLK_f:
 					{
+						int x, y;
+						SDL_GetGlobalMouseState(&x, &y);
 						if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN_DESKTOP)
 						{
 							SDL_SetWindowFullscreen(g_window, 0);
@@ -4310,8 +4324,7 @@ int main(int argc, char* argv[]) {
 						}
 						else
 							SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-						UpdateLayout();
-						UpdateSubscriptions();
+						SDL_WarpMouseGlobal(x, y);
 						break;
 					}
 					}
@@ -4333,7 +4346,9 @@ int main(int argc, char* argv[]) {
 					{
 						gfx->Resize();
 						UpdateLayout();
+						UpdateMaxPages();
 						UpdateSubscriptions();
+						SetRedrawWindow(true);
 						break;
 					}
 					}
@@ -4348,6 +4363,7 @@ int main(int argc, char* argv[]) {
 				case SDL_USEREVENT:
 				{
 					if (e.user.code == EVENT_CONNECT) {
+						Disconnect();
 						Connect(0);
 					}
 					else if(e.user.code == EVENT_DISCONNECT) {
@@ -4360,17 +4376,9 @@ int main(int argc, char* argv[]) {
 				}
 			}
 
-			if(GetRedrawWindow())
-			{
-			//	unsigned int ticks = SDL_GetTicks();
-
+			if(GetRedrawWindow()) {
 				SetRedrawWindow(false);
 				Draw();
-
-			/*	ticks = SDL_GetTicks() - ticks;
-				char s[32];
-				sprintf(s, "%d\n", ticks);
-				OutputDebugString(s);*/
 			}
 		}
 
@@ -4388,8 +4396,8 @@ int main(int argc, char* argv[]) {
 	}
 	else
 	{
-		toLog("LoadGfx failed");
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadGfx failed", NULL);
+		toLog("LoadImages failed");
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadImages failed", NULL);
 	}
 
 	gfx->DeleteFont(g_fntMain);

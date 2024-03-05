@@ -37,7 +37,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.0 beta";
+const string APP_VERSION = "1.01 beta";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\n\
@@ -104,7 +104,7 @@ under certain conditions; have a look at the COPYING file for details.";
 #define UA_MINUS_INFINITY	0
 
 #define UA_SERVER_RESFRESH_TIME	20000 //in ms
-#define IS_UA_SERVER_REFRESHING (SDL_GetTicks() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
+#define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
 
 #define UA_INPUT	0
 #define UA_AUX		1

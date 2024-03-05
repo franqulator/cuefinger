@@ -86,7 +86,7 @@ const int COLLISION_TANGENT_AREA = 8; //Bereich (Rechteck) um den Kollisionpunkt
 #define GFX_USE_SPRITEBATCH		0x08
 #define GFX_DESTINATION_ALPHA_MASK 0x10 //nur für drawonsurface
 
-#define MAX_LAYERS				6
+#define MAX_LAYERS				1 // normally 6 but only need 1
 
 #define GFX_LAYER_BACK				0
 #define GFX_LAYER_SPLIT_LEFT_BACK	1
