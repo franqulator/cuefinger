@@ -136,34 +136,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="gfx2d_sdl.h" />
-    <ClInclude Include="main.h" />
-    <ClInclude Include="misc.h" />
-    <ClInclude Include="network_win.h" />
-    <ClInclude Include="resource.h" />
-    <ClInclude Include="simdjson.h" />
-    <ClInclude Include="vector2d.h" />
-    <ClInclude Include="wrapper.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="gfx2d_collision.cpp" />
-    <ClCompile Include="gfx2d_fileio.cpp" />
-    <ClCompile Include="gfx2d_filter.cpp" />
-    <ClCompile Include="gfx2d_sdl.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="misc.cpp" />
-    <ClCompile Include="network_win.cpp" />
-    <ClCompile Include="simdjson.cpp" />
-    <ClCompile Include="vector2d.cpp" />
-    <ClCompile Include="wrapper.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="cuefinger.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="app.ico" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
