@@ -44,23 +44,30 @@ https://github.com/raduvarga/UA-Midi-Control
 
 ---
 
-### To run Cuefinger on Linux you might have to install the SDL2 runtimes:
-- Open Terminal
-> sudo apt-get install libsdl2-2.0<br>
-> sudo apt-get install libsdl2-ttf-2.0-0
+## Windows 10/11
+### Use binary
+Just chose the fitting *.exe and run it.
 
----
-
-### How to compile on Windows 10/11:
+### Compile with Visual Studio 2022
 You need SDL2 developer package (https://github.com/libsdl-org/SDL/releases/tag/release-2.30.0).<br>
 You can use the Visual Studio 2022 project files, make sure that you copy the SDL2 include and bin into the project folder or change the include and lib paths in the gfx2d_sdl.h
 
-### How to compile on Linux:
+---
+
+## Linux
+### Use binary
+The compiled file is target for Ubuntu 23.10 x64. You might have to install the SDL2 runtimes:
+- Open Terminal
+> sudo apt-get install libsdl2-2.0<br>
+> sudo apt-get install libsdl2-ttf-2.0-0
+- Make sure it has permission to run as executable
+> chmod +x $file
+
+### Compile with makefile
 - Open the Terminal in the project folder:
 - You might need to install the SDL2 libraries:
 >sudo apt-get install libsdl2-dev<br>
 >sudo apt-get install libsdl2-ttf-dev
-- create a folder named linux where the application will be created to
 - run the makefile
 >make
 
