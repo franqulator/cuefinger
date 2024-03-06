@@ -421,3 +421,7 @@ FodyWeavers.xsd
 *.sln.iml
 /.gitignore
 /.gitignore
+/.gitignore
+/.gitignore
+/build/ubuntu_x64/cuefinger_Debug
+/build/win_x64/Cuefinger_Debug.exe
