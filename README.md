@@ -1,4 +1,4 @@
-# Cuefinger 1.01 beta
+# Cuefinger 1.0.1 beta
 
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
