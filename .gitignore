@@ -1,0 +1,21 @@
+﻿################################################################################
+# Diese .gitignore-Datei wurde von Microsoft(R) Visual Studio automatisch erstellt.
+################################################################################
+
+/include
+/.vs
+/lib
+/linux/.vs/cuefinger_linux
+/linux/x64
+/linux/x86/Debug
+/releases
+/windows/.vs/cuefinger
+/windows/x64
+/windows/x86
+*.txt
+*.odt
+/build/data/cuefinger.log
+/build/data/settings.json
+/build/data/BiGMobil2.json
+/build/win_x64/Cuefinger.pdb
+/build/win_x86/Cuefinger.pdb
