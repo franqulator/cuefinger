@@ -47,7 +47,7 @@ https://github.com/raduvarga/UA-Midi-Control
 ### To run Cuefinger on Linux you might have to install the SDL2 runtimes:
 - Open Terminal
 > sudo apt-get install libsdl2-2.0<br>
-> sudo apt-get install libsdl-ttf2.0-0
+> sudo apt-get install libsdl2-ttf-2.0-0
 
 ---
 
