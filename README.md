@@ -71,3 +71,12 @@ The compiled file is target for Ubuntu 23.10 x64. You might have to install the 
 - run the makefile
 >make
 
+---
+## Screenshots
+Here are some screenshots of it's scalable GUI and the select channels feature:
+![Screenshot 2024-03-07 133925](https://github.com/franqulator/cuefinger/assets/97669947/96e54cd6-a9e3-4b98-8e4e-5e732f7be527)
+![Screenshot 2024-03-07 134025](https://github.com/franqulator/cuefinger/assets/97669947/d6636c4e-30c6-44a2-842a-a49c6fc928d2)
+![Screenshot 2024-03-07 134614](https://github.com/franqulator/cuefinger/assets/97669947/5cc8ad68-d18d-40b2-9638-c45215067027)
+![Screenshot 2024-03-07 134546](https://github.com/franqulator/cuefinger/assets/97669947/6ef12605-6ce7-4bb0-88f8-fc9e52d3e9be)
+![Screenshot 2024-03-07 134119](https://github.com/franqulator/cuefinger/assets/97669947/34c141f0-b8a3-4a0d-849c-fea6bef0631b)
+
