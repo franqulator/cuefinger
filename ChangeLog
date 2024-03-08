@@ -1,0 +1,14 @@
+--- v1.01 beta ---
+
+- Bugfix: fixed font scaling after toggle fullscreen
+- Bugfix: fixed empty page in certain conditions after resizing window
+- Bugfix: fixed possible crash when more than one UA Console server where found
+- Bugfix: channels show/hide via prefix (#,!) weren't un-/subscribed 
+- Bugfix: fixed toggle fullscreen reposition of mouse cursor
+- Bugfix: lock_to_mix 'MIX' didn't work
+- added timeout to check if connection is alive
+- layout improved
+- perfomance improved
+- timer optimized
+- Windows: upgrade to SDL 2.30.0 and SDL_TTF 2.22.0
+- Manual added

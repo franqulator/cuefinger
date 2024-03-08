@@ -1,0 +1,13 @@
+Idea & code
+Frank Brempel
+
+Graphics
+Michael Brempel
+
+Cuefinger uses SDL2 and simdjson
+www.libsdl.org
+simdjson.org
+
+Thanks to
+Antonio Radu Varga whose project UA-Midi-Control helped me to get started
+https://github.com/raduvarga/UA-Midi-Control
