@@ -8,8 +8,8 @@ license: GPL-3.0
 grade: stable # must be 'stable' to release into candidate/stable channels
 confinement: strict # use 'strict' once you have the right plugs and slots
     
-#architectures:
-#  - build-on: amd64  
+architectures:
+  - build-on: amd64  
 
 icon: cuefinger.png
 
@@ -17,17 +17,21 @@ layout:
   $SNAP/usr/local/data:
     bind: $SNAP/usr/local/share
 
+lint:
+  ignore:
+    - library:
+        - usr/lib/x86_64-linux-gnu/libpulse-simple.so.0.1.1
+
 apps:
   cuefinger:
     command: usr/local/bin/cuefinger
- #   command-chain: ["bin/desktop-launch"]
+    desktop: usr/local/share/cuefinger.desktop
     extensions: [gnome]
     plugs:
       - network
     
 parts:
   cuefinger:
-    # See 'snapcraft plugins'
     plugin: autotools
     source: https://github.com/franqulator/cuefinger
     source-type: git
