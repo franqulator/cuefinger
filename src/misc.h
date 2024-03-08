@@ -80,10 +80,13 @@ struct Point
 	int y;
 };
 
-void initLocalPath(string _localfolder);
-string getLocalPath(string subpath);
+void initDataPath(string _datafolder); // readonly
+string getDataPath(string subpath);
 
-void initAppPath(string _localfolder);
+void initPrefPath(string _preffolder); // write and read
+string getPrefPath(string subpath);
+
+void initAppPath(string _appfolder);
 string getAppPath(string subpath);
 
 void clearLog(string info);

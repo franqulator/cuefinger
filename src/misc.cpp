@@ -22,18 +22,38 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "misc.h"
 
 //weitere funktionen
-string g_localFolder="";
-void initLocalPath(string localFolder) { // read and write
-	g_localFolder = localFolder;
+string g_dataFolder="";
+void initDataPath(string dataFolder) { // read only
+	g_dataFolder = dataFolder;
 }
 
-string getLocalPath(string subpath) { // folder to read and write, path length should be 256
-	string str(g_localFolder);
+string getDataPath(string subpath) { // folder to read
+	string str(g_dataFolder);
 	str += subpath; 
 
 #ifdef __linux__ 
 	for(int n=0;n< str.length(); n++) {
 		if(str[n] == '\\') {
+			str[n] = '/';
+		}
+	}
+#endif
+
+	return str;
+}
+
+string g_prefFolder = "";
+void initPrefPath(string prefFolder) { // read and write
+	g_prefFolder = prefFolder;
+}
+
+string getPrefPath(string subpath) { // folder to read and write
+	string str(g_prefFolder);
+	str += subpath;
+
+#ifdef __linux__ 
+	for (int n = 0; n < str.length(); n++) {
+		if (str[n] == '\\') {
 			str[n] = '/';
 		}
 	}
@@ -67,7 +87,7 @@ void clearLog(string info) {
 	tm t;
 	errno_t err = localtime_s(&t, &tme);
 
-	string path = getLocalPath("data/cuefinger.log");
+	string path = getPrefPath("cuefinger.log");
 
 	FILE *fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "w") == 0) {
@@ -94,7 +114,7 @@ void clearLog(string info) {
 }
 void toLog(string str) {
 	string path;
-	path = getLocalPath("data/cuefinger.log");
+	path = getPrefPath("cuefinger.log");
 
 	FILE *fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "a") == 0) {

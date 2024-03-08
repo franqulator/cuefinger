@@ -262,7 +262,7 @@ void UpdateLayout() {
 			g_fntLabel = NULL;
 		}
 
-		g_fntLabel = gfx->CreateFontFromFile(getLocalPath("data/ChelseaMarket-Regular.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
+		g_fntLabel = gfx->CreateFontFromFile(getDataPath("ChelseaMarket-Regular.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
 	}
 
 	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
@@ -275,7 +275,7 @@ void UpdateLayout() {
 			g_fntMain = NULL;
 		}
 
-		g_fntMain = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f));
+		g_fntMain = gfx->CreateFontFromFile(getDataPath("OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f));
 	}
 
 	float new_faderscale_fontsize = min(g_channel_btn_size / 4.0f, g_channel_label_fontsize);
@@ -287,7 +287,7 @@ void UpdateLayout() {
 			g_fntFaderScale = NULL;
 		}
 
-		g_fntFaderScale = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
+		g_fntFaderScale = gfx->CreateFontFromFile(getDataPath("OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
 	}
 
 	float new_btnbold_fontsize = g_channel_btn_size / 3;
@@ -299,7 +299,7 @@ void UpdateLayout() {
 			g_fntChannelBtn = NULL;
 		}
 
-		g_fntChannelBtn = gfx->CreateFontFromFile(getLocalPath("data/OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
+		g_fntChannelBtn = gfx->CreateFontFromFile(getDataPath("OpenSans-VariableFont_wdth,wght.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
 	}
 
 	float new_offline_fontsize = min(win_width / 6, win_height / 3);
@@ -313,7 +313,7 @@ void UpdateLayout() {
 			g_fntOffline = NULL;
 		}
 
-		g_fntOffline = gfx->CreateFontFromFile(getLocalPath("data/Changa-VariableFont_wght.ttf"), (int)round(g_offline_fontsize * 96.0f / 100.0f));
+		g_fntOffline = gfx->CreateFontFromFile(getDataPath("Changa-VariableFont_wght.ttf"), (int)round(g_offline_fontsize * 96.0f / 100.0f));
 	}
 
 	//btnleiste links
@@ -3338,9 +3338,12 @@ void UpdateConnectButtons()
 }
 
 GFXSurface* LoadImage(string filename) {
-	GFXSurface *gs = gfx->LoadGfx(getLocalPath("data/" + filename));
-	if (!gs)
+	string path = getDataPath(filename);
+	GFXSurface *gs = gfx->LoadGfx(path);
+	if (!gs) {
+		toLog("LoadImage " + path + " failed");
 		return NULL;
+	}
 
 	// usually GFXEngine keeps a copy of the image in RAM but here it's not needed, so delete it manually
 	delete[] gs->bgra;
@@ -3445,7 +3448,7 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 	try
 	{
 		dom::parser parser;
-		dom::element element = parser.load(getLocalPath("data/" + filename));
+		dom::element element = parser.load(getPrefPath(filename));
 
 		string_view selected_send = element["ua_server"]["selected_mix"];
 
@@ -3499,7 +3502,7 @@ bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-s
 	try
 	{
 		dom::parser parser;
-		dom::element element = parser.load(getLocalPath("data/" + filename));
+		dom::element element = parser.load(getPrefPath(filename));
 
 		for (int n = 0; n < ua_dev->inputsCount; n++)
 		{
@@ -3538,7 +3541,7 @@ bool SaveServerSettings(string server_name)
 		return false;
 
 	string filename = GetFileName(server_name);
-	string path = getLocalPath("data/" + filename);
+	string path = getPrefPath(filename);
 
 	FILE* fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "w") == 0)
@@ -3636,7 +3639,7 @@ bool Settings::load() {
 	//JSON
 	try {
 		dom::parser parser;
-		dom::element element = parser.load(getLocalPath("data/" + filename));
+		dom::element element = parser.load(getPrefPath(filename));
 
 		try {
 			this->lock_settings = element["general"]["lock_settings"];
@@ -3704,7 +3707,7 @@ bool Settings::save()
 		return true;
 
 	string filename = GetFileName("settings");
-	string path = getLocalPath("data/" + filename);
+	string path = getPrefPath(filename);
 
 	FILE* fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "w") == 0)
@@ -3774,10 +3777,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *lpCmdLine
 int main(int argc, char* argv[]) {
 #endif
 
-	string path = string(SDL_GetBasePath());
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
+
+	char* cs = SDL_GetBasePath();
+	string path = string(cs);
+	SDL_free(cs);
 	size_t l = path.find_last_of("\\/", path.length() - 2);
 	path = path.substr(0, l + 1);
-	initLocalPath(path);
+	initDataPath(path + "data\\");
+
+	cs = SDL_GetPrefPath("franqulator", "cuefinger");
+	path = string(cs);
+	SDL_free(cs);
+	initPrefPath(path);
 
 	clearLog(APP_NAME + " " + APP_VERSION);
 
@@ -3796,8 +3808,6 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
-
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 
 #ifdef _WIN32
 	SetProcessDPIAware();
