@@ -1,4 +1,4 @@
-# Cuefinger 1.0.1 beta
+# Cuefinger 1.0.2
 
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
@@ -56,7 +56,7 @@ You can use the Visual Studio 2022 project files, make sure that you copy the SD
 
 ## Linux
 ### Use binary
-The compiled file is target for Ubuntu 23.10 x64. You might have to install the SDL2 runtimes:
+The compiled file is target for Ubuntu 22.04 x64. You might have to install the SDL2 runtimes:
 - Open Terminal
 > sudo apt-get install libsdl2-2.0<br>
 > sudo apt-get install libsdl2-ttf-2.0-0
