@@ -1,0 +1,20 @@
+Linux
+---
+
+You can install it from the snap-store
+> sudo snap install cuefinger
+
+or download it from github and use a binary version or compile it yourself:
+https://github.com/franqulator/cuefinger
+
+Extract the archive and run the executable from the folder ubuntu_x64.
+If you are on Linux 32Bit you can try the one in the folder mint_x86.
+But depending on the Linux distribution you use it could be that you have to compile it yourself.
+
+Windows 10/11
+---
+
+Download it from github and use a binary version or compile it yourself:
+https://github.com/franqulator/cuefinger
+
+Extract the archive and run the executable from the folder win_x64 if you are on Windows 64Bit otherwise win_x86.

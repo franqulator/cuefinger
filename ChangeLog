@@ -1,4 +1,7 @@
---- v1.01 beta ---
+--- v1.0.2 ---
+- changed the location of settings and log to the user folder to prevent issues with write permissions
+
+--- v1.0.1 beta ---
 
 - Bugfix: fixed font scaling after toggle fullscreen
 - Bugfix: fixed empty page in certain conditions after resizing window
