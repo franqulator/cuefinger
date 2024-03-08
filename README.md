@@ -64,12 +64,15 @@ The compiled file is target for Ubuntu 23.10 x64. You might have to install the 
 > chmod +x $file
 
 ### Compile with makefile
-- Open the Terminal in the project folder:
-- You might need to install the SDL2 libraries:
+You might need to install the SDL2 developer libraries:
+- Open Terminal
 >sudo apt-get install libsdl2-dev<br>
 >sudo apt-get install libsdl2-ttf-dev
-- run the makefile
->make
+- navigate to the src folder and run make:
+> cd src<br>
+> make
+- you can now run cuefinger
+> ../build/linux/cuefinger
 
 ---
 ## Screenshots
