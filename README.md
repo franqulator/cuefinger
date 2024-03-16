@@ -55,6 +55,11 @@ You can use the Visual Studio 2022 project files, make sure that you copy the SD
 ---
 
 ## Linux
+### Snapstore
+<a href="https://snapcraft.io/cuefinger">
+  <img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" />
+</a>
+
 ### Use binary
 The compiled file is target for Ubuntu 22.04 x64. You might have to install the SDL2 runtimes:
 - Open Terminal
