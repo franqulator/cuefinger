@@ -1,3 +1,5 @@
+//Version 5.0 - 2023-11-24
+
 /*
 This file is part of Cuefinger 1
 
@@ -17,23 +19,21 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-GFXEngine v5.0 beta
 */
 
 #ifndef _GFX2D_H_
 #define _GFX2D_H_
 
 #ifdef __linux_wsl__
-#include "../include/SDL.h"
-#include "../include/SDL_ttf.h"
-#include "translator.h"
+	#include "../include/SDL.h"
+	#include "../include/SDL_ttf.h"
+	#include "translator.h"
 
 #define MAXINT32 0x7FFFFFFF
 #elif __linux__ 
-	#include <SDL2/SDL.h>
-	#include <SDL2/SDL_ttf.h>
-	#include "translator.h"
+		#include <SDL2/SDL.h>
+		#include <SDL2/SDL_ttf.h>
+		#include "translator.h"
 
 	#define MAXINT32 0x7FFFFFFF
 
@@ -92,7 +92,7 @@ const int COLLISION_TANGENT_AREA = 8; //Bereich (Rechteck) um den Kollisionpunkt
 #define GFX_USE_SPRITEBATCH		0x08
 #define GFX_DESTINATION_ALPHA_MASK 0x10 //nur für drawonsurface
 
-#define MAX_LAYERS				1 // normally 6 but only need 1
+#define MAX_LAYERS				1
 
 #define GFX_LAYER_BACK				0
 #define GFX_LAYER_SPLIT_LEFT_BACK	1
@@ -120,6 +120,10 @@ const int COLLISION_TANGENT_AREA = 8; //Bereich (Rechteck) um den Kollisionpunkt
 
 #define BGR2RGB(b,g,r) 	(COLORREF)((b << 16) | (g << 8) | r)
 #define RGB2BGR(rgb) 	(((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb & 0xFF0000) >> 16) )
+
+#define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
+#define SAFE_DELETE_ARRAY(a) if( (a) != NULL ) delete[] (a); (a) = NULL;
+#define SAFE_RELEASE(a) if( (a) != NULL ) a->Release(); (a) = NULL;
 
 struct GFXFilter
 {
@@ -163,7 +167,7 @@ public:
 	Rect rc;
 	float opacity;
 	float rotation;
-	Vector2D rotation_pt;
+	Vector2D rotationOffset;
 	Vector2D stretch;
 };
 
@@ -180,7 +184,7 @@ public:
 
 	float opacity;
 	float rotation;
-	Vector2D rotation_pt;
+	Vector2D rotationOffset;
 	Vector2D stretch;
 	int flags;
 
@@ -320,6 +324,7 @@ public:
 	GFXSurface* ScreenCapture(unsigned int x=0, unsigned int y=0, unsigned int w=0, unsigned int h=0);
 	GFXSurface* CreateSurface(unsigned int w,unsigned int h);
 	GFXSurface* CopySurface(GFXSurface *gs, unsigned int w=0, unsigned int h=0);
+	void FreeRAM(GFXSurface* gs);
 	bool 		DeleteSurface(GFXSurface* gs);
 
 	//Zeichenfunktionen
@@ -327,19 +332,19 @@ public:
 	bool EndDrawOnSurface(GFXSurface *gsurf_dest);
 
 	bool Draw(GFXSurface* gs,float x,float y,Rect* rc_src=NULL, 
-				int flags=0, float opacity=1.0, float rotation=0, Vector2D *rotation_pt=NULL, Vector2D *stretch=NULL, int layer=0);
+				int flags=0, float opacity=1.0f, float rotation=0.0f, Vector2D *rotationOffset=NULL, Vector2D *stretch=NULL, int layer=0);
 	bool Draw(GFXSurface* gs, float x, float y, Rect* rc_src,
-		int flags, float opacity, float rotation, Vector2D* rotation_pt, float scale, int layer = 0);
+		int flags, float opacity, float rotation, Vector2D* rotationOffset, float scale, int layer = 0);
 
 	bool DrawOnSurface(GFXSurface *gs_dest, GFXSurface *gs_src, float x, float y, Rect* rc_src=NULL,
-				int flags=0, float opacity=1.0, float rotation=0, Vector2D *rotation_pt=NULL, Vector2D *stretch=NULL,
+				int flags=0, float opacity=1.0f, float rotation=0.0f, Vector2D *rotationOffset=NULL, Vector2D *stretch=NULL,
 				bool keep_src_surface=false); //keep_src_surface is ignored in SDL
 
 	bool DrawShape(int shape, unsigned int color, float x, float y, float w, float h,
-				int flags=0, float opacity = 1.0, float rotation=0, Vector2D *rotation_pt=NULL, int layer=0);
+				int flags=0, float opacity = 1.0f, float rotation=0.0f, Vector2D *rotationOffset=NULL, int layer=0);
 
 	bool DrawShapeOnSurface(GFXSurface *gs_dest, int shape, unsigned int color, float x, float y, float w, float h,
-				int flags=0, float opacity = 1.0, float rotation=0, Vector2D *rotation_pt=NULL);
+				int flags=0, float opacity = 1.0f, float rotation=0.0f, Vector2D *rotationOffset=NULL);
 
 	void FreeDrawOnSurfaceSource(GFXSurface *gs_src); // unused in SDL
 
@@ -351,7 +356,7 @@ public:
 	void SetFilter_Contrast(GFXSurface* gs, float contrast);
 	void SetFilter_Saturation(GFXSurface* gs, float saturation);
 	void SetFilter_Invert(GFXSurface* gs, bool invert);
-	//filter müssen evtl. noch beim pixelzeichnen und abspeichern miteinberechnet werden !
+	bool ApplyFilter(GFXSurface* gs);
 	//drawcolor elipse zeichnen
 
 	//Alphachannelfunktionen
@@ -372,62 +377,68 @@ public:
 	bool CreateCollisionData(GFXSurface* gs, bool borderCheck = true);
 	void DeleteCollisionData(GFXSurface* gs);
 
-	bool Collision(float pt_x, float pt_y, float r_x, float r_y, Rect* rc, float rotation = 0); //Punkt in Rechteck
-
-	bool Collision(float pt_x, float pt_y, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc = NULL, int flags = 0, float gs_rotation = 0, Vector2D* stretch = NULL); // Punkt in Grafik
-
-	bool Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int flags1, float rotation1, Vector2D* stretch1,
-		GFXSurface* gs2, float x2, float y2, Rect* rc2, int flags2, float rotation2, Vector2D* stretch2, Vector2D* pt_col = NULL); //Grafik in Grafik
-
-	bool Collision(float pt_x, float pt_y, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags, float gs_rotation, float scale); // Punkt in Grafik
-
-	bool Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int flags1, float rotation1, float scale1,
-		GFXSurface* gs2, float x2, float y2, Rect* rc2, int flags2, float rotation2, float scale2, Vector2D* pt_col = NULL); //Grafik in Grafik
-
-
-	bool Collision(const float x1, const float y1, const float radius1, 
-		const float x2, const float y2, const float radius2, Vector2D* colPt = NULL); // Kreis in Kreis
-	bool Collision(float x1, float y1, Rect* rc1, float rotation1, float x2, float y2, Rect* rc2, float rotation2, Vector2D* colPt = NULL); // Rechteck in Rechteck
-	Vector2D GetTangentAt(float pt_x, float pt_y, float direction, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags, float rotation, Vector2D* stretch, Vector2D* borderColPt = NULL);
-	Vector2D GetTangentAt(float pt_x, float pt_y, float direction, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags, float rotation, float scale, Vector2D* borderColPt = NULL);
+	//Punkt in Rechteck
+	bool Collision(float pt_x, float pt_y, float r_x, float r_y, Rect* rc, float rotation = 0.0f, Vector2D* rotationOffset = NULL);
+	// Punkt in Grafik
+	bool Collision(float pt_x, float pt_y, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc = NULL, int flags = 0,
+		float gs_rotation = 0.0f, Vector2D* rotationOffset = NULL, Vector2D* stretch = NULL);
+	//Grafik in Grafik
+	bool Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int flags1, float rotation1, Vector2D* rotationOffset1, Vector2D* stretch1,
+		GFXSurface* gs2, float x2, float y2, Rect* rc2, int flags2, float rotation2, Vector2D* rotationOffset2, Vector2D* stretch2, Vector2D* pt_col = NULL);
+	// Punkt in Grafik
+	bool Collision(float pt_x, float pt_y, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags,
+		float gs_rotation, Vector2D* rotationOffset, float scale);
+	//Grafik in Grafik
+	bool Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int flags1, float rotation1, Vector2D* rotationOffset1, float scale1,
+		GFXSurface* gs2, float x2, float y2, Rect* rc2, int flags2, float rotation2, Vector2D* rotationOffset2, float scale2, Vector2D* pt_col = NULL);
+	// Kreis in Kreis
+	bool Collision(const float x1, const float y1, const float radius1,
+		const float x2, const float y2, const float radius2, Vector2D* colPt = NULL);
+	// Rechteck in Rechteck
+	bool Collision(float x1, float y1, Rect* rc1, float rotation1, Vector2D* rotationOffset1,
+		float x2, float y2, Rect* rc2, float rotation2, Vector2D* rotationOffset2, Vector2D* colPt = NULL); 
+	Vector2D GetTangentAt(float pt_x, float pt_y, float direction, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags, float rotation, Vector2D* rotationOffset, Vector2D* stretch, Vector2D* borderColPt = NULL);
+	Vector2D GetTangentAt(float pt_x, float pt_y, float direction, GFXSurface* gs, float gs_x, float gs_y, Rect* gs_rc, int flags, float rotation, Vector2D* rotationOffset, float scale, Vector2D* borderColPt = NULL);
 
 	//Font
 	GFXFont* CreateFontFromFile(string ttf_path, int _height, bool bold=false, bool italic=false, bool underline=false);
 	bool DeleteFont(GFXFont*);
 	void SetColor(GFXFont* font, unsigned int color);
-	void SetShadow(GFXFont* font, unsigned int color, float opacity, float distance = 1, float direction = M_PI * 0.75);
+	void SetShadow(GFXFont* font, unsigned int color, float opacity, float distance = 1, float direction = M_PIF * 0.75f);
 	void SetOutline(GFXFont* font, float strength, unsigned int color=BLACK, float opacity = 1.0);
 	Vector2D GetTextBlockSize(GFXFont *font, string text, int alignment=GFX_LEFT, float max_width=0);
 	void Write(GFXFont *font, float x, float y, string text, int alignment=GFX_LEFT, Vector2D *max_size=NULL,
-					int flags=0, float opacity=1.0, float rotation=0, Vector2D *rotation_pt=NULL, Vector2D *stretch=NULL, int layer=0);
+					int flags=0, float opacity=1.0, float rotation=0, Vector2D * rotationOffset = NULL, Vector2D *stretch=NULL, int layer=0);
+
+	void debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, float strength = 3, Vector2D offset = Vector2D(0, 0));
 
 private:
 	//main
 	bool _Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsigned int color, float pos_x, float pos_y, Rect* _rc = NULL,
-		float opacity = 1.0, float rotation = 0, Vector2D* rotation_pt = NULL, Vector2D* stretch = NULL, int flags = 0, GFXFilter* apply_filter = NULL,
+		float opacity = 1.0, float rotation = 0, Vector2D* rotationOffset = NULL, Vector2D* stretch = NULL, int flags = 0, GFXFilter* apply_filter = NULL,
 		int xoffset = 0, int yoffset = 0);
 	void _Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, float _x, float _y, string _text, int _alignment = GFX_LEFT,
-		Vector2D* _max_size = NULL, float _opacity = 1.0, float _rotation = 0, Vector2D* _rotation_pt = NULL, Vector2D* _stretch = NULL, int _flags = 0);
+		Vector2D* _max_size = NULL, float _opacity = 1.0, float _rotation = 0, Vector2D* _rotationOffset = NULL, Vector2D* _stretch = NULL, int _flags = 0);
 	void _DrawAll();
 	int _CreateSpriteBatches(int layer); // returns number of created batches
 	int _CreateSpriteBatch(GFXSurface* gs, int layer); // returns number of sprites in that batch
 	void _AddJob(GFXFont* font, float x, float y, string text, short alignment, Vector2D* max_size,
-		int flags, float opacity, float rotation, Vector2D* rotation_pt, Vector2D* stretch, int layer);
+		int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer);
 	bool _AddJob(GFXSurface* gs, int shape, unsigned int color, float x, float y, Rect* rc,
-		int flags, float opacity, float rotation, Vector2D* rotation_pt, Vector2D* stretch, int layer);
+		int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer);
+	bool _HasBGRABuffer(GFXSurface* gs);
 
 	//fileio
 	bool _ReadAlphaChannelBmp(GFXSurface* gs, FILE* fh);
-	GFXSurface* _ReadGfx(FILE* fh);
 	GFXSurface* _ReadTga(FILE* fh);
 	GFXSurface* _ReadBmp(FILE* fh);
 
 	//collision
 	bool _CollisionBorderPointExists(GFXSurface* gs, int x, int y);
 	Vector2D* _convertToScreen(Vector2D* v, float screenX, float screenY, Rect* rc = NULL, int flag = 0,
-		float rotation = 0, float scaleX = 1.0, float scaleY = 1.0);
+		float rotation = 0, Vector2D* rotationOffset = NULL, float scaleX = 1.0, float scaleY = 1.0);
 	Vector2D* _convertFromScreen(Vector2D* v, float objX, float objY, Rect* rc = NULL, int flag = 0,
-		float rotation = 0, float scaleX = 1.0, float scaleY = 1.0);
+		float rotation = 0, Vector2D* rotationOffset = NULL, float scaleX = 1.0, float scaleY = 1.0);
 
 	//font
 	string _write_get_next_line(GFXFont *fnt,string txt, size_t *txt_ptr, float width, bool autobreak);
@@ -438,8 +449,6 @@ private:
 	void _RenderFilter(GFXSurface* gs, unsigned char* p_update_bgra, Rect* rc = NULL);
 	bool _compareFilter(float filter1, float filter2); // vergleicht unter berücksichtigung der FILTER_ACCURACY
 	bool _equal(GFXFilter* filter1, GFXFilter* filter2, bool excludeHWFilter=false); // nutzt _compareFilter als vergleicher
-
-	void _debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, float strength = 3, Vector2D offset = Vector2D(0, 0));
 };
 
 #endif

@@ -29,6 +29,7 @@ GFXEngine *gfx = NULL;
 
 SDL_Window *g_window=NULL;
 SDL_TimerID g_timer_network_serverlist = 0;
+SDL_TimerID g_timer_network_reconnect = 0;
 SDL_TimerID g_timer_network_timeout = 0;
 SDL_TimerID g_timer_network_send_timeout_msg = 0;
 
@@ -39,6 +40,7 @@ string g_msg = "";
 int g_ua_server_list_index = 0;
 string g_ua_server_list[UA_MAX_SERVER_LIST] = {};
 string g_ua_server_connected = "";
+int g_ua_server_last_connection = -1;
 
 mutex g_mutex_redraw;
 bool g_redraw = true;
@@ -809,11 +811,12 @@ bool Channel::IsOverriddenHide(bool ignoreStereoname) {
 
 UADevice::UADevice()
 {
-	ua_id = "";
-	inputsCount = 0;
-	inputs = NULL;
-	auxsCount = 0;
-	auxs = NULL;
+	this->ua_id = "";
+	this->inputsCount = 0;
+	this->inputs = NULL;
+	this->auxsCount = 0;
+	this->auxs = NULL;
+	this->online = false;
 }
 UADevice::~UADevice()
 {
@@ -1294,80 +1297,92 @@ static int UA_PingServer(void *param)
 	if (!param)
 		return 0;
 
-	char *ip = (char*)param;
+	string ip ((char*)param);
 
-	if (g_ua_server_list_index >= UA_MAX_SERVER_LIST)
-	{
-		free(param);
-		return 0;
-	}
+	if (g_ua_server_list_index < UA_MAX_SERVER_LIST) {
 
-	try
-	{
-		TCPClient *tcpClient = new TCPClient(ip, UA_TCP_PORT, NULL);
-
-		char computername[NI_MAXHOST];
-		GetComputerNameByIP(ip, computername);
-
-		bool exists = false;
-		for (int n = 0; n < g_ua_server_list_index; n++)
+		try
 		{
-			if (g_ua_server_list[n] == string(computername))
+			TCPClient* tcpClient = new TCPClient(ip, UA_TCP_PORT, NULL);
+
+			string computername = GetComputerNameByIP(ip);
+
+			bool exists = false;
+			for (int n = 0; n < g_ua_server_list_index; n++)
 			{
-				exists = true;
-				break;
+				if (g_ua_server_list[n] == computername)
+				{
+					exists = true;
+					break;
+				}
+			}
+
+			if (!exists)
+			{
+				g_ua_server_list[g_ua_server_list_index] = computername;
+				g_ua_server_list_index++;
+
+				UpdateConnectButtons();
+
+				toLog("UA-Server found on " + g_ua_server_list[g_ua_server_list_index - 1]);
+			}
+
+			delete tcpClient;
+			tcpClient = NULL;
+		}
+		catch (string error) {
+			if (g_settings.extended_logging) {
+				toLog("No UA-Server found on " + ip);
 			}
 		}
-
-		if (!exists)
-		{
-			g_ua_server_list[g_ua_server_list_index] = string(computername);
-			g_ua_server_list_index++;
-
-			UpdateConnectButtons();
-			
-			toLog("UA-Server found on " + g_ua_server_list[g_ua_server_list_index]);
-		}
-
-		tcpClient->Disconnect();
-		delete tcpClient;
-		tcpClient = NULL;
 	}
-	catch (char *error)
-	{
-//		char msg[256];
-//		sprintf(msg, "No UA Server on %s\n", ip);
-//		OutputDebugString(msg);
-	}
-
 	free(param);
 
 	return 0;
 }
 
-void UA_GetServerListCallback(char *ip)
-{
-	if (strncmp(ip, "127.",4) == 0)
-	{
+void UA_GetServerListCallback(string ip) {
+	if (ip.substr(0, 4) == "127.") {
 		//check localhost
-		void *scan_ip_buffer = malloc(sizeof(char) * 17);
-		strcpy_s((char*)scan_ip_buffer, 17, ip);
-		string thread_name = "PingUAServer on " + string((char*)scan_ip_buffer);
-		SDL_CreateThread(UA_PingServer, thread_name.c_str(), scan_ip_buffer);
+		char *scanIpBuffer = (char*)malloc(sizeof(char) * 16);
+		if (scanIpBuffer) {
+			ip.copy(scanIpBuffer, ip.length());
+			scanIpBuffer[ip.length()] = '\0';
+			string threadName = "PingUAServer on " + ip;
+			if (!SDL_CreateThread(UA_PingServer, threadName.c_str(), (void*)scanIpBuffer)) {
+				if (g_settings.extended_logging) {
+					toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+				}
+			}
+		}
+		else {
+			if (g_settings.extended_logging) {
+				toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
+			}
+		}
 	}
-	else
-	{
-		string ip_fragment = string(ip);
-		int cut = ip_fragment.find_last_of('.');
-		ip_fragment = ip_fragment.substr(0, cut + 1);
+	else {
+		size_t cut = ip.find_last_of('.');
+		string ipFragment = ip.substr(0, cut + 1);
 
-		for (int n = 0; n < 256; n++)
-		{
-			string full_ip = ip_fragment + to_string(n);
-			void *scan_ip_buffer = malloc(sizeof(char) * 17);
-			strcpy_s((char*)scan_ip_buffer, 17, full_ip.c_str());
-			string thread_name = "PingUAServer on " + string((char*)scan_ip_buffer);
-			SDL_Thread  *thread = SDL_CreateThread(UA_PingServer, thread_name.c_str(), scan_ip_buffer);
+		for (int n = 0; n < 256; n++) {
+			ip = ipFragment + to_string(n);
+			char* scanIpBuffer = (char*)malloc(sizeof(char) * 16);
+			if (scanIpBuffer) {
+				ip.copy(scanIpBuffer, ip.length());
+				scanIpBuffer[ip.length()] = '\0';
+				string threadName = "PingUAServer on " + ip;
+				if (!SDL_CreateThread(UA_PingServer, threadName.c_str(), scanIpBuffer)) {
+					if (g_settings.extended_logging) {
+						toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+					}
+				}
+			}
+			else {
+				if (g_settings.extended_logging) {
+					toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
+				}
+			}
 		}
 	}
 }
@@ -1415,7 +1430,25 @@ Uint32 TimerCallbackRefreshServerList(Uint32 interval, void *param) //g_timer_ne
 	}
 
 	SetRedrawWindow(true);
-	return 1;
+	return interval;
+}
+
+Uint32 TimerCallbackReconnect(Uint32 interval, void* param) //g_timer_network_reconnect
+{
+	if (g_ua_server_connected.length() == 0 && g_ua_server_last_connection != -1) {
+		SDL_Event event;
+		memset(&event, 0, sizeof(SDL_Event));
+		event.type = SDL_USEREVENT;
+		event.user.code = EVENT_CONNECT;
+		SDL_PushEvent(&event);
+	}
+	else {
+		SDL_RemoveTimer(g_timer_network_reconnect);
+		g_timer_network_reconnect = 0;
+		return 0;
+	}
+	
+	return interval;
 }
 
 Uint32 TimerCallbackNetworkTimeout(Uint32 interval, void* param) //g_timer_network_timeout
@@ -1428,7 +1461,12 @@ Uint32 TimerCallbackNetworkTimeout(Uint32 interval, void* param) //g_timer_netwo
 	SDL_RemoveTimer(g_timer_network_timeout);
 	g_timer_network_timeout = 0;
 
-	return 1;
+	// try to reconnect
+	if (g_settings.reconnect_time && g_timer_network_reconnect == 0) {
+		g_timer_network_reconnect = SDL_AddTimer(g_settings.reconnect_time, TimerCallbackReconnect, NULL);
+	}
+
+	return 0;
 }
 
 Uint32 TimerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_timer_network_timeout
@@ -1437,7 +1475,7 @@ Uint32 TimerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_time
 	SDL_RemoveTimer(g_timer_network_send_timeout_msg);
 	g_timer_network_send_timeout_msg = 0;
 
-	return 1;
+	return 0;
 }
 
 void SetNetworkTimeout() {
@@ -1459,6 +1497,7 @@ void SetNetworkTimeout() {
 bool UA_GetServerList()
 {
 	g_ua_server_list_index = 0;
+	g_ua_server_last_connection = -1;
 
 	CleanUpConnectionButtons();
 
@@ -1483,8 +1522,12 @@ bool UA_GetServerList()
 		return false;
 
 	g_ua_server_list_index = 0;
+	g_ua_server_last_connection = -1;
+	for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
+		g_ua_server_list[n] = "";
+	}
 
-	CleanUpConnectionButtons();
+	UpdateConnectButtons();
 
 	g_server_refresh_start_time = GetTickCount64(); //10sec
 
@@ -1571,16 +1614,15 @@ void UA_TCPClientProc(int msg, string data)
 					const dom::object obj = element["data"]["children"];
 
 					//load device info
-					for (const dom::key_value_pair device : obj)
-					{
-						string value{device.key};
+					for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
+						string value{ it.key() };
 						g_ua_devices[i].LoadDevice(value);
 						i++;
 					}
 				}
 			/*	else if (path_parameter[2] == "MultiUnitOrder")
 				{
-				/*	Disconnect();
+					Disconnect();
 					for (int sel = 0; sel < g_connection_btns; sel++) {
 						if (g_btnConnect[sel].checked) {
 							Connect(sel); // thread unsafe!
@@ -1595,7 +1637,7 @@ void UA_TCPClientProc(int msg, string data)
 						dev->online = element["data"];
 						UpdateSubscriptions();
 
-					//	string msg = "get /devices/" + dev->ua_id + "/MultiUnitOrder/value";
+					//	string msg = "subscribe /devices/" + dev->ua_id + "/MultiUnitOrder";
 					//	UA_TCPClientSend(msg.c_str());
 
 						if (dev->online) { // load device
@@ -1661,9 +1703,8 @@ void UA_TCPClientProc(int msg, string data)
 
 						int i = 0;
 						//load device info
-						for (const dom::key_value_pair device : obj)
-						{
-							string value{device.key};
+						for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
+							string value{ it.key() };
 							dev->LoadChannels(UA_INPUT, i, value);
 							i++;
 						}
@@ -1684,9 +1725,8 @@ void UA_TCPClientProc(int msg, string data)
 
 						int i = 0;
 						//load device info
-						for (const dom::key_value_pair device : obj)
-						{
-							string value{ device.key };
+						for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
+							string value{ it.key() };
 							dev->LoadChannels(UA_INPUT, i, value);
 							i++;
 						}
@@ -1711,9 +1751,8 @@ void UA_TCPClientProc(int msg, string data)
 
 								int i = 0;
 								//load device info
-								for (const dom::key_value_pair device : obj)
-								{
-									string value{device.key};
+								for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
+									string value{ it.key() };
 									channel->LoadSends(i, value);
 									i++;
 								}
@@ -1839,10 +1878,7 @@ void UA_TCPClientProc(int msg, string data)
 								// kanal ausblenden wenn name mit # beginnt
 								else if (channel->IsOverriddenHide(true)) {
 									channel->selected_to_show = false;
-									int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
-									if (g_page >= max_pages) {
-										g_page = max_pages;
-									}
+									UpdateMaxPages();
 									UpdateSubscriptions();
 								}
 
@@ -1900,10 +1936,7 @@ void UA_TCPClientProc(int msg, string data)
 								// kanal ausblenden wenn name mit # beginnt
 								else if (channel->IsOverriddenHide()) {
 									channel->selected_to_show = false;
-									int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
-									if (g_page >= max_pages) {
-										g_page = max_pages;
-									}
+									UpdateMaxPages();
 									UpdateSubscriptions();
 								}
 
@@ -1954,13 +1987,17 @@ void UA_TCPClientProc(int msg, string data)
 				//ua-error
 				string_view sv = element["error"];
 				string s{sv};
-				if(g_settings.extended_logging) toLog("UA-Error " + s);
+				if (g_settings.extended_logging) {
+					toLog("UA-Error " + s);
+				}
 			}
 			catch (simdjson_error e) {}
 		}
 		catch (simdjson_error e)
 		{
-			if(g_settings.extended_logging) toLog("JSON-Error: " + string(e.what()));
+			if (g_settings.extended_logging) {
+				toLog("JSON-Error: " + string(e.what()));
+			}
 		}
 		tcp_msg = "";
 		break;
@@ -2350,9 +2387,11 @@ void Draw() {
 }
 
 #ifdef SIMULATION
-void Connect(int connection_index)
+bool Connect(int connection_index)
 {
-	g_page = 0;
+	if (connection_index != g_ua_server_last_connection) {
+		g_page = 0;
+	}
 
 	if (g_ua_server_list[connection_index].length() == 0)
 		return;
@@ -2379,28 +2418,32 @@ void Connect(int connection_index)
 	g_btnPageRight->enabled=true;
 	g_btnMix->enabled=true;
 
+	g_ua_server_last_connection = connection_index;
+
 	SetRedrawWindow(true);
+
+	return true;
 }
 #endif
 
 #ifndef SIMULATION
-void Connect(int connection_index)
+bool Connect(int connection_index)
 {
-	g_page = 0;
+	if (connection_index != g_ua_server_last_connection) {
+		g_page = 0;
+	}
 
 	if (g_ua_server_list[connection_index].length() == 0)
-		return;
-
-	g_ua_server_connected = g_ua_server_list[connection_index];
+		return false;
 
 	//connect to UA
 	try
 	{
 		g_msg = "Connecting to " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT;
-		Draw(); // force to draw
+		Draw(); // force draw
 
 		g_tcpClient = new TCPClient(g_ua_server_list[connection_index].c_str(), UA_TCP_PORT, &UA_TCPClientProc);
-
+		g_ua_server_connected = g_ua_server_list[connection_index];
 		toLog("UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
 
 		UA_TCPClientSend("get /devices");
@@ -2413,20 +2456,25 @@ void Connect(int connection_index)
 
 		g_btnConnect[connection_index].checked = true;
 
+		g_ua_server_last_connection = connection_index;
+
 		g_msg = "";
 
 		SetNetworkTimeout();
 
 		SetRedrawWindow(true);
 	}
-	catch (char *error)
+	catch (string error)
 	{
 		g_msg = "Connection failed on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT + ": " + string(error);
 
 		toLog("UA:  " + g_msg);
 
 		Disconnect();
+
+		return false;
 	}
+	return true;
 }
 #endif
 
@@ -2443,18 +2491,16 @@ void Disconnect()
 	g_btnMix->enabled=false;
 
 	SaveServerSettings(g_ua_server_connected);
-	g_ua_server_connected = "";
 
 	if (g_tcpClient)
 	{
-		toLog("UA:  Disconnect from " + g_ua_server_list[0] + ":" + UA_TCP_PORT);
+		toLog("UA:  Disconnect from " + g_ua_server_connected + ":" + UA_TCP_PORT);
 
-		g_tcpClient->Disconnect();
 		delete g_tcpClient;
 		g_tcpClient = NULL;
 	}
 
-	g_page = 0;
+	g_ua_server_connected = "";
 
 	g_sends_count = 0;
 	CleanUpSendButtons();
@@ -3337,70 +3383,69 @@ void UpdateConnectButtons()
 	}
 }
 
-GFXSurface* LoadImage(string filename) {
+GFXSurface* LoadGfx(string filename) {
 	string path = getDataPath(filename);
 	GFXSurface *gs = gfx->LoadGfx(path);
 	if (!gs) {
-		toLog("LoadImage " + path + " failed");
+		toLog("LoadGfx " + path + " failed");
 		return NULL;
 	}
 
-	// usually GFXEngine keeps a copy of the image in RAM but here it's not needed, so delete it manually
-	delete[] gs->bgra;
-	gs->bgra = NULL;
+	// usually GFXEngine keeps a copy of the image in RAM but here it's not needed
+	gfx->FreeRAM(gs);
 
 	return gs;
 }
 
-bool LoadImages() {
+bool LoadAllGfx() {
 
-	if(!(g_gsButtonYellow[0] = LoadImage("btn_yellow_off.gfx")))
+	if (!(g_gsButtonYellow[0] = LoadGfx("btn_yellow_off.gfx")))
 		return false;
-	if (!(g_gsButtonYellow[1] = LoadImage("btn_yellow_on.gfx")))
-		return false;
-
-	if (!(g_gsButtonRed[0] = LoadImage("btn_red_off.gfx")))
-		return false;
-	if (!(g_gsButtonRed[1] = LoadImage("btn_red_on.gfx")))
+	if (!(g_gsButtonYellow[1] = LoadGfx("btn_yellow_on.gfx")))
 		return false;
 
-	if (!(g_gsButtonGreen[0] = LoadImage("btn_green_off.gfx")))
+	if (!(g_gsButtonRed[0] = LoadGfx("btn_red_off.gfx")))
 		return false;
-	if (!(g_gsButtonGreen[1] = LoadImage("btn_green_on.gfx")))
-		return false;
-
-	if (!(g_gsButtonBlue[0] = LoadImage("btn_blue_off.gfx")))
-		return false;
-	if (!(g_gsButtonBlue[1] = LoadImage("btn_blue_on.gfx")))
+	if (!(g_gsButtonRed[1] = LoadGfx("btn_red_on.gfx")))
 		return false;
 
-	if (!(g_gsChannelBg = LoadImage("channelbg.gfx")))
+	if (!(g_gsButtonGreen[0] = LoadGfx("btn_green_off.gfx")))
+		return false;
+	if (!(g_gsButtonGreen[1] = LoadGfx("btn_green_on.gfx")))
 		return false;
 
-	if (!(g_gsBgRight = LoadImage("bg_right.gfx")))
+	if (!(g_gsButtonBlue[0] = LoadGfx("btn_blue_off.gfx")))
+		return false;
+	if (!(g_gsButtonBlue[1] = LoadGfx("btn_blue_on.gfx")))
 		return false;
 
-	if (!(g_gsFaderrail = LoadImage("faderrail.gfx")))
+	if (!(g_gsChannelBg = LoadGfx("channelbg.gfx")))
 		return false;
 
-	if (!(g_gsFader = LoadImage("fader.gfx")))
+	if (!(g_gsBgRight = LoadGfx("bg_right.gfx")))
 		return false;
 
-	if (!(g_gsPan = LoadImage("poti.gfx")))
+	if (!(g_gsFaderrail = LoadGfx("faderrail.gfx")))
 		return false;
 
-	if (!(g_gsPanPointer = LoadImage("poti_pointer.gfx")))
+	if (!(g_gsFader = LoadGfx("fader.gfx")))
+		return false;
+
+	if (!(g_gsPan = LoadGfx("poti.gfx")))
+		return false;
+
+	if (!(g_gsPanPointer = LoadGfx("poti_pointer.gfx")))
 		return false;
 
 	for (int n = 0; n < 4; n++) {
-		if (!(g_gsLabel[n] = LoadImage("label" + to_string(n + 1) + ".gfx")))
+		if (!(g_gsLabel[n] = LoadGfx("label" + to_string(n + 1) + ".gfx")))
 			return false;
 	}
 
 	return true;
 }
 
-void DeleteGfx()
+void ReleaseAllGfx()
 {
 	for (int n = 0; n < 2; n++)
 	{
@@ -3655,6 +3700,14 @@ bool Settings::load() {
 		}
 
 		try {
+			int64_t reconnect_time = element["general"]["reconnect_time"];
+			this->reconnect_time = reconnect_time;
+		}
+		catch (simdjson_error e) {
+			this->reconnect_time = 10000;
+		}
+
+		try {
 			this->extended_logging = element["general"]["extended_logging"];
 		}
 		catch (simdjson_error e) {}
@@ -3718,6 +3771,7 @@ bool Settings::save()
 		fprintf(fh, "\"general\": {\n");
 		fprintf(fh, "\"lock_settings\": false,\n");
 		fprintf(fh, "\"lock_to_mix\": \"%s\",\n", this->lock_to_mix.c_str());
+		fprintf(fh, "\"reconnect_time\": %d,\n", this->reconnect_time);
 		fprintf(fh, "\"extended_logging\": %s\n", this->extended_logging ? "true" : "false");
 		fprintf(fh, "},\n");
 
@@ -3851,15 +3905,13 @@ int main(int argc, char* argv[]) {
 	try {
 		gfx = new GFXEngine(WND_TITLE, g_settings.x, g_settings.y, g_settings.w, g_settings.h, flag, &g_window);
 	}
-	catch (invalid_argument e)
-	{
+	catch (invalid_argument e) {
 		toLog("InitGfx failed : " + string(SDL_GetError()));
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","InitGfx failed", NULL);
 		return 1;
 	}
 	SDL_SetWindowMinimumSize(g_window, 320, 240);
-	if (LoadImages())
-	{
+	if (LoadAllGfx()) {
 		UpdateLayout();
 
 #ifdef _WIN32
@@ -4374,7 +4426,7 @@ int main(int argc, char* argv[]) {
 				{
 					if (e.user.code == EVENT_CONNECT) {
 						Disconnect();
-						Connect(0);
+						Connect(g_ua_server_last_connection == -1 ? 0 : g_ua_server_last_connection);
 					}
 					else if(e.user.code == EVENT_DISCONNECT) {
 						Disconnect();
@@ -4406,8 +4458,8 @@ int main(int argc, char* argv[]) {
 	}
 	else
 	{
-		toLog("LoadImages failed");
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadImages failed", NULL);
+		toLog("LoadGfx failed");
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadGfx failed", NULL);
 	}
 
 	gfx->DeleteFont(g_fntMain);
@@ -4415,7 +4467,7 @@ int main(int argc, char* argv[]) {
 	gfx->DeleteFont(g_fntLabel);
 	gfx->DeleteFont(g_fntFaderScale);
 	gfx->DeleteFont(g_fntOffline);
-	DeleteGfx();
+	ReleaseAllGfx();
 	
 	delete gfx;
 	gfx = NULL;

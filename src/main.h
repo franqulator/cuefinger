@@ -37,7 +37,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.0.2";
+const string APP_VERSION = "1.1.0";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\n\
@@ -135,6 +135,7 @@ public:
 	string lock_to_mix;
 	string serverlist[UA_MAX_SERVER_LIST];
 	bool extended_logging;
+	unsigned int reconnect_time;
 
 	Settings() {
 		x = 0;
@@ -146,6 +147,7 @@ public:
 		channel_width = 0;
 		lock_settings = false;
 		extended_logging = false;
+		reconnect_time = 10000;
 	}
 	bool load();
 	bool save();
@@ -282,11 +284,11 @@ public:
 };
 
 void UA_TCPClientSend(const char* msg);
-void Connect(int);
+bool Connect(int);
 void Disconnect();
 void Draw();
-bool LoadGfx();
-void DeleteGfx();
+bool LoadAllGfx();
+void ReleaseAllGfx();
 bool LoadServerSettings(string server_name, Button *btnSend);
 bool LoadServerSettings(string server_name, UADevice *dev);
 bool SaveServerSettings(string server_name);

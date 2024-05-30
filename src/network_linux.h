@@ -31,6 +31,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <string>
+#include <unistd.h>
+#include <stdexcept>
+#include "translator.h"
 
 using namespace std;
 
@@ -42,23 +45,24 @@ using namespace std;
 #define MSG_CLIENT_CONNECTION_LOST	3
 #define MSG_TEXT					4
 
-bool GetClientIPs(void(*MessageCallback)(char *));
-void GetComputerNameByIP(char *ip, char *computername);
+bool GetClientIPs(void(*MessageCallback)(string ip));
+string GetComputerNameByIP(string ip);
 
 static int receiveThread(void *param);
 
 class TCPClient
 {
-public:
+private:
 	int socketConnect;
 	SDL_Thread *receiveThreadHandle;
 	bool receiveThreadIsRunning;
-	TCPClient(const char *ip_or_hostname, const char *port, void (*MessageCallback)(int,string));
+public:
+	TCPClient(string host, string port, void (*MessageCallback)(int,string)); // throws exception
 	~TCPClient();
-	void Send(const char *txt);
-	char* GetServerIP(char *ip);
-	void (*MessageCallback)(int,string);
-	void Disconnect();
+	void Send(string data);
+private:
+	static int receiveThread(void* param);
+	void (*MessageCallback)(int msg, string data);
 };
 
 #endif

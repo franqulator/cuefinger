@@ -1,3 +1,5 @@
+//Version 5.0 - 2023-11-24
+
 /*
 This file is part of Cuefinger 1
 
@@ -17,8 +19,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-GFXEngine v5.0 beta
 */
 
 #include "gfx2d_sdl.h"
@@ -33,7 +33,7 @@ void GFXJob::init() {
 	this->spritebatch = NULL;
 }
 
-void GFXEngine::_debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, float strength, Vector2D offset) {
+void GFXEngine::debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, float strength, Vector2D offset) {
 	Vector2D rotationCenter(-v.length() / 2, strength / 2);
 	DrawShape(0, color,
 		pos.getX() - strength / 2 + offset.getX(),
@@ -52,20 +52,20 @@ void GFXEngine::_debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, flo
 			0, 1, 0, NULL, GFX_LAYER_FRONT);*/
 }
 
-void GFXEngine::_AddJob(GFXFont *font, float x, float y, string text, short alignment, Vector2D *max_size,
-				int flags, float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, int layer)
+void GFXEngine::_AddJob(GFXFont* font, float x, float y, string text, short alignment, Vector2D* max_size,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
-	if(!font || layer >= MAX_LAYERS)
+	if (!font || layer >= MAX_LAYERS)
 		return;
 
 	font->will_draw++;
-	
+
 	if (!text.length())
 	{
 		return;
 	}
 
-	GFXJob *job = NULL;
+	GFXJob* job = NULL;
 
 	if (jobsList[layer].empty() || jobsIterator[layer] == jobsList[layer].end()) {
 		job = new GFXJob;
@@ -83,53 +83,53 @@ void GFXEngine::_AddJob(GFXFont *font, float x, float y, string text, short alig
 	job->text = text;
 	job->alignment = alignment;
 
-	if(max_size)
+	if (max_size)
 		job->max_size = *max_size;
 	else
-		job->max_size = Vector2D(0, 0);
+		job->max_size = Vector2D(0.0f, 0.0f);
 
 	memcpy(&job->properties, &font->properties, sizeof(GFXFontProperties));
 
-	job->opacity=opacity;
-	job->rotation=rotation;
-	if(rotation_pt)
-		job->rotation_pt=*rotation_pt;
+	job->opacity = opacity;
+	job->rotation = rotation;
+	if (rotationOffset)
+		job->rotationOffset = *rotationOffset;
 	else
-		job->rotation_pt = Vector2D(NAN,NAN);
-	if(stretch)
-		job->stretch=*stretch;
+		job->rotationOffset = Vector2D(0.0f, 0.0f);
+	if (stretch)
+		job->stretch = *stretch;
 	else
-		job->stretch=Vector2D(NAN,NAN);
+		job->stretch = Vector2D(NAN, NAN);
 
-	job->flags=flags;
+	job->flags = flags;
 
 	job->x = x;
 	job->y = y;
 
 	if (layer == GFX_LAYER_SPLIT_LEFT_BACK || layer == GFX_LAYER_SPLIT_LEFT_FRONT)
 	{
-		job->x -= renderer_width / 4;
+		job->x -= (float)renderer_width / 4.0f;
 	}
 	else if (layer == GFX_LAYER_SPLIT_RIGHT_BACK || layer == GFX_LAYER_SPLIT_RIGHT_FRONT)
 	{
-		job->x += renderer_width / 4;
+		job->x += (float)renderer_width / 4.0f;
 	}
 
 	job->zorder = this->zorder[layer];
 	this->zorder[layer]++;
 }
 
-bool GFXEngine::_AddJob(GFXSurface *gs, int shape, unsigned int color, float x, float y, Rect *rc,
-			int flags, float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, int layer)
+bool GFXEngine::_AddJob(GFXSurface* gs, int shape, unsigned int color, float x, float y, Rect* rc,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
 	if (layer >= MAX_LAYERS)
 		return false;
-		
+
 	if (gs)
 		gs->will_draw++;
 
-	GFXJob* job = NULL; 
-	
+	GFXJob* job = NULL;
+
 	if (jobsList[layer].empty() || jobsIterator[layer] == jobsList[layer].end()) {
 		job = new GFXJob;
 		jobsList[layer].push_back(job);
@@ -153,7 +153,7 @@ bool GFXEngine::_AddJob(GFXSurface *gs, int shape, unsigned int color, float x, 
 		job->rc.right = rc->right;
 		job->rc.bottom = rc->bottom;
 	}
-	else if(gs)
+	else if (gs)
 	{
 		job->rc.left = 0;
 		job->rc.top = 0;
@@ -170,38 +170,42 @@ bool GFXEngine::_AddJob(GFXSurface *gs, int shape, unsigned int color, float x, 
 
 	if (layer == GFX_LAYER_SPLIT_LEFT_BACK || layer == GFX_LAYER_SPLIT_LEFT_FRONT)
 	{
-		job->x -= renderer_width / 4;
+		job->x -= (float)renderer_width / 4.0f;
 	}
 	else if (layer == GFX_LAYER_SPLIT_RIGHT_BACK || layer == GFX_LAYER_SPLIT_RIGHT_FRONT)
 	{
-		job->x += renderer_width / 4;
+		job->x += (float)renderer_width / 4.0f;
 	}
 
-	job->opacity=opacity;
-	job->rotation=rotation;
-	if(rotation_pt)
-		job->rotation_pt=*rotation_pt;
+	job->opacity = opacity;
+	job->rotation = rotation;
+	if (rotationOffset)
+		job->rotationOffset = *rotationOffset;
 	else
-		job->rotation_pt = Vector2D(NAN,NAN);
-	if(stretch)
-		job->stretch=*stretch;
+		job->rotationOffset = Vector2D(0.0f, 0.0f);
+	if (stretch)
+		job->stretch = *stretch;
 	else
-		job->stretch=Vector2D(NAN,NAN);
+		job->stretch = Vector2D(NAN, NAN);
 
-	job->flags=flags;
+	job->flags = flags;
 
-	if(gs) {
+	if (gs) {
 		memcpy(&job->apply_filter, &gs->apply_filter, sizeof(GFXFilter));
 	}
 
-
-	Vector2D center = Vector2D(job->rc.getWidth(), job->rc.getHeight());
-	float radius = center.length() / 2;
-	center.multiply(0.5);
+	Vector2D center(0, 0);
+	if (stretch) {
+		center.set(stretch->getX() / 2.0f, stretch->getY() / 2.0f);
+	}
+	else {
+		center.set((float)job->rc.getWidth() / 2.0f, (float)job->rc.getHeight() / 2.0f);
+	}
+	float radius = center.length();
 
 	bool remove_job = job->rc.getWidth() < 1 || job->rc.getHeight() < 1
-		|| center.getX() + radius < 1 || center.getX() - radius > renderer_width
-		|| center.getY() + radius < 1 || center.getY() - radius > renderer_height;
+		|| center.getX() + radius < 1.0f || center.getX() - radius > (float)renderer_width
+		|| center.getY() + radius < 1.0f || center.getY() - radius > (float)renderer_height;
 
 	if (remove_job) {
 		jobsIterator[layer]--;
@@ -212,14 +216,14 @@ bool GFXEngine::_AddJob(GFXSurface *gs, int shape, unsigned int color, float x, 
 		gs->jobs[layer].insert(job);
 		this->spriteBatchRequests[layer].insert(gs);
 	}
-	
+
 	job->zorder = this->zorder[layer];
 	this->zorder[layer]++;
 
 	return true;
 }
 
-GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flags, SDL_Window **r_window)
+GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flags, SDL_Window** r_window)
 {
 	this->window = NULL;
 	this->renderer = NULL;
@@ -229,24 +233,24 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 	this->updateBgraSize = 0;
 	this->p_update_bgra = NULL;
 
-	if(!SDL_WasInit(SDL_INIT_VIDEO))
+	if (!SDL_WasInit(SDL_INIT_VIDEO))
 		SDL_Init(SDL_INIT_VIDEO);
-	
+
 	TTF_Init();
 
-	if(flags & GFX_HIDECURSOR)
+	if (flags & GFX_HIDECURSOR)
 		SDL_ShowCursor(SDL_DISABLE);
 
-	Uint32 window_flags= /*SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL|*/ SDL_WINDOW_RESIZABLE /*| SDL_WINDOW_ALLOW_HIGHDPI*/;
-	if( (flags & GFX_FULLSCREEN))
+	Uint32 window_flags = /*SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL|*/ SDL_WINDOW_RESIZABLE /*| SDL_WINDOW_ALLOW_HIGHDPI*/;
+	if ((flags & GFX_FULLSCREEN))
 	{
 		window_flags |= SDL_WINDOW_FULLSCREEN;
 	}
-	else if(flags & GFX_FULLSCREEN_DESKTOP)
+	else if (flags & GFX_FULLSCREEN_DESKTOP)
 	{
 		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
-	else if( (flags & GFX_MAXIMIZED))
+	else if ((flags & GFX_MAXIMIZED))
 	{
 		window_flags |= SDL_WINDOW_MAXIMIZED;
 	}
@@ -255,35 +259,35 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 	window = SDL_CreateWindow(title.c_str(), x, y, width, height, window_flags);
 	if (window == NULL) {
 		throw invalid_argument("Error in GFXEngine: SDL_CreateWindow -> " + string(SDL_GetError()));
-    }
+	}
 
-	if(r_window)
+	if (r_window)
 	{
 		*r_window = window;
 	}
 
 	Uint32 render_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE;
-	if(flags & GFX_SOFTWARE)
+	if (flags & GFX_SOFTWARE)
 	{
 		render_flags = SDL_RENDERER_SOFTWARE;
 	}
 
-	if(flags & GFX_VSYNC)
+	if (flags & GFX_VSYNC)
 	{
 		render_flags = SDL_RENDERER_PRESENTVSYNC;
 	}
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
-    renderer = SDL_CreateRenderer(window, -1, render_flags);
-    if(!renderer) {
+	renderer = SDL_CreateRenderer(window, -1, render_flags);
+	if (!renderer) {
 		throw invalid_argument("Error in GFXEngine: SDL_CreateRenderer -> " + string(SDL_GetError()));
-    }
+	}
 
-/*	window_surface = SDL_GetWindowSurface(window);
-    if(!window_surface) {
-		throw invalid_argument("Error in GFXEngine: SDL_GetWindowSurface -> " + string(SDL_GetError()));
-    }
-*/
+	/*	window_surface = SDL_GetWindowSurface(window);
+		if(!window_surface) {
+			throw invalid_argument("Error in GFXEngine: SDL_GetWindowSurface -> " + string(SDL_GetError()));
+		}
+	*/
 	SDL_RenderSetLogicalSize(renderer, width, height);
 
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -295,7 +299,7 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 	SDL_RenderGetScale(renderer, &xscale, &yscale);
 
 	//offline render texture for prerendering text
-	offline_render_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, 
+	offline_render_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING,
 		renderer_width * xscale, renderer_height * yscale);
 	if (!offline_render_texture) {
 		throw invalid_argument("Error in GFXEngine: SDL_CreateTexture -> " + string(SDL_GetError()));
@@ -346,13 +350,11 @@ bool GFXEngine::Resize(unsigned int width, unsigned int height) {
 GFXEngine::~GFXEngine() {
 	AbortUpdate();
 
-	if(p_update_bgra) {
-		delete[] p_update_bgra;
-	}
+	SAFE_DELETE_ARRAY(p_update_bgra);
 
 	for (int i = 0; i < MAX_LAYERS; i++) {
 		while (!jobsList[i].empty()) {
-			delete jobsList[i].back();
+			SAFE_DELETE(jobsList[i].back());
 			jobsList[i].pop_back();
 		}
 	}
@@ -362,18 +364,18 @@ GFXEngine::~GFXEngine() {
 		offline_render_texture = NULL;
 	}
 
-	if(renderer) {
-    	SDL_DestroyRenderer(renderer);
+	if (renderer) {
+		SDL_DestroyRenderer(renderer);
 		renderer = NULL;
 	}
 
-/*	if(window_surface) {
-		//don't use free since it's handled by the window
-		window_surface = NULL;
-	}*/
+	/*	if(window_surface) {
+			//don't use free since it's handled by the window
+			window_surface = NULL;
+		}*/
 
-	if(window) {
-	    SDL_DestroyWindow(window);
+	if (window) {
+		SDL_DestroyWindow(window);
 		window = NULL;
 	}
 
@@ -383,18 +385,18 @@ GFXEngine::~GFXEngine() {
 
 bool GFXEngine::Update() {
 	// falls innerhalb eines BeginDraw - EndDraw-Blocks aufgerufen wird, renderTarget vorrübergehend auf Ausgabe setzen 
-	SDL_Texture *prev_renderTarget = SDL_GetRenderTarget(renderer);
-	if(prev_renderTarget)
+	SDL_Texture* prev_renderTarget = SDL_GetRenderTarget(renderer);
+	if (prev_renderTarget)
 		SDL_SetRenderTarget(renderer, NULL);
-	
+
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 
 	_DrawAll();
 
 	SDL_RenderPresent(renderer);
-	
-	if(prev_renderTarget)
+
+	if (prev_renderTarget)
 		SDL_SetRenderTarget(renderer, prev_renderTarget);
 
 	AbortUpdate();// zum reset der werte
@@ -402,45 +404,45 @@ bool GFXEngine::Update() {
 	return true;
 }
 
-string GFXEngine::_write_get_next_line(GFXFont *fnt,string txt, size_t *txt_ptr, float width, bool autobreak) {
+string GFXEngine::_write_get_next_line(GFXFont* fnt, string txt, size_t* txt_ptr, float width, bool autobreak) {
 	int estimate_width;
 	int estimate_height;
 
 	string txt_line;
 
-	size_t fi = txt.find_first_of("\n",*txt_ptr);
-	if(fi == string::npos)
+	size_t fi = txt.find_first_of("\n", *txt_ptr);
+	if (fi == string::npos)
 	{
-		txt_line = txt.substr(*txt_ptr,txt.length() - *txt_ptr);
+		txt_line = txt.substr(*txt_ptr, txt.length() - *txt_ptr);
 	}
 	else
 	{
 		txt_line = txt.substr(*txt_ptr, fi - *txt_ptr + 1);
 	}
 
-	if(autobreak) // automatischer zeilenumbruch
+	if (autobreak) // automatischer zeilenumbruch
 	{
-		TTF_SizeUTF8(fnt->ttf, txt_line.c_str(),&estimate_width, &estimate_height);
-		if(width > 0 && estimate_width > width)
+		TTF_SizeUTF8(fnt->ttf, txt_line.c_str(), &estimate_width, &estimate_height);
+		if (width > 0 && estimate_width > width)
 		{
-			for(int txt_len=1; txt_len<txt.length() - *txt_ptr; txt_len++)
+			for (int txt_len = 1; txt_len < txt.length() - *txt_ptr; txt_len++)
 			{
 				txt_line = txt.substr(*txt_ptr, txt_len);
 
-				TTF_SizeUTF8(fnt->ttf, txt_line.c_str(),&estimate_width, &estimate_height);
+				TTF_SizeUTF8(fnt->ttf, txt_line.c_str(), &estimate_width, &estimate_height);
 
-				if(estimate_width > width)
+				if (estimate_width > width)
 				{
 					fi = txt_line.find_last_of(" -\t");
-					if(fi != string::npos)
+					if (fi != string::npos)
 					{
 						txt_len = fi + 1;
 					}
 					else
 						txt_len--;
 
-					if(txt_len < 1)
-						txt_len = 1;									
+					if (txt_len < 1)
+						txt_len = 1;
 
 					txt_line = txt_line.substr(0, txt_len);
 					break;
@@ -454,7 +456,7 @@ string GFXEngine::_write_get_next_line(GFXFont *fnt,string txt, size_t *txt_ptr,
 }
 
 
-int GFXEngine::_CreateSpriteBatch(GFXSurface *gs, int layer)
+int GFXEngine::_CreateSpriteBatch(GFXSurface* gs, int layer)
 {
 	if (!renderer || !gs || renderer_width <= 0 || renderer_height <= 0)
 		return 0;
@@ -477,16 +479,16 @@ int GFXEngine::_CreateSpriteBatch(GFXSurface *gs, int layer)
 			mainJob = subJob;
 		}
 
-		GFXSpriteBatch *batch = new GFXSpriteBatch();
+		GFXSpriteBatch* batch = new GFXSpriteBatch();
 		batch->x = subJob->x;
 		batch->y = subJob->y;
 		batch->rc = subJob->rc;
 		batch->opacity = subJob->opacity;
 		batch->rotation = subJob->rotation;
-		batch->rotation_pt = subJob->rotation_pt;
+		batch->rotationOffset = subJob->rotationOffset;
 		batch->stretch = subJob->stretch;
 
-		if(!mainJob->spritebatch) {
+		if (!mainJob->spritebatch) {
 			mainJob->spritebatch = new deque<GFXSpriteBatch*>();
 		}
 
@@ -539,12 +541,12 @@ void GFXEngine::_DrawAll()
 
 		if (layer == GFX_LAYER_SPLIT_LEFT_BACK || layer == GFX_LAYER_SPLIT_LEFT_FRONT)
 		{
-			SDL_Rect rcClip = {0, 0, renderer_width / 2, renderer_height};
+			SDL_Rect rcClip = { 0, 0, renderer_width / 2, renderer_height };
 			SDL_RenderSetClipRect(renderer, &rcClip);
 		}
 		else if (layer == GFX_LAYER_SPLIT_RIGHT_BACK || layer == GFX_LAYER_SPLIT_RIGHT_FRONT)
 		{
-			SDL_Rect rcClip = {renderer_width / 2, 0, renderer_width / 2, renderer_height};
+			SDL_Rect rcClip = { renderer_width / 2, 0, renderer_width / 2, renderer_height };
 			SDL_RenderSetClipRect(renderer, &rcClip);
 		}
 		else
@@ -556,51 +558,51 @@ void GFXEngine::_DrawAll()
 		{
 			if ((*it)->font) //Schreibe Text
 			{
-				if((*it)->properties.shadow_distance)
+				if ((*it)->properties.shadow_distance)
 				{
-					float tx = cos((*it)->properties.shadow_direction)*(*it)->properties.shadow_distance;
-					float ty = sin((*it)->properties.shadow_direction)*(*it)->properties.shadow_distance;
+					float tx = cos((*it)->properties.shadow_direction) * (*it)->properties.shadow_distance;
+					float ty = sin((*it)->properties.shadow_direction) * (*it)->properties.shadow_distance;
 
 					_Write(NULL, (*it)->font, (*it)->properties.shadow_color,
 						(*it)->x + tx, (*it)->y + ty,
 						(*it)->text, (*it)->alignment, &(*it)->max_size,
-						(*it)->opacity * (*it)->properties.shadow_opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+						(*it)->opacity * (*it)->properties.shadow_opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 						(*it)->flags);
 				}
-				if((*it)->properties.outline_strength)
+				if ((*it)->properties.outline_strength)
 				{
 					//left
 					_Write(NULL, (*it)->font, (*it)->properties.outline_color,
 						(*it)->x - (*it)->properties.outline_strength, (*it)->y,
 						(*it)->text, (*it)->alignment, &(*it)->max_size,
-						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 						(*it)->flags);
 
 					//top
 					_Write(NULL, (*it)->font, (*it)->properties.outline_color,
 						(*it)->x, (*it)->y - (*it)->properties.outline_strength,
 						(*it)->text, (*it)->alignment, &(*it)->max_size,
-						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 						(*it)->flags);
 
 					//right
 					_Write(NULL, (*it)->font, (*it)->properties.outline_color,
 						(*it)->x + (*it)->properties.outline_strength, (*it)->y,
 						(*it)->text, (*it)->alignment, &(*it)->max_size,
-						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 						(*it)->flags);
 
 					//bottom
 					_Write(NULL, (*it)->font, (*it)->properties.outline_color,
 						(*it)->x, (*it)->y + (*it)->properties.outline_strength,
 						(*it)->text, (*it)->alignment, &(*it)->max_size,
-						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+						(*it)->opacity * (*it)->properties.outline_opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 						(*it)->flags);
 				}
 				_Write(NULL, (*it)->font, (*it)->color,
 					(*it)->x, (*it)->y,
 					(*it)->text, (*it)->alignment, &(*it)->max_size,
-					(*it)->opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+					(*it)->opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 					(*it)->flags);
 			}
 			else if ((*it)->spritebatch) //batch
@@ -609,15 +611,15 @@ void GFXEngine::_DrawAll()
 			//	(*it)->apply_filter.brightness = 1.0f;
 				for (deque<GFXSpriteBatch*>::iterator it2 = (*it)->spritebatch->begin(); it2 != (*it)->spritebatch->end(); ++it2) {
 
-					_Draw(NULL, (*it)->gs, 0, 0, (*it2)->x, (*it2)->y, &(*it2)->rc, 
-						(*it2)->opacity, (*it2)->rotation, &(*it2)->rotation_pt, &(*it2)->stretch,
+					_Draw(NULL, (*it)->gs, 0, 0, (*it2)->x, (*it2)->y, &(*it2)->rc,
+						(*it2)->opacity, (*it2)->rotation, &(*it2)->rotationOffset, &(*it2)->stretch,
 						(*it)->flags, &(*it)->apply_filter);
 				}
 			}
-			else if((*it)->gs || (*it)->shape)
+			else if ((*it)->gs || (*it)->shape)
 			{
-				_Draw(NULL, (*it)->gs, (*it)->shape, (*it)->color, (*it)->x, (*it)->y, &(*it)->rc, 
-					(*it)->opacity, (*it)->rotation, &(*it)->rotation_pt, &(*it)->stretch,
+				_Draw(NULL, (*it)->gs, (*it)->shape, (*it)->color, (*it)->x, (*it)->y, &(*it)->rc,
+					(*it)->opacity, (*it)->rotation, &(*it)->rotationOffset, &(*it)->stretch,
 					(*it)->flags, &(*it)->apply_filter);
 			}
 		}
@@ -632,11 +634,10 @@ void GFXEngine::AbortUpdate()
 		{
 			if ((*it)->spritebatch) {
 				for (deque<GFXSpriteBatch*>::iterator it2 = (*it)->spritebatch->begin(); it2 != (*it)->spritebatch->end(); ++it2) {
-					delete (*it2);
+					SAFE_DELETE(*it2);
 				}
 				(*it)->spritebatch->clear();
-				delete (*it)->spritebatch;
-				(*it)->spritebatch = NULL;
+				SAFE_DELETE((*it)->spritebatch);
 			}
 			if ((*it)->gs) {
 				(*it)->gs->jobs[layer].clear();
@@ -648,7 +649,7 @@ void GFXEngine::AbortUpdate()
 				}
 			}
 			if ((*it)->font) {
-				(*it)->font->will_draw=0;
+				(*it)->font->will_draw = 0;
 				if ((*it)->font->will_delete && (*it)->font->will_draw < 1)
 				{
 					DeleteFont((*it)->font);
@@ -664,7 +665,7 @@ void GFXEngine::AbortUpdate()
 
 GFXSurface* GFXEngine::CreateSurface(unsigned int w, unsigned int h)
 {
-	GFXSurface *gs = new GFXSurface;
+	GFXSurface* gs = new GFXSurface;
 	if (!gs)
 	{
 		return NULL;
@@ -690,7 +691,7 @@ GFXSurface* GFXEngine::CreateSurface(unsigned int w, unsigned int h)
 		return NULL;
 	}
 
-	gs->bitmap = new SDL_Texture*[gs->x_surfaces*gs->y_surfaces];
+	gs->bitmap = new SDL_Texture * [gs->x_surfaces * gs->y_surfaces];
 	if (!gs->bitmap)
 	{
 		DeleteSurface(gs);
@@ -716,8 +717,8 @@ GFXSurface* GFXEngine::CreateSurface(unsigned int w, unsigned int h)
 			else
 				bmHeight = MAX_TEXTURE_HEIGHT;
 
-			gs->bitmap[x + y * gs->x_surfaces] = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_BGRA32, 
-														/*SDL_TEXTUREACCESS_TARGET /*| SDL_TEXTUREACCESS_STREAMING */ SDL_TEXTUREACCESS_STATIC, bmWidth, bmHeight);
+			gs->bitmap[x + y * gs->x_surfaces] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32,
+				/*SDL_TEXTUREACCESS_TARGET | SDL_TEXTUREACCESS_STREAMING |*/ SDL_TEXTUREACCESS_STATIC, bmWidth, bmHeight);
 			if (!gs->bitmap[x + y * gs->x_surfaces])
 			{
 				DeleteSurface(gs);
@@ -731,7 +732,7 @@ GFXSurface* GFXEngine::CreateSurface(unsigned int w, unsigned int h)
 	return gs;
 }
 
-GFXSurface* GFXEngine::CopySurface(GFXSurface *gs_src, unsigned int w, unsigned int h)
+GFXSurface* GFXEngine::CopySurface(GFXSurface* gs_src, unsigned int w, unsigned int h)
 {
 	if (!gs_src)
 		return NULL;
@@ -744,10 +745,10 @@ GFXSurface* GFXEngine::CopySurface(GFXSurface *gs_src, unsigned int w, unsigned 
 	if (w)
 		new_w = w;
 
-	if(h)
+	if (h)
 		new_h = h;
 
-	GFXSurface *gs = NULL;
+	GFXSurface* gs = NULL;
 	gs = CreateSurface(new_w, new_h);
 	if (!gs)
 		return NULL;
@@ -758,23 +759,25 @@ GFXSurface* GFXEngine::CopySurface(GFXSurface *gs_src, unsigned int w, unsigned 
 
 	if (new_w == gs_src->w && new_h == gs_src->h)//copy
 	{
-		memcpy(gs->bgra, gs_src->bgra, sizeof(unsigned int)*gs->w*gs->h);
+		if (_HasBGRABuffer(gs_src)) {
+			memcpy(gs->bgra, gs_src->bgra, sizeof(unsigned int) * gs->w * gs->h);
 
-		if (!_CopyColorInfo(gs))
-		{
-			DeleteSurface(gs);
-			return NULL;
-		}
+			if (!_CopyColorInfo(gs))
+			{
+				DeleteSurface(gs);
+				return NULL;
+			}
 
-		if (create_collision_array)
-		{
-			CreateCollisionData(gs);
+			if (create_collision_array)
+			{
+				CreateCollisionData(gs);
+			}
 		}
 	}
 	else//resize
 	{
 		BeginDrawOnSurface(gs);
-		Vector2D stretch((float)new_w,(float)new_h);
+		Vector2D stretch((float)new_w, (float)new_h);
 		DrawOnSurface(gs, gs_src, 0, 0, NULL, 0, 1.0, 0, NULL, &stretch);
 		EndDrawOnSurface(gs);
 
@@ -784,18 +787,16 @@ GFXSurface* GFXEngine::CopySurface(GFXSurface *gs_src, unsigned int w, unsigned 
 	return gs;
 }
 
-bool GFXEngine::_CopyColorInfo(GFXSurface *gs, bool premultiplyAlpha, bool applyFilter)
+bool GFXEngine::_CopyColorInfo(GFXSurface* gs, bool premultiplyAlpha, bool applyFilter)
 //copies pixels from ram to sdl-surface
 {
 	if (!gs)
 		return false;
 
-	if(applyFilter)
+	if (applyFilter)
 	{
 		if (this->updateBgraSize < gs->w * gs->h * 4) {
-			if (p_update_bgra) {
-				delete[] p_update_bgra;
-			}
+			SAFE_DELETE_ARRAY(p_update_bgra);
 			this->updateBgraSize = gs->w * gs->h * 4;
 			p_update_bgra = new unsigned char[this->updateBgraSize];
 			if (!p_update_bgra)
@@ -803,91 +804,91 @@ bool GFXEngine::_CopyColorInfo(GFXSurface *gs, bool premultiplyAlpha, bool apply
 		}
 	}
 
-	unsigned char *p_byte_bgra = (unsigned char*)gs->bgra;
+	unsigned char* p_byte_bgra = (unsigned char*)gs->bgra;
 
-/*	if (premultiplyAlpha && gs->use_alpha && !gs->alpha_premultiplied)
-	{
-		for (unsigned int y = 0; y < gs->h; y++)
+	/*	if (premultiplyAlpha && gs->use_alpha && !gs->alpha_premultiplied)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
+			for (unsigned int y = 0; y < gs->h; y++)
 			{
-				int idx = (y*gs->w + x) * 4;
-				float mul = (float)p_byte_bgra[idx + 3] / 255;
+				for (unsigned int x = 0; x < gs->w; x++)
+				{
+					int idx = (y*gs->w + x) * 4;
+					float mul = (float)p_byte_bgra[idx + 3] / 255;
 
-				p_byte_bgra[idx] = (unsigned char)round((float)p_byte_bgra[idx] * mul);
-				p_byte_bgra[idx + 1] = (unsigned char)round((float)p_byte_bgra[idx + 1] * mul);
-				p_byte_bgra[idx + 2] = (unsigned char)round((float)p_byte_bgra[idx + 2] * mul);
+					p_byte_bgra[idx] = (unsigned char)roundf((float)p_byte_bgra[idx] * mul);
+					p_byte_bgra[idx + 1] = (unsigned char)roundf((float)p_byte_bgra[idx + 1] * mul);
+					p_byte_bgra[idx + 2] = (unsigned char)roundf((float)p_byte_bgra[idx + 2] * mul);
+				}
 			}
+			gs->alpha_premultiplied = true;
 		}
-		gs->alpha_premultiplied = true;
-	}
-	//sdl untertützt kein premultiplied alpha -> zu straight alpha konvertieren
-	else */if(gs->use_alpha && gs->alpha_premultiplied)
-	{
-		for (unsigned int y = 0; y < gs->h; y++)
+		//sdl untertützt kein premultiplied alpha -> zu straight alpha konvertieren
+		else */if (gs->use_alpha && gs->alpha_premultiplied)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
+			for (unsigned int y = 0; y < gs->h; y++)
 			{
-				int idx = (y*gs->w + x) * 4;
-				float mul = 255.0 / (float)p_byte_bgra[idx + 3];
+				for (unsigned int x = 0; x < gs->w; x++)
+				{
+					int idx = (y * gs->w + x) * 4;
+					float mul = 255.0 / (float)p_byte_bgra[idx + 3];
 
-				p_byte_bgra[idx] = (unsigned char)round((float)p_byte_bgra[idx] * mul);
-				p_byte_bgra[idx + 1] = (unsigned char)round((float)p_byte_bgra[idx + 1] * mul);
-				p_byte_bgra[idx + 2] = (unsigned char)round((float)p_byte_bgra[idx + 2] * mul);
+					p_byte_bgra[idx] = (unsigned char)roundf((float)p_byte_bgra[idx] * mul);
+					p_byte_bgra[idx + 1] = (unsigned char)roundf((float)p_byte_bgra[idx + 1] * mul);
+					p_byte_bgra[idx + 2] = (unsigned char)roundf((float)p_byte_bgra[idx + 2] * mul);
+				}
 			}
+			gs->alpha_premultiplied = false;
 		}
-		gs->alpha_premultiplied = false;
-	}
 
-	if (applyFilter)
-	{
-		_RenderFilter(gs, p_update_bgra);
-		p_byte_bgra = p_update_bgra;
-	}
-
-	for (int sx = 0; sx < gs->x_surfaces; sx++)
-	{
-		for (int sy = 0; sy < gs->y_surfaces; sy++)
+		if (applyFilter)
 		{
-		//	Rect rcT = { 0,0,gs->w,gs->h };
-
-			int maxwidth = MAX_TEXTURE_WIDTH;
-			int maxheight = MAX_TEXTURE_HEIGHT;
-
-			//randsurfaces können kleiner sein (rest)
-			if (sx == gs->x_surfaces - 1)
-				maxwidth = gs->w - sx * MAX_TEXTURE_WIDTH;
-			if (sy == gs->y_surfaces - 1)
-				maxheight = gs->h - sy * MAX_TEXTURE_HEIGHT;
-
-			if (maxwidth < 1 || maxheight < 1)
-				continue;
-
-			SDL_Rect rcSDL;
-			rcSDL.x = 0;
-			rcSDL.y = 0;
-			rcSDL.w = maxwidth;
-			rcSDL.h = maxheight;
-			int result = SDL_UpdateTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL, 
-							&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT) * gs->w + sx * MAX_TEXTURE_WIDTH)],
-							/*&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT + rcT.top) * gs->w + sx * MAX_TEXTURE_WIDTH + rcT.left)],*/ gs->w * 4);
-
-		/*	void *pixels;
-			int pitch = 0;
-			int result = SDL_LockTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL, (void**)&pixels, &pitch);
-			if (result != 0) {
-				string error(SDL_GetError());
-				return false;
-			}
-			memcpy(pixels, &p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT) * gs->w + sx * MAX_TEXTURE_WIDTH)], pitch * maxheight);
-			SDL_UnlockTexture(gs->bitmap[sx + sy * gs->x_surfaces]);*/
+			_RenderFilter(gs, p_update_bgra);
+			p_byte_bgra = p_update_bgra;
 		}
-	}
 
-	return true;
+		for (int sx = 0; sx < gs->x_surfaces; sx++)
+		{
+			for (int sy = 0; sy < gs->y_surfaces; sy++)
+			{
+				//	Rect rcT = { 0,0,gs->w,gs->h };
+
+				int maxwidth = MAX_TEXTURE_WIDTH;
+				int maxheight = MAX_TEXTURE_HEIGHT;
+
+				//randsurfaces können kleiner sein (rest)
+				if (sx == gs->x_surfaces - 1)
+					maxwidth = gs->w - sx * MAX_TEXTURE_WIDTH;
+				if (sy == gs->y_surfaces - 1)
+					maxheight = gs->h - sy * MAX_TEXTURE_HEIGHT;
+
+				if (maxwidth < 1 || maxheight < 1)
+					continue;
+
+				SDL_Rect rcSDL;
+				rcSDL.x = 0;
+				rcSDL.y = 0;
+				rcSDL.w = maxwidth;
+				rcSDL.h = maxheight;
+				int result = SDL_UpdateTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL,
+					&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT) * gs->w + sx * MAX_TEXTURE_WIDTH)],
+					/*&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT + rcT.top) * gs->w + sx * MAX_TEXTURE_WIDTH + rcT.left)],*/ gs->w * 4);
+
+				/*	void *pixels;
+					int pitch = 0;
+					int result = SDL_LockTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL, (void**)&pixels, &pitch);
+					if (result != 0) {
+						string error(SDL_GetError());
+						return false;
+					}
+					memcpy(pixels, &p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT) * gs->w + sx * MAX_TEXTURE_WIDTH)], pitch * maxheight);
+					SDL_UnlockTexture(gs->bitmap[sx + sy * gs->x_surfaces]);*/
+			}
+		}
+
+		return true;
 }
 
-bool GFXEngine::DeleteSurface(GFXSurface *gs)
+bool GFXEngine::DeleteSurface(GFXSurface* gs)
 {
 	if (gs)
 	{
@@ -898,7 +899,7 @@ bool GFXEngine::DeleteSurface(GFXSurface *gs)
 		}
 		if (gs->bitmap)
 		{
-			for (int n = 0; n < gs->x_surfaces*gs->y_surfaces; n++)
+			for (int n = 0; n < gs->x_surfaces * gs->y_surfaces; n++)
 			{
 				if (gs->bitmap[n])
 				{
@@ -906,30 +907,24 @@ bool GFXEngine::DeleteSurface(GFXSurface *gs)
 					gs->bitmap[n] = NULL;
 				}
 			}
-			delete[] gs->bitmap;
-			gs->bitmap = NULL;
+			SAFE_DELETE_ARRAY(gs->bitmap);
 		}
-		if (gs->bgra)
-		{
-			delete[] gs->bgra;
-			gs->bgra = NULL;
-		}
+		SAFE_DELETE_ARRAY(gs->bgra);
 
 		DeleteCollisionData(gs);
 
-		delete gs;
-		gs = NULL;
+		SAFE_DELETE(gs);
 		return true;
 	}
 	return false;
 }
 
-bool GFXEngine::BeginDrawOnSurface(GFXSurface *gs_dest)
+bool GFXEngine::BeginDrawOnSurface(GFXSurface* gs_dest)
 {
 	if (!gs_dest)
 		return false;
 
-	for(int n=0; n < gs_dest->x_surfaces * gs_dest->y_surfaces; n++)
+	for (int n = 0; n < gs_dest->x_surfaces * gs_dest->y_surfaces; n++)
 	{
 		SDL_SetRenderTarget(renderer, gs_dest->bitmap[n]);
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
@@ -938,64 +933,68 @@ bool GFXEngine::BeginDrawOnSurface(GFXSurface *gs_dest)
 	return true;
 }
 
-bool GFXEngine::EndDrawOnSurface(GFXSurface *gs_dest)
+bool GFXEngine::EndDrawOnSurface(GFXSurface* gs_dest)
 {
 	if (!gs_dest)
 		return false;
 
 	int w = gs_dest->w;
 	int h = gs_dest->h;
-			
-	if(w >= MAX_TEXTURE_WIDTH)
+
+	if (w >= MAX_TEXTURE_WIDTH)
 	{
-		w=MAX_TEXTURE_WIDTH;
+		w = MAX_TEXTURE_WIDTH;
 	}
-	if(h >= MAX_TEXTURE_HEIGHT)
+	if (h >= MAX_TEXTURE_HEIGHT)
 	{
-		h=MAX_TEXTURE_HEIGHT;
+		h = MAX_TEXTURE_HEIGHT;
 	}
 
-	unsigned int *buffer = new unsigned int[w * h];
-	if(!buffer)
+	unsigned int* buffer = new unsigned int[w * h];
+	if (!buffer)
 		return false;
 
-	for(int sy=0; sy < gs_dest->y_surfaces; sy++)
+	if (!_HasBGRABuffer(gs_dest)) {
+		gs_dest->bgra = new unsigned int[gs_dest->w * gs_dest->h];
+	}
+
+	for (int sy = 0; sy < gs_dest->y_surfaces; sy++)
 	{
-		for(int sx=0; sx < gs_dest->x_surfaces; sx++)
+		for (int sx = 0; sx < gs_dest->x_surfaces; sx++)
 		{
 			SDL_SetRenderTarget(renderer, gs_dest->bitmap[sx + sy * gs_dest->x_surfaces]);
 
 			int bm_width = gs_dest->w - sx * MAX_TEXTURE_WIDTH;
 			int bm_height = gs_dest->h - sy * MAX_TEXTURE_HEIGHT;
 
-			if(bm_width > MAX_TEXTURE_WIDTH)
+			if (bm_width > MAX_TEXTURE_WIDTH)
 			{
 				bm_width = MAX_TEXTURE_WIDTH;
 			}
-			if(bm_height > MAX_TEXTURE_HEIGHT)
+			if (bm_height > MAX_TEXTURE_HEIGHT)
 			{
 				bm_height = MAX_TEXTURE_HEIGHT;
 			}
 
 			SDL_Rect rc;
-			rc.x=0;
-			rc.y=0;
-			rc.w=bm_width;
-			rc.h=bm_height;
-			if(SDL_RenderReadPixels(renderer, &rc, SDL_PIXELFORMAT_BGRA32, (void*)buffer, 4 * bm_width) != 0)
+			rc.x = 0;
+			rc.y = 0;
+			rc.w = bm_width;
+			rc.h = bm_height;
+			if (SDL_RenderReadPixels(renderer, &rc, SDL_PIXELFORMAT_BGRA32, (void*)buffer, 4 * bm_width) != 0)
 			{
-				delete[] buffer;
+				SAFE_DELETE_ARRAY(buffer);
 				return false;
 			}
 
 			for (int y = 0; y < bm_height; y++)
 			{
-				memcpy(&gs_dest->bgra[(sy * MAX_TEXTURE_HEIGHT + y)  * gs_dest->w + sx * MAX_TEXTURE_WIDTH], &buffer[y * bm_width], 4 * bm_width);
+				memcpy(&gs_dest->bgra[(sy * MAX_TEXTURE_HEIGHT + y) * gs_dest->w + sx * MAX_TEXTURE_WIDTH], &buffer[y * bm_width], 4 * bm_width);
 			}
 		}
 	}
 
-	delete[] buffer;
+	SAFE_DELETE_ARRAY(buffer);
 
 	SDL_SetRenderTarget(renderer, NULL);
 
@@ -1007,9 +1006,9 @@ bool GFXEngine::EndDrawOnSurface(GFXSurface *gs_dest)
 	return _CopyColorInfo(gs_dest);
 }
 
-bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsigned int color, float pos_x, float pos_y, Rect* _rc, 
-			float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, int flags, GFXFilter *apply_filter,
-			int xoffset, int yoffset)
+bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsigned int color, float pos_x, float pos_y, Rect* _rc,
+	float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int flags, GFXFilter* apply_filter,
+	int xoffset, int yoffset)
 {
 	if (!renderer || !_rc)
 		return false;
@@ -1020,16 +1019,16 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 	float tiled_pos_x = pos_x;
 	float tiled_pos_y = pos_y;
 
-	if(gs_dest)
+	if (gs_dest)
 	{
 		tiled_pos_x -= bm_x * MAX_TEXTURE_WIDTH;
 		tiled_pos_y -= bm_y * MAX_TEXTURE_HEIGHT;
 
-		if(bm_x >= gs_dest->x_surfaces || bm_x<0
-		|| bm_y >= gs_dest->y_surfaces || bm_y<0)
+		if (bm_x >= gs_dest->x_surfaces || bm_x < 0
+			|| bm_y >= gs_dest->y_surfaces || bm_y < 0)
 			return false;
 
-		SDL_SetRenderTarget(renderer, gs_dest->bitmap[bm_x + bm_y*gs_dest->x_surfaces]);
+		SDL_SetRenderTarget(renderer, gs_dest->bitmap[bm_x + bm_y * gs_dest->x_surfaces]);
 	}
 
 	Rect l_rc = { 0, 0, 0, 0 };
@@ -1045,17 +1044,19 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 
 	float x_ratio = 1.0f;
 	float y_ratio = 1.0f;
-	
+
 	if (stretch && !isnan(stretch->getX()) && !isnan(stretch->getY()) && l_rc.getWidth() > 0 && l_rc.getHeight() > 0)
 	{
 		x_ratio = stretch->getX() / (float)(_rc->getWidth());
 		y_ratio = stretch->getY() / (float)(_rc->getHeight());
 	}
 
-	
-	if(gs_src)//bitmap
+
+	if (gs_src)//bitmap
 	{
-		_ApplyFilter(gs_src, apply_filter);
+		if (_HasBGRABuffer(gs_src)) {
+			_ApplyFilter(gs_src, apply_filter);
+		}
 
 		SDL_Rect rc;
 		SDL_FRect destRC;
@@ -1099,16 +1100,16 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 					continue;
 
 				if (flags & GFX_ADDITIV) {
-					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces],SDL_BLENDMODE_ADD);
+					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces], SDL_BLENDMODE_ADD);
 				}
-				else if(opacity < 1.0f || gs_src->use_alpha) {
-					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces],SDL_BLENDMODE_BLEND);
+				else if (opacity < 1.0f || gs_src->use_alpha) {
+					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces], SDL_BLENDMODE_BLEND);
 				}
 				else {
-					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces],SDL_BLENDMODE_NONE);
+					SDL_SetTextureBlendMode(gs_src->bitmap[x + y * gs_src->x_surfaces], SDL_BLENDMODE_NONE);
 				}
 
-				SDL_SetTextureAlphaMod(gs_src->bitmap[x + y * gs_src->x_surfaces],(Uint8)(opacity*255.0f));
+				SDL_SetTextureAlphaMod(gs_src->bitmap[x + y * gs_src->x_surfaces], (Uint8)(opacity * 255.0f));
 
 				destRC.x = tiled_pos_x + lastwidth;
 				destRC.w = rc.w * x_ratio;
@@ -1118,11 +1119,11 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 				center.y = (float)l_rc.getHeight() / 2.0f;
 				center.x *= x_ratio;
 				center.y *= y_ratio;
-				
-				if(rotation_pt && !isnan(rotation_pt->getX()) && !isnan(rotation_pt->getY()))
+
+				if (rotationOffset)
 				{
-					center.x = rotation_pt->getX();
-					center.y = rotation_pt->getY();
+					center.x += rotationOffset->getX();
+					center.y += rotationOffset->getY();
 				}
 
 				int flip = SDL_FLIP_NONE;
@@ -1132,21 +1133,21 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 				if (flags & GFX_VFLIP) {
 					flip |= SDL_FLIP_VERTICAL;
 				}
-				if(SDL_RenderCopyExF(renderer, gs_src->bitmap[x + y * gs_src->x_surfaces],
-						&rc, &destRC, RAD2DEG(rotation), &center, (SDL_RendererFlip)flip)!=0)
+				if (SDL_RenderCopyExF(renderer, gs_src->bitmap[x + y * gs_src->x_surfaces],
+					&rc, &destRC, RAD2DEG(rotation), &center, (SDL_RendererFlip)flip) != 0)
 				{
-					return false;	
+					return false;
 				}
 
-			//	SDL_SetRenderDrawColor(renderer, 255, 0, 0, (Uint8)50);
-			//	SDL_RenderFillRectF(renderer, &destRC);
+				//	SDL_SetRenderDrawColor(renderer, 255, 0, 0, (Uint8)50);
+				//	SDL_RenderFillRectF(renderer, &destRC);
 
 				lastwidth += destRC.w;
 			}
 			lastheight += destRC.h;
 		}
 
-		if(gs_dest)
+		if (gs_dest)
 		{
 			float width = (float)l_rc.getWidth();
 			float height = (float)l_rc.getHeight();
@@ -1154,54 +1155,54 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 			width *= x_ratio;
 			height *= y_ratio;
 
-			float radius = sqrt(pow(width, 2.0f) + pow(height, 2.0f)) /2.0f;
+			float radius = sqrt(pow(width, 2.0f) + pow(height, 2.0f)) / 2.0f;
 
 			float center_pos_x = pos_x + width / 2.0f;
 			float center_pos_y = pos_y + height / 2.0f;
 
-			if(rotation_pt)
+			if (rotationOffset)
 			{
-				center_pos_x += rotation_pt->getX();
-				center_pos_y += rotation_pt->getY();
+				center_pos_x += rotationOffset->getX();
+				center_pos_y += rotationOffset->getY();
 			}
 
 			//grafik auf links folgende teiltexturen zeichnen weiterzeichnen
-			if(xoffset >=0 && !yoffset &&
+			if (xoffset >= 0 && !yoffset &&
 				center_pos_x - radius + xoffset < 0)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
-						opacity, rotation, rotation_pt, stretch, flags, NULL,
-						xoffset + MAX_TEXTURE_WIDTH, yoffset);
+					opacity, rotation, rotationOffset, stretch, flags, NULL,
+					xoffset + MAX_TEXTURE_WIDTH, yoffset);
 			}
 			//grafik auf rechts folgende teiltexturen zeichnen weiterzeichnen
-			if(xoffset <=0 && !yoffset &&
+			if (xoffset <= 0 && !yoffset &&
 				center_pos_x + radius + xoffset > MAX_TEXTURE_WIDTH)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
-						opacity, rotation, rotation_pt, stretch, flags, NULL,
-						xoffset - MAX_TEXTURE_WIDTH, yoffset);
+					opacity, rotation, rotationOffset, stretch, flags, NULL,
+					xoffset - MAX_TEXTURE_WIDTH, yoffset);
 			}
 			//grafik auf nach oben folgende weiterzeichnen
-			if(yoffset >=0 && 
+			if (yoffset >= 0 &&
 				center_pos_y - radius + yoffset < 0)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
-						opacity, rotation, rotation_pt, stretch, flags, NULL,
-						xoffset, yoffset + MAX_TEXTURE_HEIGHT);
+					opacity, rotation, rotationOffset, stretch, flags, NULL,
+					xoffset, yoffset + MAX_TEXTURE_HEIGHT);
 			}
 			//grafik auf nach unten folgende weiterzeichnen
-			if(yoffset <=0 &&
+			if (yoffset <= 0 &&
 				center_pos_y + radius + yoffset > MAX_TEXTURE_HEIGHT)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
-						opacity, rotation, rotation_pt, stretch, flags, NULL,
-						xoffset, yoffset - MAX_TEXTURE_HEIGHT);
+					opacity, rotation, rotationOffset, stretch, flags, NULL,
+					xoffset, yoffset - MAX_TEXTURE_HEIGHT);
 			}
 		}
 	}
 	else if (shape)//shape
 	{
-		SDL_SetRenderDrawColor(renderer, GetRValue(color),GetGValue(color),	GetBValue(color),(Uint8)(opacity * 255.0f));
+		SDL_SetRenderDrawColor(renderer, GetRValue(color), GetGValue(color), GetBValue(color), (Uint8)(opacity * 255.0f));
 
 		if (shape == GFX_ELLIPSE)
 		{
@@ -1220,81 +1221,81 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface *gs_src, int shape, unsign
 
 	return true;
 }
-bool GFXEngine::DrawOnSurface(GFXSurface *gs_dest, GFXSurface *gs_src, float x, float y, Rect* rc_src,
-			int flags, float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, bool keep_src_surface) // keep_src_surface is ignored in SDL
+bool GFXEngine::DrawOnSurface(GFXSurface* gs_dest, GFXSurface* gs_src, float x, float y, Rect* rc_src,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, bool keep_src_surface) // keep_src_surface is ignored in SDL
 {
-	return _Draw(gs_dest, gs_src, 0, 0, x, y, rc_src, opacity, rotation, rotation_pt, stretch, flags, &gs_src->apply_filter);
+	return _Draw(gs_dest, gs_src, 0, 0, x, y, rc_src, opacity, rotation, rotationOffset, stretch, flags, &gs_src->apply_filter);
 }
 
-void GFXEngine::FreeDrawOnSurfaceSource(GFXSurface *gs_src) {} // unused in SDL
+void GFXEngine::FreeDrawOnSurfaceSource(GFXSurface* gs_src) {} // unused in SDL-Version
 
 bool GFXEngine::Draw(GFXSurface* gs, float x, float y, Rect* rc,
-	int flags, float opacity, float rotation, Vector2D* rotation_pt, float scale, int layer) {
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, float scale, int layer) {
 
 	if (!gs) {
 		return false;
 	}
 
-	Vector2D stretch(gs->w, gs->h);
+	Vector2D stretch(gs->w * scale, gs->h * scale);
 	if (rc) {
 		stretch.set((float)rc->getWidth() * scale, (float)rc->getHeight() * scale);
 	}
-	return Draw(gs, x, y, rc, flags, opacity, rotation, rotation_pt, &stretch, layer);
+	return Draw(gs, x, y, rc, flags, opacity, rotation, rotationOffset, &stretch, layer);
 }
 
-bool GFXEngine::Draw(GFXSurface* gs,float x,float y,Rect* rc, 
-			int flags, float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, int layer)
+bool GFXEngine::Draw(GFXSurface* gs, float x, float y, Rect* rc,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
 	if (!gs)
 	{
 		return false;
 	}
-	return _AddJob(gs, 0, 0, x, y, rc, flags, opacity, rotation, rotation_pt, stretch, layer);
+	return _AddJob(gs, 0, 0, x, y, rc, flags, opacity, rotation, rotationOffset, stretch, layer);
 }
 
-bool GFXEngine::DrawShapeOnSurface(GFXSurface *gs_dest, int shape, unsigned int color, float x, float y, float w, float h,
-			int flags, float opacity, float rotation, Vector2D *rotation_pt)
+bool GFXEngine::DrawShapeOnSurface(GFXSurface* gs_dest, int shape, unsigned int color, float x, float y, float w, float h,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset)
 {
 	Rect rc_src;
-	rc_src.left=0;
-	rc_src.top=0;
-	rc_src.right=w;
-	rc_src.bottom=h;
-	return _Draw(gs_dest, NULL, shape, color, x, y, &rc_src, opacity, rotation, rotation_pt, NULL, flags);
+	rc_src.left = 0;
+	rc_src.top = 0;
+	rc_src.right = w;
+	rc_src.bottom = h;
+	return _Draw(gs_dest, NULL, shape, color, x, y, &rc_src, opacity, rotation, rotationOffset, NULL, flags);
 }
 
 bool GFXEngine::DrawShape(int shape, unsigned int color, float x, float y, float w, float h,
-			int flags, float opacity, float rotation, Vector2D *rotation_pt, int layer)
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, int layer)
 {
 	Rect rc = { 0,0,(int)w,(int)h };
 
-	return _AddJob(NULL, shape, color, x, y, &rc, flags, opacity, rotation, rotation_pt, NULL, layer);
+	return _AddJob(NULL, shape, color, x, y, &rc, flags, opacity, rotation, rotationOffset, NULL, layer);
 }
 
-bool GFXEngine::EnableAlphaChannel(GFXSurface *gs, bool alpha)
+bool GFXEngine::EnableAlphaChannel(GFXSurface* gs, bool alpha)
 {
-	if(!gs)
+	if (!gs)
 		return false;
-	
+
 	bool result = true;
 
 	gs->use_alpha = alpha;
-/*
-	if(alpha)
-	{
-		for(int n=0; n < gs->x_surfaces * gs->y_surfaces; n++) {
-			if(SDL_SetTextureBlendMode(gs->bitmap[n], SDL_BLENDMODE_BLEND) != 0) {
-				result = false;
+	/*
+		if(alpha)
+		{
+			for(int n=0; n < gs->x_surfaces * gs->y_surfaces; n++) {
+				if(SDL_SetTextureBlendMode(gs->bitmap[n], SDL_BLENDMODE_BLEND) != 0) {
+					result = false;
+				}
 			}
 		}
-	}
-	else
-	{
-		for(int n=0; n < gs->x_surfaces * gs->y_surfaces; n++)
-			if(SDL_SetTextureBlendMode(gs->bitmap[n], SDL_BLENDMODE_NONE)  != 0) {
-				result = false;
-			}
-	}*/
+		else
+		{
+			for(int n=0; n < gs->x_surfaces * gs->y_surfaces; n++)
+				if(SDL_SetTextureBlendMode(gs->bitmap[n], SDL_BLENDMODE_NONE)  != 0) {
+					result = false;
+				}
+		}*/
 	return result;
 }
 
@@ -1326,18 +1327,18 @@ GFXSurface* GFXEngine::ScreenCapture(unsigned int x, unsigned int y, unsigned in
 	if (scaled_h < 0)
 		scaled_h = scaled_renderer_height - scaled_y;
 
-	GFXSurface *gsurf = CreateSurface(scaled_w, scaled_h);
+	GFXSurface* gsurf = CreateSurface(scaled_w, scaled_h);
 	if (!gsurf)
 		return NULL;
-		
+
 	SDL_Rect rc;
-	rc.x=xoffset;
-	rc.y=yoffset;
-	rc.w=scaled_w;
-	rc.h=scaled_h;
-    if(SDL_RenderReadPixels(renderer, &rc, SDL_PIXELFORMAT_BGRA32, (void*)gsurf->bgra, 4 * scaled_renderer_width) != 0)
+	rc.x = xoffset;
+	rc.y = yoffset;
+	rc.w = scaled_w;
+	rc.h = scaled_h;
+	if (SDL_RenderReadPixels(renderer, &rc, SDL_PIXELFORMAT_BGRA32, (void*)gsurf->bgra, 4 * scaled_renderer_width) != 0)
 	{
-		delete gsurf;
+		SAFE_DELETE(gsurf);
 		return NULL;
 	}
 
@@ -1350,7 +1351,7 @@ GFXSurface* GFXEngine::ScreenCapture(unsigned int x, unsigned int y, unsigned in
 // ******************
 GFXFont* GFXEngine::CreateFontFromFile(string ttf_path, int _height, bool bold, bool italic, bool underline)
 {
-	GFXFont *fnt;
+	GFXFont* fnt;
 	fnt = new GFXFont;
 	if (!fnt)
 	{
@@ -1361,9 +1362,9 @@ GFXFont* GFXEngine::CreateFontFromFile(string ttf_path, int _height, bool bold, 
 	SDL_RenderGetScale(renderer, &xscale, &yscale);
 
 	fnt->ttf = TTF_OpenFont(ttf_path.c_str(), _height * yscale);
-	if(!fnt->ttf)
+	if (!fnt->ttf)
 	{
-		delete fnt;
+		SAFE_DELETE(fnt);
 		return NULL;
 	}
 
@@ -1382,11 +1383,11 @@ GFXFont* GFXEngine::CreateFontFromFile(string ttf_path, int _height, bool bold, 
 	}
 
 	TTF_SetFontStyle(fnt->ttf, style);
-	
+
 	return fnt;
 }
 
-bool GFXEngine::DeleteFont(GFXFont *font)
+bool GFXEngine::DeleteFont(GFXFont* font)
 {
 	if (font)
 	{
@@ -1399,30 +1400,30 @@ bool GFXEngine::DeleteFont(GFXFont *font)
 		{
 			TTF_CloseFont(font->ttf);
 		}
-		delete font;
+		SAFE_DELETE(font);
 	}
 	return true;
 }
 
 //gs für zukünftige nutzung falls man auf surface render möchte
-void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, float _x, float _y, string _text, int _alignment,
-		Vector2D *_max_size, float _opacity, float _rotation, Vector2D *_rotation_pt, Vector2D *_stretch, int _flags)
+void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, float _x, float _y, string _text, int _alignment,
+	Vector2D* _max_size, float _opacity, float _rotation, Vector2D* _rotationOffset, Vector2D* _stretch, int _flags)
 {
-	if(!_font)
-	 return;
+	if (!_font)
+		return;
 
-	SDL_Color color={GetRValue(_color),
+	SDL_Color color = { GetRValue(_color),
 					GetGValue(_color),
 					GetBValue(_color),
-					255};
+					255 };
 
-	bool done=false;
+	bool done = false;
 	size_t txt_ptr = 0;
 	int line_nr = 0;
 	string txt_line;
 
 	float max_width = 0;
-	if(_max_size)
+	if (_max_size)
 		max_width = _max_size->getX();
 
 	float xscale, yscale;
@@ -1434,21 +1435,27 @@ void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, floa
 	{
 		string txt_line = _write_get_next_line(_font, _text, &txt_ptr, max_width * xscale, (_alignment & GFX_AUTOBREAK));
 
-		SDL_Surface *sf_text = TTF_RenderUTF8_Blended(_font->ttf, txt_line.c_str(), color);
-		if(sf_text)
+		SDL_Surface* sf_text = TTF_RenderUTF8_Blended(_font->ttf, txt_line.c_str(), color);
+		if (sf_text)
 		{
 			float sf_width = (float)sf_text->w / xscale;
 			float sf_height = (float)sf_text->h / yscale;
 
 			if (SDL_LockSurface(sf_text) == 0)
 			{
-				void *pixels;
+				void* pixels;
 				int pitch;
+				SDL_Rect clip_rect = sf_text->clip_rect;
+				clip_rect.w++;
+				clip_rect.h++;
 
-				int res = SDL_LockTexture(offline_render_texture, &sf_text->clip_rect, &pixels, &pitch);
-				if(res== 0)
+				int res = SDL_LockTexture(offline_render_texture, &clip_rect, &pixels, &pitch);
+				if (res == 0)
 				{
-				//	memcpy(&pixels, sf_text->pixels, sf_text->h * sf_text->pitch);
+					//	memcpy(&pixels, sf_text->pixels, sf_text->h * sf_text->pitch);
+
+					//clear area + 1, ränder durch interpolation verhindern
+					memset(pixels, 0, clip_rect.h * (pitch + pitch / clip_rect.w));
 
 					SDL_ConvertPixels(sf_text->w, sf_text->h, sf_text->format->format, sf_text->pixels, sf_text->pitch,
 						SDL_PIXELFORMAT_BGRA32, pixels, pitch);
@@ -1458,8 +1465,8 @@ void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, floa
 					//	SDL_Texture *tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
 					//	if(tx_text)
 					{
-						float x_ratio = 1;
-						float y_ratio = 1;
+						float x_ratio = 1.0f;
+						float y_ratio = 1.0f;
 
 						if (_stretch)
 						{
@@ -1479,8 +1486,8 @@ void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, floa
 
 						if ((_alignment & GFX_CENTER))
 						{
-							destRC.x -= sf_width / 2;
-							destRC.x += max_width / 2;
+							destRC.x -= sf_width / 2.0f;
+							destRC.x += max_width / 2.0f;
 						}
 						else if ((_alignment & GFX_RIGHT))
 						{
@@ -1500,13 +1507,13 @@ void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, floa
 						SDL_SetTextureAlphaMod(offline_render_texture, (Uint8)(_opacity * 255.0f));
 
 						SDL_FPoint center;
-						center.x = (float)destRC.w / 2;
-						center.y = (float)destRC.h / 2;
+						center.x = destRC.w / 2.0f;
+						center.y = destRC.h / 2.0f;
 
-						if (_rotation_pt && !isnan(_rotation_pt->getX()) && !isnan(_rotation_pt->getY()))
+						if (_rotationOffset)
 						{
-							center.x += _rotation_pt->getX();
-							center.y += _rotation_pt->getY();
+							center.x += _rotationOffset->getX();
+							center.y += _rotationOffset->getY();
 						}
 
 						int flip = SDL_FLIP_NONE;
@@ -1529,23 +1536,23 @@ void GFXEngine::_Write(GFXSurface *gs, GFXFont *_font, unsigned int _color, floa
 			SDL_FreeSurface(sf_text);
 		}
 		line_nr++;
-	}while(txt_ptr < _text.length());
+	} while (txt_ptr < _text.length());
 }
 
-void GFXEngine::Write(GFXFont *font, float x, float y, string text, int alignment, Vector2D *max_size,
-			int flags, float opacity, float rotation, Vector2D *rotation_pt, Vector2D *stretch, int layer)
+void GFXEngine::Write(GFXFont* font, float x, float y, string text, int alignment, Vector2D* max_size,
+	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
-	_AddJob(font, x, y, text, alignment, max_size, flags, opacity, rotation, rotation_pt, stretch, layer);
+	_AddJob(font, x, y, text, alignment, max_size, flags, opacity, rotation, rotationOffset, stretch, layer);
 }
 
-Vector2D GFXEngine::GetTextBlockSize(GFXFont *font, string text, int alignment, float max_width)
+Vector2D GFXEngine::GetTextBlockSize(GFXFont* font, string text, int alignment, float max_width)
 {
 	Vector2D sz = { 0,0 };
 
-	if(!font)
+	if (!font)
 		return sz;
 
-	size_t txt_ptr=0;
+	size_t txt_ptr = 0;
 	int w, h;
 
 	float xscale, yscale;
@@ -1555,10 +1562,10 @@ Vector2D GFXEngine::GetTextBlockSize(GFXFont *font, string text, int alignment, 
 	{
 		string txt_line = _write_get_next_line(font, text, &txt_ptr, max_width * xscale, (alignment & GFX_AUTOBREAK));
 		TTF_SizeText(font->ttf, txt_line.c_str(), &w, &h);
-		
+
 		sz.setX(max(sz.getX(), (float)w));
 		sz.addY((float)h);
-	}while(txt_ptr < text.length());
+	} while (txt_ptr < text.length());
 
 	sz.multiplyX(1 / xscale);
 	sz.multiplyY(1 / yscale);

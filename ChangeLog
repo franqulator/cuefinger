@@ -1,3 +1,10 @@
+--- v1.1.0 ---
+- Automatically try to reconnect to last used server, when connection was lost
+- Gfx-Engine update
+- Improved performance and stability
+- Bugfixes
+
+
 --- v1.0.2 ---
 - changed the location of settings and log to the user folder to prevent issues with write permissions
 

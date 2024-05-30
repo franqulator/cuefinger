@@ -160,7 +160,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)__linux_wsl__</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions);__linux_wsl__</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <LibraryDependencies>SDL2; SDL2main; SDL2_ttf</LibraryDependencies>

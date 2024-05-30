@@ -1,3 +1,5 @@
+//Version 5.0 - 2023-11-24
+
 /*
 This file is part of Cuefinger 1
 
@@ -17,16 +19,9 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-GFXEngine v5.0 beta
 */
 
-#ifdef __linux__ 
-	#include "gfx2d_sdl.h"
-#elif _WIN32
-//	#include "gfx2d_d2d.h"
-	#include "gfx2d_sdl.h"
-#endif
+#include "gfx2d_sdl.h"
 
 bool GFXEngine::PremultiplyAlpha(GFXSurface *gs)
 {
@@ -313,6 +308,29 @@ bool GFXEngine::_ApplyFilter(GFXSurface *gs_src, GFXFilter *apply_filter, bool r
 	return false;
 }
 
+bool GFXEngine::ApplyFilter(GFXSurface* gs) {
+
+	if (!gs) {
+		return false;
+	}
+
+	if (this->_ApplyFilter(gs, &gs->apply_filter)) {
+
+		// copy rendered pixels to bgra memory
+		if (this->_HasBGRABuffer(gs)) {
+			memcpy(gs->bgra, p_update_bgra, 4 * gs->w * gs->h);
+		}
+
+		// reset filter settings
+		gs->apply_filter = GFXFilter();
+		gs->filter = gs->apply_filter;
+
+		return true;
+	}
+
+	return false;
+}
+
 void GFXEngine::SetFilter_ColorShift(GFXSurface *gs, float intensity, unsigned int color)
 {
 	if(!gs)
@@ -368,7 +386,7 @@ void GFXEngine::SetFilter_Saturation(GFXSurface *gs, float saturation) // satura
 		return;
 
 	if (saturation < -1.0f) {
-		saturation = 1.0f;
+		saturation = -1.0f;
 	}
 
 	if (saturation > 10.0f) {

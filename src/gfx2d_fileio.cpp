@@ -1,3 +1,5 @@
+//Version 5.0 - 2023-11-24
+
 /*
 This file is part of Cuefinger 1
 
@@ -17,16 +19,9 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-GFXEngine v5.0 beta
 */
 
-#ifdef __linux__ 
-	#include "gfx2d_sdl.h"
-#elif _WIN32
-//	#include "gfx2d_d2d.h"
-	#include "gfx2d_sdl.h"
-#endif
+#include "gfx2d_sdl.h"
 
 #define		GFX_24BIT					0x01
 #define		GFX_8BIT_PALETTE			0x04
@@ -765,25 +760,28 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, long _size)
 
 bool GFXEngine::LoadAlphaChannelBmp(GFXSurface *gs, string name)
 {
-	FILE *fh;
-	errno_t e = fopen_s(&fh, name.c_str(), "rb");
-	if (e)
-		return false;
+	if (_HasBGRABuffer(gs)) {
+		FILE* fh;
+		errno_t e = fopen_s(&fh, name.c_str(), "rb");
+		if (e)
+			return false;
 
-	bool ret = _ReadAlphaChannelBmp(gs, fh);
-	
-	fclose(fh);
+		bool ret = _ReadAlphaChannelBmp(gs, fh);
 
-	if (!ret) // errorhandling in readalphachannelbmp()
-		return false;
-	
-	EnableAlphaChannel(gs,true);
+		fclose(fh);
 
-	if (!_CopyColorInfo(gs))
-	{
-		return false;
+		if (!ret) // errorhandling in readalphachannelbmp()
+			return false;
+
+		EnableAlphaChannel(gs, true);
+
+		if (!_CopyColorInfo(gs))
+		{
+			return false;
+		}
+		return ret;
 	}
-	return ret;
+	return false;
 }
 GFXSurface* GFXEngine::LoadBmp(string name)
 {
@@ -866,183 +864,184 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 	if (!gs)
 		return false;
 
-	bool result = true;
-	FILE *fh;
-	if (fopen_s(&fh, name.c_str(), "wb") != 0)
-	{
-		return false;
-	}
-
-	//HEADER
-	fputc(13, fh);
-	fwrite("GFX", 1, 3, fh);
-
-	unsigned int palette_clr[256];
-	int palette_sz = 0;
-	unsigned char type = GFX_24BIT;
-
-	unsigned int src_clr = 0;
-	unsigned char *p8 = (unsigned char *)gs->bgra;
-
-	//check if can be saved as palette
-	for (unsigned int n = 0; n < gs->w * gs->h; n++)
-	{
-		if (gs->use_alpha)
-			src_clr = gs->bgra[n];
-		else
-			src_clr = gs->bgra[n] & 0x00FFFFFF;
-
-		if (palette_sz > 255)
-			break;
-		bool there = false;
-		for (int i = 0; i < palette_sz; i++)
+	if (_HasBGRABuffer(gs)) {
+		bool result = true;
+		FILE* fh;
+		if (fopen_s(&fh, name.c_str(), "wb") != 0)
 		{
-			if (src_clr == palette_clr[i])
-			{
-				there = true;
+			return false;
+		}
+
+		//HEADER
+		fputc(13, fh);
+		fwrite("GFX", 1, 3, fh);
+
+		unsigned int palette_clr[256];
+		int palette_sz = 0;
+		unsigned char type = GFX_24BIT;
+
+		unsigned int src_clr = 0;
+		unsigned char* p8 = (unsigned char*)gs->bgra;
+
+		//check if can be saved as palette
+		for (unsigned int n = 0; n < gs->w * gs->h; n++)
+		{
+			if (gs->use_alpha)
+				src_clr = gs->bgra[n];
+			else
+				src_clr = gs->bgra[n] & 0x00FFFFFF;
+
+			if (palette_sz > 255)
 				break;
+			bool there = false;
+			for (int i = 0; i < palette_sz; i++)
+			{
+				if (src_clr == palette_clr[i])
+				{
+					there = true;
+					break;
+				}
+			}
+			if (!there)
+			{
+				if (palette_sz < 256)
+					palette_clr[palette_sz] = src_clr;
+				palette_sz++;
 			}
 		}
-		if (!there)
+		if (palette_sz < 256)
+			type = GFX_8BIT_PALETTE;
+
+		if (gs->use_alpha)
 		{
-			if (palette_sz < 256)
-				palette_clr[palette_sz] = src_clr;
-			palette_sz++;
-		}
-	}
-	if (palette_sz < 256)
-		type = GFX_8BIT_PALETTE;
-
-	if (gs->use_alpha)
-	{
-		if(!gs->alpha_premultiplied)
-			type |= GFX_ALPHA_STRAIGHT;
-		else
-			type |= GFX_ALPHA_PREMULTIPLIED;
-	}
-
-	fputc(type, fh);
-	fwrite(&gs->w, sizeof(unsigned int), 1, fh);
-	fwrite(&gs->h, sizeof(unsigned int), 1, fh);
-
-	bool *used = new bool[gs->w*gs->h];
-	if (!used)
-	{
-		return false;
-	}
-
-	memset(used, 0, sizeof(bool)*gs->w*gs->h);
-
-	//minimale rechteckgröße in quadratpixel, die eine kompression sinnvoll macht
-	int min_rect_size = 10;
-	if (type & GFX_24BIT)
-		min_rect_size = 4;
-
-	//nach blöcken (rect) gleicher farbe suchen, die zusammengefasst werden können
-	SmallRect *rcs = NULL;
-	int szRcs = 0;
-	int idx = 0;
-	unsigned int compare_clr;
-
-	rcs = new SmallRect[gs->w * gs->h / min_rect_size];
-	
-	unsigned int cur_x, cur_y;
-	bool xend, yend;
-
-	for (unsigned int y = 0; y < gs->h - 1; y++)
-	{
-		for (unsigned int x = 0; x < gs->w - 1; x++)
-		{
-			if (used[y*gs->w + x])
-				continue;
-
-			if (gs->use_alpha)
-				compare_clr = gs->bgra[(y*gs->w + x)];
+			if (!gs->alpha_premultiplied)
+				type |= GFX_ALPHA_STRAIGHT;
 			else
-				compare_clr = gs->bgra[(y*gs->w + x)] & 0x00FFFFFF;
+				type |= GFX_ALPHA_PREMULTIPLIED;
+		}
 
-			cur_x = x + 1;
-			cur_y = y + 1;
-			xend = false;
-			yend = false;
-			while (!xend || !yend)
+		fputc(type, fh);
+		fwrite(&gs->w, sizeof(unsigned int), 1, fh);
+		fwrite(&gs->h, sizeof(unsigned int), 1, fh);
+
+		bool* used = new bool[gs->w * gs->h];
+		if (!used)
+		{
+			return false;
+		}
+
+		memset(used, 0, sizeof(bool) * gs->w * gs->h);
+
+		//minimale rechteckgröße in quadratpixel, die eine kompression sinnvoll macht
+		int min_rect_size = 10;
+		if (type & GFX_24BIT)
+			min_rect_size = 4;
+
+		//nach blöcken (rect) gleicher farbe suchen, die zusammengefasst werden können
+		SmallRect* rcs = NULL;
+		int szRcs = 0;
+		int idx = 0;
+		unsigned int compare_clr;
+
+		rcs = new SmallRect[gs->w * gs->h / min_rect_size];
+
+		unsigned int cur_x, cur_y;
+		bool xend, yend;
+
+		for (unsigned int y = 0; y < gs->h - 1; y++)
+		{
+			for (unsigned int x = 0; x < gs->w - 1; x++)
 			{
-				if (!xend)
+				if (used[y * gs->w + x])
+					continue;
+
+				if (gs->use_alpha)
+					compare_clr = gs->bgra[(y * gs->w + x)];
+				else
+					compare_clr = gs->bgra[(y * gs->w + x)] & 0x00FFFFFF;
+
+				cur_x = x + 1;
+				cur_y = y + 1;
+				xend = false;
+				yend = false;
+				while (!xend || !yend)
 				{
-					for (unsigned int y2 = y; y2 < cur_y; y2++)
-					{
-						idx = (y2*gs->w + cur_x);
-
-						if (used[idx])
-						{
-							xend = true;
-							break;
-						}
-
-						if (gs->use_alpha)
-							src_clr = gs->bgra[idx];
-						else
-							src_clr = gs->bgra[idx] & 0x00FFFFFF;
-
-						if (compare_clr != src_clr)
-						{
-							xend = true;
-							break;
-						}
-					}
 					if (!xend)
-						cur_x++;
-					if (cur_x >= gs->w)
-						xend = true;
-				}
-				if (!yend)
-				{
-					for (unsigned int x2 = x; x2 < cur_x; x2++)
 					{
-						idx = (cur_y*gs->w + x2);
-
-						if (used[idx])
+						for (unsigned int y2 = y; y2 < cur_y; y2++)
 						{
+							idx = (y2 * gs->w + cur_x);
+
+							if (used[idx])
+							{
+								xend = true;
+								break;
+							}
+
+							if (gs->use_alpha)
+								src_clr = gs->bgra[idx];
+							else
+								src_clr = gs->bgra[idx] & 0x00FFFFFF;
+
+							if (compare_clr != src_clr)
+							{
+								xend = true;
+								break;
+							}
+						}
+						if (!xend)
+							cur_x++;
+						if (cur_x >= gs->w)
 							xend = true;
-							break;
-						}
-
-						if (gs->use_alpha)
-							src_clr = gs->bgra[idx];
-						else
-							src_clr = gs->bgra[idx] & 0x00FFFFFF;
-
-						if (compare_clr != src_clr)
-						{
-							yend = true;
-							break;
-						}
 					}
 					if (!yend)
-						cur_y++;
-					if (cur_y >= gs->h)
-						yend = true;
-				}
-			}
-			if ((cur_x - x)*(cur_y - y) >= min_rect_size)
-			{
-				//validate: falls überlappungen es unretabel machen
-			/*	int counter = 0;
-				for (unsigned int y2 = y; y2 < cur_y; y2++)
-				{
-					for (unsigned int x2 = x; x2 < cur_x; x2++)
 					{
-						if (!used[y2 * gs->w + x2])
+						for (unsigned int x2 = x; x2 < cur_x; x2++)
 						{
-							counter++;
-							if (counter >= min_rect_size)
-								break;
-						}
-					}
-				}*/
+							idx = (cur_y * gs->w + x2);
 
-			//	if (counter >= min_rect_size)
-			//	{
+							if (used[idx])
+							{
+								xend = true;
+								break;
+							}
+
+							if (gs->use_alpha)
+								src_clr = gs->bgra[idx];
+							else
+								src_clr = gs->bgra[idx] & 0x00FFFFFF;
+
+							if (compare_clr != src_clr)
+							{
+								yend = true;
+								break;
+							}
+						}
+						if (!yend)
+							cur_y++;
+						if (cur_y >= gs->h)
+							yend = true;
+					}
+				}
+				if ((cur_x - x) * (cur_y - y) >= min_rect_size)
+				{
+					//validate: falls überlappungen es unretabel machen
+				/*	int counter = 0;
+					for (unsigned int y2 = y; y2 < cur_y; y2++)
+					{
+						for (unsigned int x2 = x; x2 < cur_x; x2++)
+						{
+							if (!used[y2 * gs->w + x2])
+							{
+								counter++;
+								if (counter >= min_rect_size)
+									break;
+							}
+						}
+					}*/
+
+					//	if (counter >= min_rect_size)
+					//	{
 					rcs[szRcs].Left = x;
 					rcs[szRcs].Top = y;
 					rcs[szRcs].Right = cur_x;
@@ -1052,215 +1051,194 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 					{
 						memset(&used[y2 * gs->w + x], true, sizeof(bool) * (cur_x - x));
 					}
-			//	}
-			}
-		}
-	}
-
-	if(type & GFX_24BIT)
-	{
-		//encodestep 1
-		fwrite(&szRcs, sizeof(unsigned int), 1, fh);
-
-		for (int n = 0; n < szRcs; n++)
-		{
-			if (gs->use_alpha)
-				fwrite(&p8[(rcs[n].Left + rcs[n].Top * gs->w) * 4], 4, 1, fh);
-			else
-				fwrite(&p8[(rcs[n].Left + rcs[n].Top * gs->w) * 4], 3, 1, fh);
-
-			fwrite(&rcs[n], sizeof(SmallRect), 1, fh);
-		}
-		//encodestep 2
-		int parts = 0;
-		for (unsigned int i = 0; i < gs->w * gs->h; i++)
-		{
-			if (!used[i])
-				parts++;
-		}
-		int *ids = new int[parts];
-		parts = 0;
-		for (unsigned int i = 0; i < gs->w * gs->h; i++)
-		{
-			if (!used[i])
-			{
-				ids[parts] = i;
-				parts++;
-			}
-		}
-		unsigned int clr[256];
-		int clr_id = 0;
-		int clr_counter[256];
-		memset(clr_counter, 0, sizeof(int) * 256);
-
-		for (int y = 0; y < parts; y++)
-		{
-			if(gs->use_alpha)
-				src_clr = gs->bgra[ids[y]];
-			else
-				src_clr = gs->bgra[ids[y]] & 0x00FFFFFF;
-
-			bool there = false;
-			for (int n = 0; n < clr_id; n++)
-			{
-				if (src_clr == clr[n])
-				{
-					clr_counter[n]++;
-					there = true;
-					break;
+					//	}
 				}
 			}
-			if (!there)
-			{
-				clr[clr_id] = src_clr;
-				clr_counter[clr_id]++;
-				clr_id++;
-			}
-			if ( y > 0 && ( ((y + 1) % 256) == 0 || y == parts - 1 ) )
-			{
-				unsigned int part_size = (y % 256);
-
-				unsigned int palette_clr_count = 0;
-				for (int n = 0; n < clr_id; n++)
-				{
-					if (clr_counter[n] > 1)
-						palette_clr_count++;
-				}
-				fputc(palette_clr_count, fh);
-				for (int n = 0; n < clr_id; n++)
-				{
-					if (clr_counter[n] > 1)
-					{
-						if (gs->use_alpha)
-							fwrite(&clr[n], 4, 1, fh);
-						else
-							fwrite(&clr[n], 3, 1, fh);
-
-						fputc(clr_counter[n], fh);
-
-						int count = 0;
-						for (unsigned int v = 0; v <= part_size; v++)
-						{
-							if (gs->use_alpha)
-								compare_clr = gs->bgra[ids[y - part_size + v]];
-							else
-								compare_clr = gs->bgra[ids[y - part_size + v]] & 0x00FFFFFF;
-
-							if (clr[n] == compare_clr)
-							{
-								used[ids[y - part_size + v]] = true;
-								fputc(v, fh);
-								count++;
-							}
-						}
-					}
-				}
-				clr_id = 0;
-				memset(clr_counter, 0, sizeof(int) * 256);
-			}
-		}
-		delete[] ids;
-		
-		//bitmap (dont use rle compression
-//		unsigned char count = 0;
-//		bool raw = false;
-		for (unsigned int n = 0; n < gs->w*gs->h; n++)
-		{
-			if (!used[n])
-			{
-			/*	if (count < 1)
-				{
-					//count rle pixels
-					for (count = 1; count < 128; count++)
-					{
-						if (n + count >= gs->w * gs->h -1 || gs->bgra[n] != gs->bgra[n + count])
-						{
-							break;
-						}
-					}
-
-					if (count > 1)
-					{
-						unsigned char wcount = count | 0x80;
-						fwrite(&wcount, 1, 1, fh);
-						raw = false;
-					}
-					else
-					{
-						//count raw pixels
-						for (count = 2; count < 128; count++)
-						{
-							if (n + count >= gs->w * gs->h -1 || gs->bgra[n + count - 1] == gs->bgra[n + count])
-							{
-								count--;
-								break;
-							}
-						}
-
-						fwrite(&count, 1, 1, fh);
-						raw = true;
-					}
-
-
-					if (gs->use_alpha)
-						fwrite(&gs->bgra[n], 4, 1, fh);
-					else
-						fwrite(&gs->bgra[n], 3, 1, fh);
-				}
-				else if (raw)
-				{*/
-					if (gs->use_alpha)
-						fwrite(&gs->bgra[n], 4, 1, fh);
-					else
-						fwrite(&gs->bgra[n], 3, 1, fh);
-			//	}
-			//	count--;
-
-			}
-		}
-	}
-	else if (type & GFX_8BIT_PALETTE)
-	{
-		//write palette
-		fputc(palette_sz, fh);
-		for (int n = 0; n < palette_sz; n++)
-		{
-			if (gs->use_alpha)
-				fwrite(&palette_clr[n], 4, 1, fh);
-			else
-				fwrite(&palette_clr[n], 3, 1, fh);
 		}
 
-		//encodestep 1
-		fwrite(&szRcs, sizeof(unsigned int), 1, fh);
-
-		for (int n = 0; n < szRcs; n++)
+		if (type & GFX_24BIT)
 		{
-			if (gs->use_alpha)
-				src_clr = gs->bgra[(rcs[n].Left + rcs[n].Top * gs->w)];
-			else
-				src_clr = gs->bgra[(rcs[n].Left + rcs[n].Top * gs->w)] & 0x00FFFFFF;
+			//encodestep 1
+			fwrite(&szRcs, sizeof(unsigned int), 1, fh);
 
-			for (int i = 0; i < palette_sz; i++)
-			{
-				if (src_clr == palette_clr[i])
-				{
-					fputc(i, fh);
-					break;
-				}
-			}
-
-			fwrite(&rcs[n], sizeof(SmallRect), 1, fh);
-		}
-		//bitmap
-		for (unsigned int n = 0; n < gs->w*gs->h; n++)
-		{
-			if (!used[n])
+			for (int n = 0; n < szRcs; n++)
 			{
 				if (gs->use_alpha)
-					src_clr = gs->bgra[n];
+					fwrite(&p8[(rcs[n].Left + rcs[n].Top * gs->w) * 4], 4, 1, fh);
 				else
-					src_clr = gs->bgra[n] & 0x00FFFFFF;
+					fwrite(&p8[(rcs[n].Left + rcs[n].Top * gs->w) * 4], 3, 1, fh);
+
+				fwrite(&rcs[n], sizeof(SmallRect), 1, fh);
+			}
+			//encodestep 2
+			int parts = 0;
+			for (unsigned int i = 0; i < gs->w * gs->h; i++)
+			{
+				if (!used[i])
+					parts++;
+			}
+			int* ids = new int[parts];
+			parts = 0;
+			for (unsigned int i = 0; i < gs->w * gs->h; i++)
+			{
+				if (!used[i])
+				{
+					ids[parts] = i;
+					parts++;
+				}
+			}
+			unsigned int clr[256];
+			int clr_id = 0;
+			int clr_counter[256];
+			memset(clr_counter, 0, sizeof(int) * 256);
+
+			for (int y = 0; y < parts; y++)
+			{
+				if (gs->use_alpha)
+					src_clr = gs->bgra[ids[y]];
+				else
+					src_clr = gs->bgra[ids[y]] & 0x00FFFFFF;
+
+				bool there = false;
+				for (int n = 0; n < clr_id; n++)
+				{
+					if (src_clr == clr[n])
+					{
+						clr_counter[n]++;
+						there = true;
+						break;
+					}
+				}
+				if (!there)
+				{
+					clr[clr_id] = src_clr;
+					clr_counter[clr_id]++;
+					clr_id++;
+				}
+				if (y > 0 && (((y + 1) % 256) == 0 || y == parts - 1))
+				{
+					unsigned int part_size = (y % 256);
+
+					unsigned int palette_clr_count = 0;
+					for (int n = 0; n < clr_id; n++)
+					{
+						if (clr_counter[n] > 1)
+							palette_clr_count++;
+					}
+					fputc(palette_clr_count, fh);
+					for (int n = 0; n < clr_id; n++)
+					{
+						if (clr_counter[n] > 1)
+						{
+							if (gs->use_alpha)
+								fwrite(&clr[n], 4, 1, fh);
+							else
+								fwrite(&clr[n], 3, 1, fh);
+
+							fputc(clr_counter[n], fh);
+
+							int count = 0;
+							for (unsigned int v = 0; v <= part_size; v++)
+							{
+								if (gs->use_alpha)
+									compare_clr = gs->bgra[ids[y - part_size + v]];
+								else
+									compare_clr = gs->bgra[ids[y - part_size + v]] & 0x00FFFFFF;
+
+								if (clr[n] == compare_clr)
+								{
+									used[ids[y - part_size + v]] = true;
+									fputc(v, fh);
+									count++;
+								}
+							}
+						}
+					}
+					clr_id = 0;
+					memset(clr_counter, 0, sizeof(int) * 256);
+				}
+			}
+			delete[] ids;
+
+			//bitmap (dont use rle compression
+	//		unsigned char count = 0;
+	//		bool raw = false;
+			for (unsigned int n = 0; n < gs->w * gs->h; n++)
+			{
+				if (!used[n])
+				{
+					/*	if (count < 1)
+						{
+							//count rle pixels
+							for (count = 1; count < 128; count++)
+							{
+								if (n + count >= gs->w * gs->h -1 || gs->bgra[n] != gs->bgra[n + count])
+								{
+									break;
+								}
+							}
+
+							if (count > 1)
+							{
+								unsigned char wcount = count | 0x80;
+								fwrite(&wcount, 1, 1, fh);
+								raw = false;
+							}
+							else
+							{
+								//count raw pixels
+								for (count = 2; count < 128; count++)
+								{
+									if (n + count >= gs->w * gs->h -1 || gs->bgra[n + count - 1] == gs->bgra[n + count])
+									{
+										count--;
+										break;
+									}
+								}
+
+								fwrite(&count, 1, 1, fh);
+								raw = true;
+							}
+
+
+							if (gs->use_alpha)
+								fwrite(&gs->bgra[n], 4, 1, fh);
+							else
+								fwrite(&gs->bgra[n], 3, 1, fh);
+						}
+						else if (raw)
+						{*/
+					if (gs->use_alpha)
+						fwrite(&gs->bgra[n], 4, 1, fh);
+					else
+						fwrite(&gs->bgra[n], 3, 1, fh);
+					//	}
+					//	count--;
+
+				}
+			}
+		}
+		else if (type & GFX_8BIT_PALETTE)
+		{
+			//write palette
+			fputc(palette_sz, fh);
+			for (int n = 0; n < palette_sz; n++)
+			{
+				if (gs->use_alpha)
+					fwrite(&palette_clr[n], 4, 1, fh);
+				else
+					fwrite(&palette_clr[n], 3, 1, fh);
+			}
+
+			//encodestep 1
+			fwrite(&szRcs, sizeof(unsigned int), 1, fh);
+
+			for (int n = 0; n < szRcs; n++)
+			{
+				if (gs->use_alpha)
+					src_clr = gs->bgra[(rcs[n].Left + rcs[n].Top * gs->w)];
+				else
+					src_clr = gs->bgra[(rcs[n].Left + rcs[n].Top * gs->w)] & 0x00FFFFFF;
 
 				for (int i = 0; i < palette_sz; i++)
 				{
@@ -1270,361 +1248,404 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 						break;
 					}
 				}
+
+				fwrite(&rcs[n], sizeof(SmallRect), 1, fh);
+			}
+			//bitmap
+			for (unsigned int n = 0; n < gs->w * gs->h; n++)
+			{
+				if (!used[n])
+				{
+					if (gs->use_alpha)
+						src_clr = gs->bgra[n];
+					else
+						src_clr = gs->bgra[n] & 0x00FFFFFF;
+
+					for (int i = 0; i < palette_sz; i++)
+					{
+						if (src_clr == palette_clr[i])
+						{
+							fputc(i, fh);
+							break;
+						}
+					}
+				}
 			}
 		}
-	}
-	else
-	{
-		result = false;
-	}
+		else
+		{
+			result = false;
+		}
 
-	if (rcs)
-		delete[] rcs;
+		SAFE_DELETE_ARRAY(rcs);
 
-	fclose(fh);
-	return result;
+		fclose(fh);
+		return result;
+	}
+	return false;
 }
 
 bool GFXEngine::SaveBmp(GFXSurface *gs, string name)
 {
-	FILE *fh;
-	if (fopen_s(&fh, name.c_str(), "wb") != 0)
-	{
-		return false;
-	}
-	fputs("BM", fh);
-
-	unsigned int clr[256];
-	for (int n = 0; n < 256; n++)
-		clr[n] = 0;
-	int pClr = 0;
-	int colorDepht = 16;
-	unsigned char *p8 = (unsigned char*)gs->bgra;
-	for (unsigned int y = 0; y < gs->h; y++)
-	{
-		for (unsigned int x = 0; x < gs->w; x++)
+	if (_HasBGRABuffer(gs)) {
+		FILE* fh;
+		if (fopen_s(&fh, name.c_str(), "wb") != 0)
 		{
-			//mit bitmaske prüfen ob mit 16bit (565) farbverlust entsteht
-			if ( (p8[(y*gs->w + x) * 4 + 2] & 0x07) || (p8[(y*gs->w + x) * 4 + 1] & 0x03) || (p8[(y*gs->w + x) * 4 ] & 0x07))
-				colorDepht = 24;
-			if (pClr > 256)
-				continue;
-			bool there = false;
-			for (int n = 0; n < pClr; n++)
-			{
-				if ( RGB(p8[(y*gs->w + x) * 4 + 2],
-						p8[(y*gs->w + x) * 4 + 1],
-						p8[(y*gs->w + x) * 4])  == clr[n])
-				{
-					there = true;
-					break;
-				}
-			}
-			if (!there)
-			{
-				if (pClr > 255)
-				{
-					pClr++;
-					break;
-				}
-				clr[pClr] = RGB(p8[(y*gs->w + x) * 4 + 2],
-								p8[(y*gs->w + x) * 4 + 1],
-								p8[(y*gs->w + x) * 4]);
-				pClr++;
-			}
+			return false;
 		}
-	}
-	if (pClr <= 256)
-	{
-		colorDepht = 8;
-		pClr = 256;
-	}
-	else
-		pClr = 0;
+		fputs("BM", fh);
 
-	int terminator = 4 - ((gs->w*colorDepht / 8) % 4);
-	if (terminator == 4)
-		terminator = 0;
-	int bitmapdatasize = (colorDepht / 8 * gs->w + terminator)*gs->h;
-	int offset = 13 * 4 + 2 + 4 * pClr;
-	if (colorDepht == 16)
-		offset += 16;
-	int filesize = bitmapdatasize + offset;
-
-	//filesize
-	fputc(filesize, fh);
-	fputc(filesize >> 8, fh);
-	fputc(filesize >> 16, fh);
-	fputc(filesize >> 24, fh);
-	//reserved
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//offset
-	fputc(offset, fh);
-	fputc(offset >> 8, fh);
-	fputc(offset >> 16, fh);
-	fputc(offset >> 24, fh);
-	//headersize
-	fputc(0x28, fh);
-	fputc(0 >> 8, fh);
-	fputc(0 >> 16, fh);
-	fputc(0 >> 24, fh);
-	//width
-	fputc(gs->w, fh);
-	fputc(gs->w >> 8, fh);
-	fputc(gs->w >> 16, fh);
-	fputc(gs->w >> 24, fh);
-	//height
-	fputc(gs->h, fh);
-	fputc(gs->h >> 8, fh);
-	fputc(gs->h >> 16, fh);
-	fputc(gs->h >> 24, fh);
-	//planes
-	fputc(1, fh);
-	fputc(0, fh);
-	//colordepht
-	fputc(colorDepht, fh);
-	fputc(colorDepht >> 8, fh);
-	//compression
-	if (colorDepht == 16)
-		fputc(3, fh);
-	else
-		fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//bitmapdatasize
-	fputc(bitmapdatasize, fh);
-	fputc(bitmapdatasize >> 8, fh);
-	fputc(bitmapdatasize >> 16, fh);
-	fputc(bitmapdatasize >> 24, fh);
-	//h-resolution
-	fputc(0x12, fh);
-	fputc(0x0B, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//v-resolution
-	fputc(0x12, fh);
-	fputc(0x0B, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//colors (palette-size)
-	fputc(pClr, fh);
-	fputc(pClr >> 8, fh);
-	fputc(pClr >> 16, fh);
-	fputc(pClr >> 24, fh);
-	//important colors
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-
-	//palette
-	for (int n = 0; n < pClr; n++)
-	{
-		fputc(GetBValue(clr[n]), fh);
-		fputc(GetGValue(clr[n]), fh);
-		fputc(GetRValue(clr[n]), fh);
-		fputc(0, fh);
-	}
-
-	if (colorDepht == 16)
-	{
-		fputc(0, fh);
-		fputc(0xF8, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-
-		fputc(0xE0, fh);
-		fputc(0x07, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-
-		fputc(0x1F, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-
-		fputc(0, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-		fputc(0, fh);
-	}
-
-	switch (colorDepht)
-	{
-	case 8:
-	{
-		for (int y = gs->h - 1; y >= 0; y--)
+		unsigned int clr[256];
+		for (int n = 0; n < 256; n++)
+			clr[n] = 0;
+		int pClr = 0;
+		int colorDepht = 16;
+		unsigned char* p8 = (unsigned char*)gs->bgra;
+		for (unsigned int y = 0; y < gs->h; y++)
 		{
 			for (unsigned int x = 0; x < gs->w; x++)
 			{
-				for (int i = 0; i < pClr; i++)
+				//mit bitmaske prüfen ob mit 16bit (565) farbverlust entsteht
+				if ((p8[(y * gs->w + x) * 4 + 2] & 0x07) || (p8[(y * gs->w + x) * 4 + 1] & 0x03) || (p8[(y * gs->w + x) * 4] & 0x07))
+					colorDepht = 24;
+				if (pClr > 256)
+					continue;
+				bool there = false;
+				for (int n = 0; n < pClr; n++)
 				{
-					if (clr[i] == RGB(p8[(y*gs->w + x) * 4 + 2],
-										p8[(y*gs->w + x) * 4 + 1],
-										p8[(y*gs->w + x) * 4]))
+					if (RGB(p8[(y * gs->w + x) * 4 + 2],
+						p8[(y * gs->w + x) * 4 + 1],
+						p8[(y * gs->w + x) * 4]) == clr[n])
 					{
-						fputc(i, fh);
+						there = true;
 						break;
 					}
 				}
+				if (!there)
+				{
+					if (pClr > 255)
+					{
+						pClr++;
+						break;
+					}
+					clr[pClr] = RGB(p8[(y * gs->w + x) * 4 + 2],
+						p8[(y * gs->w + x) * 4 + 1],
+						p8[(y * gs->w + x) * 4]);
+					pClr++;
+				}
 			}
-			//terminator
-			for (int n = 0; n < terminator; n++)
-				fputc(0, fh);
 		}
-	}
-	break;
-	case 16:
-	{
-		for (int y = gs->h - 1; y >= 0; y--)
+		if (pClr <= 256)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
-			{
-				unsigned short clr = RGB_565(
-										p8[(y*gs->w + x) * 4 + 2], 
-										p8[(y*gs->w + x) * 4 + 1], 
-										p8[(y*gs->w + x) * 4 ]);
-				fputc(clr, fh);
-				fputc(clr >> 8, fh);
-			}
-			//terminator
-			for (int n = 0; n < terminator; n++)
-				fputc(0, fh);
+			colorDepht = 8;
+			pClr = 256;
 		}
-	}
-	break;
-	case 24:
-	{
-		for (int y = gs->h - 1; y >= 0; y--)
+		else
+			pClr = 0;
+
+		int terminator = 4 - ((gs->w * colorDepht / 8) % 4);
+		if (terminator == 4)
+			terminator = 0;
+		int bitmapdatasize = (colorDepht / 8 * gs->w + terminator) * gs->h;
+		int offset = 13 * 4 + 2 + 4 * pClr;
+		if (colorDepht == 16)
+			offset += 16;
+		int filesize = bitmapdatasize + offset;
+
+		//filesize
+		fputc(filesize, fh);
+		fputc(filesize >> 8, fh);
+		fputc(filesize >> 16, fh);
+		fputc(filesize >> 24, fh);
+		//reserved
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//offset
+		fputc(offset, fh);
+		fputc(offset >> 8, fh);
+		fputc(offset >> 16, fh);
+		fputc(offset >> 24, fh);
+		//headersize
+		fputc(0x28, fh);
+		fputc(0 >> 8, fh);
+		fputc(0 >> 16, fh);
+		fputc(0 >> 24, fh);
+		//width
+		fputc(gs->w, fh);
+		fputc(gs->w >> 8, fh);
+		fputc(gs->w >> 16, fh);
+		fputc(gs->w >> 24, fh);
+		//height
+		fputc(gs->h, fh);
+		fputc(gs->h >> 8, fh);
+		fputc(gs->h >> 16, fh);
+		fputc(gs->h >> 24, fh);
+		//planes
+		fputc(1, fh);
+		fputc(0, fh);
+		//colordepht
+		fputc(colorDepht, fh);
+		fputc(colorDepht >> 8, fh);
+		//compression
+		if (colorDepht == 16)
+			fputc(3, fh);
+		else
+			fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//bitmapdatasize
+		fputc(bitmapdatasize, fh);
+		fputc(bitmapdatasize >> 8, fh);
+		fputc(bitmapdatasize >> 16, fh);
+		fputc(bitmapdatasize >> 24, fh);
+		//h-resolution
+		fputc(0x12, fh);
+		fputc(0x0B, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//v-resolution
+		fputc(0x12, fh);
+		fputc(0x0B, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//colors (palette-size)
+		fputc(pClr, fh);
+		fputc(pClr >> 8, fh);
+		fputc(pClr >> 16, fh);
+		fputc(pClr >> 24, fh);
+		//important colors
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+
+		//palette
+		for (int n = 0; n < pClr; n++)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
-			{
-				fputc(p8[(y*gs->w + x) * 4], fh);
-				fputc(p8[(y*gs->w + x) * 4 + 1], fh);
-				fputc(p8[(y*gs->w + x) * 4 + 2], fh);
-			}
-			//terminator
-			for (int n = 0; n < terminator; n++)
-				fputc(0, fh);
+			fputc(GetBValue(clr[n]), fh);
+			fputc(GetGValue(clr[n]), fh);
+			fputc(GetRValue(clr[n]), fh);
+			fputc(0, fh);
 		}
+
+		if (colorDepht == 16)
+		{
+			fputc(0, fh);
+			fputc(0xF8, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+
+			fputc(0xE0, fh);
+			fputc(0x07, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+
+			fputc(0x1F, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+
+			fputc(0, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+			fputc(0, fh);
+		}
+
+		switch (colorDepht)
+		{
+		case 8:
+		{
+			for (int y = gs->h - 1; y >= 0; y--)
+			{
+				for (unsigned int x = 0; x < gs->w; x++)
+				{
+					for (int i = 0; i < pClr; i++)
+					{
+						if (clr[i] == RGB(p8[(y * gs->w + x) * 4 + 2],
+							p8[(y * gs->w + x) * 4 + 1],
+							p8[(y * gs->w + x) * 4]))
+						{
+							fputc(i, fh);
+							break;
+						}
+					}
+				}
+				//terminator
+				for (int n = 0; n < terminator; n++)
+					fputc(0, fh);
+			}
+		}
+		break;
+		case 16:
+		{
+			for (int y = gs->h - 1; y >= 0; y--)
+			{
+				for (unsigned int x = 0; x < gs->w; x++)
+				{
+					unsigned short clr = RGB_565(
+						p8[(y * gs->w + x) * 4 + 2],
+						p8[(y * gs->w + x) * 4 + 1],
+						p8[(y * gs->w + x) * 4]);
+					fputc(clr, fh);
+					fputc(clr >> 8, fh);
+				}
+				//terminator
+				for (int n = 0; n < terminator; n++)
+					fputc(0, fh);
+			}
+		}
+		break;
+		case 24:
+		{
+			for (int y = gs->h - 1; y >= 0; y--)
+			{
+				for (unsigned int x = 0; x < gs->w; x++)
+				{
+					fputc(p8[(y * gs->w + x) * 4], fh);
+					fputc(p8[(y * gs->w + x) * 4 + 1], fh);
+					fputc(p8[(y * gs->w + x) * 4 + 2], fh);
+				}
+				//terminator
+				for (int n = 0; n < terminator; n++)
+					fputc(0, fh);
+			}
+		}
+		break;
+		default:
+		{
+			return false;
+		}
+		}
+		fclose(fh);
+		return true;
 	}
-	break;
-	default:
-	{
-		return false;
-	}
-	}
-	fclose(fh);
-	return true;
+	return false;
 }
 bool GFXEngine::SaveAlphaChannelBmp(GFXSurface *gs, string name)
 {
-	FILE *fh;
-	if (fopen_s(&fh, name.c_str(), "wb") != 0)
-	{
-		return false;
-	}
-	fputs("BM", fh);
+	if (_HasBGRABuffer(gs)) {
+		FILE* fh;
+		if (fopen_s(&fh, name.c_str(), "wb") != 0)
+		{
+			return false;
+		}
+		fputs("BM", fh);
 
-	int pClr = 256;
+		int pClr = 256;
 
-	int terminator = 4 - (gs->w % 4);
-	if (terminator == 4)
-		terminator = 0;
-	int bitmapdatasize = (gs->w + terminator)*gs->h;
-	int offset = 13 * 4 + 2 + 4 * pClr;
-	int filesize = bitmapdatasize + offset;
+		int terminator = 4 - (gs->w % 4);
+		if (terminator == 4)
+			terminator = 0;
+		int bitmapdatasize = (gs->w + terminator) * gs->h;
+		int offset = 13 * 4 + 2 + 4 * pClr;
+		int filesize = bitmapdatasize + offset;
 
-	//filesize
-	fputc(filesize, fh);
-	fputc(filesize >> 8, fh);
-	fputc(filesize >> 16, fh);
-	fputc(filesize >> 24, fh);
-	//reserved
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//offset
-	fputc(offset, fh);
-	fputc(offset >> 8, fh);
-	fputc(offset >> 16, fh);
-	fputc(offset >> 24, fh);
-	//headersize
-	fputc(0x28, fh);
-	fputc(0 >> 8, fh);
-	fputc(0 >> 16, fh);
-	fputc(0 >> 24, fh);
-	//width
-	fputc(gs->w, fh);
-	fputc(gs->w >> 8, fh);
-	fputc(gs->w >> 16, fh);
-	fputc(gs->w >> 24, fh);
-	//height
-	fputc(gs->h, fh);
-	fputc(gs->h >> 8, fh);
-	fputc(gs->h >> 16, fh);
-	fputc(gs->h >> 24, fh);
-	//planes
-	fputc(1, fh);
-	fputc(0, fh);
-	//colordepht
-	fputc(8, fh);
-	fputc(0, fh);
-	//compression
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//bitmapdatasize
-	fputc(bitmapdatasize, fh);
-	fputc(bitmapdatasize >> 8, fh);
-	fputc(bitmapdatasize >> 16, fh);
-	fputc(bitmapdatasize >> 24, fh);
-	//h-resolution
-	fputc(0x12, fh);
-	fputc(0x0B, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//v-resolution
-	fputc(0x12, fh);
-	fputc(0x0B, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	//colors (palette-size)
-	fputc(pClr, fh);
-	fputc(pClr >> 8, fh);
-	fputc(pClr >> 16, fh);
-	fputc(pClr >> 24, fh);
-	//important colors
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-	fputc(0, fh);
-
-	//palette
-	for (int n = 0; n < 256; n++)
-	{
-		fputc(n, fh);
-		fputc(n, fh);
-		fputc(n, fh);
+		//filesize
+		fputc(filesize, fh);
+		fputc(filesize >> 8, fh);
+		fputc(filesize >> 16, fh);
+		fputc(filesize >> 24, fh);
+		//reserved
 		fputc(0, fh);
-	}
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//offset
+		fputc(offset, fh);
+		fputc(offset >> 8, fh);
+		fputc(offset >> 16, fh);
+		fputc(offset >> 24, fh);
+		//headersize
+		fputc(0x28, fh);
+		fputc(0 >> 8, fh);
+		fputc(0 >> 16, fh);
+		fputc(0 >> 24, fh);
+		//width
+		fputc(gs->w, fh);
+		fputc(gs->w >> 8, fh);
+		fputc(gs->w >> 16, fh);
+		fputc(gs->w >> 24, fh);
+		//height
+		fputc(gs->h, fh);
+		fputc(gs->h >> 8, fh);
+		fputc(gs->h >> 16, fh);
+		fputc(gs->h >> 24, fh);
+		//planes
+		fputc(1, fh);
+		fputc(0, fh);
+		//colordepht
+		fputc(8, fh);
+		fputc(0, fh);
+		//compression
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//bitmapdatasize
+		fputc(bitmapdatasize, fh);
+		fputc(bitmapdatasize >> 8, fh);
+		fputc(bitmapdatasize >> 16, fh);
+		fputc(bitmapdatasize >> 24, fh);
+		//h-resolution
+		fputc(0x12, fh);
+		fputc(0x0B, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//v-resolution
+		fputc(0x12, fh);
+		fputc(0x0B, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		//colors (palette-size)
+		fputc(pClr, fh);
+		fputc(pClr >> 8, fh);
+		fputc(pClr >> 16, fh);
+		fputc(pClr >> 24, fh);
+		//important colors
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
+		fputc(0, fh);
 
-	unsigned char *p8 = (unsigned char*)gs->bgra;
-	for (int y = gs->h - 1; y >= 0; y--)
-	{
-		for (unsigned int x = 0; x < gs->w; x++)
-			fputc(p8[(y*gs->w + x) * 4 + 3], fh);
-		//terminator
-		for (int n = 0; n < terminator; n++)
+		//palette
+		for (int n = 0; n < 256; n++)
+		{
+			fputc(n, fh);
+			fputc(n, fh);
+			fputc(n, fh);
 			fputc(0, fh);
-	}
+		}
 
-	fclose(fh);
+		unsigned char* p8 = (unsigned char*)gs->bgra;
+		for (int y = gs->h - 1; y >= 0; y--)
+		{
+			for (unsigned int x = 0; x < gs->w; x++)
+				fputc(p8[(y * gs->w + x) * 4 + 3], fh);
+			//terminator
+			for (int n = 0; n < terminator; n++)
+				fputc(0, fh);
+		}
+
+		fclose(fh);
+		return true;
+	}
+	return false;
+}
+
+void GFXEngine::FreeRAM(GFXSurface* gs) {
+	if (gs && gs->bgra) {
+		delete[] gs->bgra;
+		gs->bgra = NULL;
+	}
+}
+
+bool GFXEngine::_HasBGRABuffer(GFXSurface* gs) {
+
+	if (!gs || !gs->bgra)
+		return false;
+
 	return true;
 }

@@ -39,8 +39,8 @@ using namespace std;
 
 bool InitNetwork();
 void ReleaseNetwork();
-bool GetClientIPs(void(*MessageCallback)(char *_ip));
-void GetComputerNameByIP(const char *ip, char *computername);
+bool GetClientIPs(void(*MessageCallback)(string ip));
+string GetComputerNameByIP(string ip);
 
 class TCPClient
 {
@@ -49,12 +49,10 @@ private:
 	HANDLE receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
-	TCPClient(const char *ip_or_hostname, const char *port, void (__cdecl *MessageCallback)(int,string));
+	TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,string));
 	~TCPClient();
-	void Send(const char *txt);
-	char* GetServerIP(char *ip);
-	void Disconnect();
+	void Send(string data);
 private:
 	static DWORD WINAPI receiveThread(void *param);
-	void(*MessageCallback)(int msg, string text);
+	void(*MessageCallback)(int msg, string data);
 };

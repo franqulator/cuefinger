@@ -23,24 +23,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma warning(disable : 4996)
 
-bool InitNetwork()
-{
+bool InitNetwork() {
 	WSADATA wsadata;
-	if (WSAStartup(MAKEWORD(2, 2), &wsadata) == SOCKET_ERROR)
+	if (WSAStartup(MAKEWORD(2, 2), &wsadata) == SOCKET_ERROR) {
 		return false;
-
+	}
 	return true;
 }
 
-void ReleaseNetwork()
-{
+void ReleaseNetwork() {
 	WSACleanup();
 }
 
-void GetComputerNameByIP(const char *ip, char *computername)
-{
+string GetComputerNameByIP(string ip) {
+
 	struct sockaddr_in sa;
-	inet_pton(AF_INET, ip, &(sa.sin_addr));
+	if (inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 1) {
+		return ip;
+	}
 
 	struct sockaddr_in saGNI;
 	char hostname[NI_MAXHOST];
@@ -49,51 +49,49 @@ void GetComputerNameByIP(const char *ip, char *computername)
 	saGNI.sin_addr.s_addr = sa.sin_addr.s_addr;
 	saGNI.sin_port = htons(port);
 
-	DWORD dwRetval = getnameinfo((struct sockaddr *) &saGNI,
-		sizeof(struct sockaddr),
-		hostname,
-		NI_MAXHOST, NULL, 0, NI_NOFQDN);
-
-	strcpy(computername, hostname);
-}
-
-bool GetClientIPs(void(*MessageCallback)(char *_ip))
-{
-	WSADATA wsadata;
-
-	if (WSAStartup(MAKEWORD(2, 2), &wsadata) == SOCKET_ERROR)
-	{
-		throw "Error on loading wsock2.dll";
+	if (getnameinfo((struct sockaddr*)&saGNI, sizeof(struct sockaddr), hostname, NI_MAXHOST, NULL, 0, NI_NOFQDN) != 0) {
+		return ip;
 	}
 
-	char hostname[256];
-	if (gethostname(hostname, 256) == SOCKET_ERROR)
+	return string(hostname);
+}
+
+bool GetClientIPs(void(*MessageCallback)(string ip)) {
+
+	WSADATA wsadata;
+	if (WSAStartup(MAKEWORD(2, 2), &wsadata) == SOCKET_ERROR) {
 		return false;
+	}
+
+	char hostname[NI_MAXHOST];
+	if (gethostname(hostname, NI_MAXHOST) == SOCKET_ERROR) {
+		return false;
+	}
 
 	hostent* h = gethostbyname(hostname);
-	if (!h)
+	if (!h) {
 		return false;
-
-	int i = 0;
-	char ip[256];
-	SOCKADDR_IN addr;
-
-	while (h->h_addr_list[i])
-	{
-		addr.sin_addr.s_addr = inet_addr(h->h_addr_list[0]);
-		strcpy_s(ip, 64, inet_ntoa(*(in_addr*)(h->h_addr_list[0])));
-
-		MessageCallback(ip);
-
-		i++;
 	}
 
-	return true;
+	bool result = true;
+	for (int i = 0; h->h_addr_list[i]; i++) {
+		char* ip = inet_ntoa(*(in_addr*)(h->h_addr_list[i]));
+		if (!ip) {
+			result = false;
+		}
+		else {
+			MessageCallback(string(ip));
+		}
+	}
+
+	return result;
 }
 
-TCPClient::TCPClient(const char *_ip_or_hostname, const char *_port, void (__cdecl *MessageCallback)(int,string))
-{
+TCPClient::TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,string)) {
 	this->socketConnect = 0;
+	this->receiveThreadHandle = NULL;
+	this->receiveThreadIsRunning = false;
+	this->MessageCallback = MessageCallback;
 
 	struct addrinfo hints, *result;
 	memset(&hints, 0, sizeof(struct addrinfo));
@@ -102,62 +100,54 @@ TCPClient::TCPClient(const char *_ip_or_hostname, const char *_port, void (__cde
 	hints.ai_protocol = IPPROTO_TCP;
 
 	//resolve host name to ip if necessary
-	if (getaddrinfo(_ip_or_hostname, _port, &hints, &result) < 0 || !result)
-	{
-		char msg[256];
-		sprintf(msg, "Error on resolving hostname to %s:%s", _ip_or_hostname, _port);
-		throw msg;
+	if (getaddrinfo(host.c_str(), port.c_str(), &hints, &result) != 0) {
+		throw "Error on resolving hostname on " + host + ":" + port;
 	}
 
 	this->socketConnect = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (this->socketConnect < 0)
-	{
+	if (this->socketConnect == -1) {
 		throw "Error on creating socket";
 	}
 
-	if (connect(this->socketConnect, result->ai_addr, result->ai_addrlen) < 0)
-	{
+	if (connect(this->socketConnect, result->ai_addr, result->ai_addrlen) == -1) {
 		closesocket(this->socketConnect);
 		this->socketConnect = 0;
-		char msg[256];
-		sprintf(msg, "Error on connecting to %s:%s", _ip_or_hostname, _port);
-		throw msg;
+		throw "Error on connecting to " + host + ":" + port;
 	}
 
-	if (result)
-	{
+	if (result) {
 		freeaddrinfo(result);
 	}
 
-	this->MessageCallback=MessageCallback;
-
-	if (this->MessageCallback)
-	{
+	if (this->MessageCallback) {
 		this->receiveThreadHandle = CreateThread(NULL, 0, this->receiveThread, (void*)this, NULL, NULL);
-		this->MessageCallback(MSG_CLIENT_CONNECTED, "");
+		if (this->receiveThreadHandle) {
+			this->MessageCallback(MSG_CLIENT_CONNECTED, "");
+		}
+		else {
+			throw "Error on creating thread";
+		}
 	}
 }
 
-TCPClient::~TCPClient()
-{
-}
-
-void TCPClient::Disconnect()
-{
-	if (this->receiveThreadIsRunning)
-	{
-		TerminateThread(this->receiveThreadHandle, -1);
-		this->receiveThreadIsRunning = false;
-	}
-
-	if(this->socketConnect)
-	{
+TCPClient::~TCPClient() {
+	this->MessageCallback = NULL;
+	if(this->socketConnect) {
 		shutdown(this->socketConnect,SD_BOTH);
 		closesocket(this->socketConnect);
 		this->socketConnect=NULL;
-		if (this->MessageCallback)
-		{
+		if (this->MessageCallback) {
 			this->MessageCallback(MSG_CLIENT_DISCONNECTED, "");
+		}
+	}
+
+	unsigned long long timeout = GetTickCount64();
+	while (this->receiveThreadIsRunning) { // wait until thread is terminated
+		Sleep(250);
+		if (GetTickCount64() - timeout > 3000) { // call terminate thread after 3 sec
+			TerminateThread(this->receiveThreadHandle, -1);
+			this->receiveThreadIsRunning = false;
+			this->receiveThreadHandle = NULL;
 		}
 	}
 }
@@ -165,59 +155,45 @@ void TCPClient::Disconnect()
 DWORD WINAPI TCPClient::receiveThread(void *param)
 {
 	TCPClient *tcpClient=(TCPClient*)param;
-
-	tcpClient->receiveThreadIsRunning=true;
+	tcpClient->receiveThreadIsRunning = true;
 
 	char buffer[TCP_BUFFER_SIZE];
-	string complete_message = "";
+	string completeMessage = "";
 
-	while(tcpClient->socketConnect)
-	{
-		int bytes=recv(tcpClient->socketConnect,
-			buffer,TCP_BUFFER_SIZE,NULL);
+	while(tcpClient->socketConnect) {
+		int bytes = recv(tcpClient->socketConnect, buffer, TCP_BUFFER_SIZE, NULL);
 
-		if(bytes>0)
-		{
-			int i = 0;
-			while (i < bytes)
-			{
-				int msg_len = strnlen(&buffer[i], TCP_BUFFER_SIZE - i);
+		if(bytes > 0) {
+			size_t i = 0;
+			while (i < (size_t)bytes) {
+				size_t len = strnlen(&buffer[i], TCP_BUFFER_SIZE - i);
+				completeMessage += string(&buffer[i], len);
 
-				complete_message += string(&buffer[i], msg_len);
-
-				if (i + msg_len >= bytes)
-				{
+				if (i + len >= (size_t)bytes) {
 					//message nicht komplett, warte auf weitere pakete
 				}
-				else
-				{
+				else {
 					//message komplett
-					if (tcpClient->MessageCallback)
-					{
-						tcpClient->MessageCallback(MSG_TEXT, complete_message);
+					if (tcpClient->MessageCallback) {
+						tcpClient->MessageCallback(MSG_TEXT, completeMessage);
 					}
-					complete_message = "";
+					completeMessage = "";
 				}
 
 				//suche nach weiteren messages im stream
 				i += strnlen(&buffer[i], TCP_BUFFER_SIZE - i) + 1;
 			}			
 		}
-		else
-		{
-			bool conlost=(bytes==0);
-			if(bytes==SOCKET_ERROR)
-			{
-				int err=WSAGetLastError();
-				if(err!=WSAEINTR)
-				{
-					conlost=true;
+		else {
+			bool connectionLost = (bytes == 0);
+			if(bytes == SOCKET_ERROR) {
+				int err = WSAGetLastError();
+				if(err!=WSAEINTR) {
+					connectionLost = true;
 				}
 			}
-			if(conlost)
-			{
-				if (tcpClient->MessageCallback)
-				{
+			if(connectionLost) {
+				if (tcpClient->MessageCallback) {
 					tcpClient->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
 				}
 				break;
@@ -230,47 +206,25 @@ DWORD WINAPI TCPClient::receiveThread(void *param)
 	return 0;
 }
 
-void TCPClient::Send(const char *txt)
-{
-	if(this->socketConnect)
-	{
-		size_t len=strlen(txt)+1;
-		size_t p=0;
-		while(p < len)
-		{
-			int curlen=TCP_BUFFER_SIZE;
-			if(curlen > len-p)
-			{
-				curlen = len-p;
+void TCPClient::Send(string data) {
+	if(this->socketConnect) {
+		size_t p = 0;
+		while(p < data.length() + 1) {
+			size_t len = TCP_BUFFER_SIZE;
+			if(len > data.length() + 1 - p) {
+				len = data.length() + 1 - p;
 			}
-			int len_sent = send(this->socketConnect, &txt[p] ,curlen,0);
-			if(len_sent == SOCKET_ERROR)
-			{
+			int lenSent = send(this->socketConnect, data.substr(p).c_str() ,len,0);
+			if(lenSent == SOCKET_ERROR) {
 				int err = WSAGetLastError();
-				if (err != WSAEINTR)
-				{
-					if (this->MessageCallback)
-					{
+				if (err != WSAEINTR) {
+					if (this->MessageCallback) {
 						this->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
 					}
 					return;
 				}
 			}
-			p+=len_sent;
+			p += (size_t)lenSent;
 		}
 	}
-}
-
-char* TCPClient::GetServerIP(char *ip) //ip = pointer to buffer that receives the server's ip
-{
-	if(!this->socketConnect)
-		return NULL;
-	
-	sockaddr_in addr;
-	int len=sizeof(sockaddr_in);
-	getpeername(this->socketConnect,(sockaddr*)&addr,&len);
-
-	ip=inet_ntoa ( addr.sin_addr );
-
-	return ip;
 }
