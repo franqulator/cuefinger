@@ -266,7 +266,7 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 		*r_window = window;
 	}
 
-	Uint32 render_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE;
+	Uint32 render_flags = SDL_RENDERER_ACCELERATED;
 	if (flags & GFX_SOFTWARE)
 	{
 		render_flags = SDL_RENDERER_SOFTWARE;
@@ -274,8 +274,9 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 
 	if (flags & GFX_VSYNC)
 	{
-		render_flags = SDL_RENDERER_PRESENTVSYNC;
+		render_flags |= SDL_RENDERER_PRESENTVSYNC;
 	}
+	render_flags |= SDL_RENDERER_TARGETTEXTURE;
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 	renderer = SDL_CreateRenderer(window, -1, render_flags);
