@@ -20,7 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "main.h"
-#include <mutex>
+// #include <mutex>
+
+//mutex g_redraw_mutex;
 
 #define EVENT_CONNECT		1
 #define EVENT_DISCONNECT	2
@@ -41,7 +43,6 @@ vector<string> g_ua_server_list;
 string g_ua_server_connected = "";
 int g_ua_server_last_connection = -1;
 
-mutex g_mutex_redraw;
 bool g_redraw = true;
 bool g_serverlist_defined = false;
 
@@ -1457,13 +1458,13 @@ void CleanUpSendButtons()
 
 void SetRedrawWindow(bool redraw)
 {
-	const lock_guard<mutex> lock(g_mutex_redraw);
+//	const lock_guard<mutex> lock(g_redraw_mutex);
 	g_redraw = redraw;
 }
 
 bool GetRedrawWindow()
 {
-	const lock_guard<mutex> lock(g_mutex_redraw);
+//	const lock_guard<mutex> lock(g_redraw_mutex);
 	return g_redraw;
 }
 
