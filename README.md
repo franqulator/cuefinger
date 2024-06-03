@@ -49,6 +49,8 @@ https://github.com/raduvarga/UA-Midi-Control
 You can download the apk-file here:
 <a href ="https://github.com/franqulator/cuefinger/tree/main/build/android">https://github.com/franqulator/cuefinger/tree/main/build/android</a>
 
+---
+
 ## Windows 10/11
 ### Use binary
 Just chose the fitting *.exe and run it.
