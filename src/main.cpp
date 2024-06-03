@@ -299,7 +299,7 @@ void UpdateLayout() {
 			g_fntMainBigger = NULL;
 		}
 
-		g_fntMainBigger = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_main_fontsize * 1.5f * 96.0f / 100.0f));
+		g_fntMainBigger = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_main_fontsize * 1.3f * 96.0f / 100.0f));
 	}
 
 	float new_faderscale_fontsize = min(g_channel_btn_size / 4.0f, g_channel_label_fontsize);
