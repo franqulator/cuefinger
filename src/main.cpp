@@ -282,7 +282,7 @@ void UpdateLayout() {
 		g_fntLabel = gfx->CreateFontFromFile(getDataPath("chelseamarket.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
 	}
 
-	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
+	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.5f);
 	//reload mainfont if size changed
 	if (g_main_fontsize != new_main_fontsize) {
 		g_main_fontsize = new_main_fontsize;

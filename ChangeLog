@@ -1,3 +1,10 @@
+--- v1.2.0 ---
+- GUI for settings
+- Performance improvements
+- Minor bugfixes
+- Preview for Android
+
+
 --- v1.1.0 ---
 - Automatically try to reconnect to last used server, when connection was lost
 - Gfx-Engine update

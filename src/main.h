@@ -59,7 +59,9 @@ buying my music on https://franqulator.de\n\
 \n\
 This program comes with ABSOLUTELY NO WARRANTY.\n\
 This is free software, and you are welcome to redistribute it\n\
-under certain conditions; have a look at the COPYING file for details.";
+under certain conditions; have a look at the COPYING file for details.\n\
+\n\
+https://github.com/franqulator/cuefinger";
 //#define SIMULATION 
 
 #define SIMULATION_CHANNEL_COUNT	16
