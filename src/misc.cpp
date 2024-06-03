@@ -83,6 +83,7 @@ string getAppPath(string subpath) {
 }
 
 void clearLog(string info) {
+#ifndef __ANDROID__				   
 	time_t tme = time(NULL);
 	tm t;
 	errno_t err = localtime_s(&t, &tme);
@@ -111,8 +112,12 @@ void clearLog(string info) {
 		fputs(str.c_str(), fh);
 		fclose(fh);
 	}
+#endif	  
 }
 void toLog(string str) {
+#ifdef __ANDROID__
+    __android_log_write(ANDROID_LOG_DEFAULT, "Cuefinger", str.c_str());
+#else				  															   
 	string path;
 	path = getPrefPath("cuefinger.log");
 
@@ -122,6 +127,7 @@ void toLog(string str) {
 		fputs("\n", fh);
 		fclose(fh);
 	}
+#endif	  
 }
 
 

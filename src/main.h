@@ -37,12 +37,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.1.0";
+const string APP_VERSION = "1.2.0";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\n\
-Credits \n\
-\n\
 Idea & code\n\
 Frank Brempel\n\
 \n\
@@ -53,7 +51,11 @@ Cuefinger uses SDL2 and simdjson\n\
 www.libsdl.org\n\
 simdjson.org\n\
 \n\
-Copyright © 2024 Frank Brempel\n\
+Copyright © 2021 - 2024 Frank Brempel\n\
+\n\
+Donations\n\
+If you like Cuefinger, you can donate by\n\
+buying my music on https://franqulator.de\n\
 \n\
 This program comes with ABSOLUTELY NO WARRANTY.\n\
 This is free software, and you are welcome to redistribute it\n\
@@ -72,6 +74,8 @@ under certain conditions; have a look at the COPYING file for details.";
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
+
+#define UA_MAX_SERVER_LIST_SETTING	7 
 
 #define BTN_CHECKBOX		1
 #define BTN_RADIOBUTTON	2
@@ -124,6 +128,8 @@ under certain conditions; have a look at the COPYING file for details.";
 #define SWITCH	-1
 #define ON		1
 #define OFF		0
+
+#define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
 class Settings {
 public:
@@ -296,5 +302,7 @@ void CreateSendButtons(int sz);
 void UpdateConnectButtons();
 int GetAllChannelsCount(bool countWithHidden = true);
 void UpdateSubscriptions();
+void InitSettingsDialog();
+void ReleaseSettingsDialog();
 
 #endif

@@ -23,7 +23,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifdef __linux_wsl__
 	#include "../include/SDL.h"
 #elif __linux__ 
-	#include <SDL2/SDL.h>
+	#ifdef __ANDROID__
+		#include <SDL.h>
+	#else
+		#include <SDL2/SDL.h>
+	#endif
 #endif
 
 #include <strings.h>

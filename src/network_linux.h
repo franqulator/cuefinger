@@ -21,7 +21,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef _NETWORK_
 #define _NETWORK_
 
-#include <SDL2/SDL.h>
+#ifdef __ANDROID__
+	#include <SDL.h>
+#else
+	#include <SDL2/SDL.h>
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>

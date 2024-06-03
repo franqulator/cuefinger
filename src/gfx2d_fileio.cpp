@@ -1,4 +1,4 @@
-//Version 5.0 - 2023-11-24
+//Version 5.1 - 2024-06-03
 
 /*
 This file is part of Cuefinger 1
@@ -55,10 +55,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	filesize |= getc(fh) << 16;
 	filesize |= getc(fh) << 24;
 	//reserved
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//offset
 	unsigned int offset;
 	offset = getc(fh);
@@ -66,10 +63,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	offset |= getc(fh) << 16;
 	offset |= getc(fh) << 24;
 	//headersize
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//width
 	unsigned int width;
 	width = getc(fh);
@@ -115,15 +109,9 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	bitmapdatasize |= getc(fh) << 16;
 	bitmapdatasize |= getc(fh) << 24;
 	//h-resolution
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//v-resolution
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//colors (palette-size)
 	unsigned int palette;
 	palette = getc(fh);
@@ -131,10 +119,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	palette |= (unsigned int)getc(fh) << 16;
 	palette |= (unsigned int)getc(fh) << 24;
 	//important colors
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 
 	int terminator = 0;
 	if ((filesize - offset) > width*height*colorDepht / 8)
@@ -144,7 +129,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	for (unsigned int n = 0; n < palette; n++)
 	{
 		clr[n] = (getc(fh) + getc(fh) + getc(fh)) / 3;
-		getc(fh);
+		fseek(fh, 1, SEEK_CUR);
 	}
 	fseek(fh, offset, SEEK_SET);
 	unsigned char *p8 = (unsigned char*)gs->bgra;
@@ -160,8 +145,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 				if (feof(fh))
 					return true;
 			}
-			for (int t = 0; t < terminator; t++)
-				getc(fh);
+			fseek(fh, terminator, SEEK_CUR);
 		}
 		break;
 	}
@@ -177,8 +161,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 				if (feof(fh))
 					return true;
 			}
-			for (int t = 0; t < terminator; t++)
-				getc(fh);
+			fseek(fh, terminator, SEEK_CUR);
 		}
 		break;
 	}
@@ -192,14 +175,13 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 				if (feof(fh))
 					return true;
 			}
-			for (int t = 0; t < terminator; t++)
-				getc(fh);
+			fseek(fh, terminator, SEEK_CUR);
 		}
 		break;
 	}
 	default:
 	{
-		return NULL;
+		return false;
 	}
 	}
 	return true;
@@ -222,17 +204,10 @@ GFXSurface *GFXEngine::_ReadTga(FILE *fh)
 	}
 
 	//overjump colormap
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 5, SEEK_CUR);
 
 	//overjump x/y origin
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 
 	unsigned short width = getc(fh);
 	width |= (unsigned short)getc(fh) << 8;
@@ -248,13 +223,11 @@ GFXSurface *GFXEngine::_ReadTga(FILE *fh)
 	int colorDepht = getc(fh);
 
 	//Image descriptor;
-	getc(fh);
+	fseek(fh, 1, SEEK_CUR);
 
 	//imageID field
-	for (unsigned char n = 0; n < imageID; n++)
-	{
-		getc(fh);
-	}
+	fseek(fh, imageID, SEEK_CUR);
+
 	//image map not supported
 
 	switch (colorDepht)
@@ -292,10 +265,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 	filesize |= getc(fh) << 16;
 	filesize |= getc(fh) << 24;
 	//reserved
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//offset
 	unsigned int offset;
 	offset = getc(fh);
@@ -357,15 +327,9 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 	bitmapdatasize |= getc(fh) << 16;
 	bitmapdatasize |= getc(fh) << 24;
 	//h-resolution
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//v-resolution
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 	//colors (palette-size)
 	unsigned int palette;
 	palette = getc(fh);
@@ -378,10 +342,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 		palette = 256;
 	}
 	//important colors
-	getc(fh);
-	getc(fh);
-	getc(fh);
-	getc(fh);
+	fseek(fh, 4, SEEK_CUR);
 
 	int terminator = 4 - ((gsurf->w*colorDepht / 8) % 4);
 	if (terminator == 4)
@@ -391,7 +352,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 	for (unsigned int n = 0; n < palette; n++)
 	{
 		clr[n] = RGB(getc(fh), getc(fh), getc(fh));
-		getc(fh);
+		fseek(fh, 1, SEEK_CUR);
 	}
 	fseek(fh, offset, SEEK_SET);
 	unsigned char *p8 = (unsigned char*)gsurf->bgra;
@@ -411,8 +372,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 				if (feof(fh))
 					return gsurf;
 			}
-			for (int t = 0; t < terminator; t++)
-				getc(fh);
+			fseek(fh, terminator, SEEK_CUR);
 		}
 		break;
 	}
@@ -433,8 +393,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 					if (feof(fh))
 						return gsurf;
 				}
-				for (int t = 0; t < terminator; t++)
-					getc(fh);
+				fseek(fh, terminator, SEEK_CUR);
 			}
 		}
 		else //555
@@ -452,8 +411,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 					if (feof(fh))
 						return gsurf;
 				}
-				for (int t = 0; t < terminator; t++)
-					getc(fh);
+				fseek(fh, terminator, SEEK_CUR);
 			}
 		}
 		break;
@@ -471,8 +429,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 				if (feof(fh))
 					return gsurf;
 			}
-			for (int t = 0; t < terminator; t++)
-				getc(fh);
+			fseek(fh, terminator, SEEK_CUR);
 		}
 		break;
 	}

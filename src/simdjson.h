@@ -3,6 +3,9 @@
 #ifndef SIMDJSON_H
 #define SIMDJSON_H
 
+#ifdef __ANDROID__ // added by franqulator
+	#include "android_fopen.h"
+#endif
 /**
  * @mainpage
  *
@@ -3754,7 +3757,7 @@ inline simdjson_result<padded_string> padded_string::load(std::string_view filen
   // Open the file
   SIMDJSON_PUSH_DISABLE_WARNINGS
   SIMDJSON_DISABLE_DEPRECATED_WARNING // Disable CRT_SECURE warning on MSVC: manually verified this is safe
-  std::FILE *fp = std::fopen(filename.data(), "rb");
+  std::FILE *fp = fopen(filename.data(), "rb");
   SIMDJSON_POP_DISABLE_WARNINGS
 
   if (fp == nullptr) {
@@ -8530,7 +8533,7 @@ inline simdjson_result<size_t> parser::read_file(const std::string &path) noexce
   // Open the file
   SIMDJSON_PUSH_DISABLE_WARNINGS
   SIMDJSON_DISABLE_DEPRECATED_WARNING // Disable CRT_SECURE warning on MSVC: manually verified this is safe
-  std::FILE *fp = std::fopen(path.c_str(), "rb");
+  std::FILE *fp = fopen(path.c_str(), "rb");
   SIMDJSON_POP_DISABLE_WARNINGS
 
   if (fp == nullptr) {

@@ -31,8 +31,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define MAXINT32 0x7FFFFFFF
 #elif __linux__ 
-		#include <SDL2/SDL.h>
-		#include <SDL2/SDL_ttf.h>
+		#ifdef __ANDROID__
+			#include <../SDL/include/SDL.h>
+			#include <../SDL_ttf/SDL_ttf.h>
+		#else
+			#include <SDL2/SDL.h>
+			#include <SDL2/SDL_ttf.h>
+		#endif
 		#include "translator.h"
 
 	#define MAXINT32 0x7FFFFFFF
@@ -297,7 +302,6 @@ private:
 	SDL_Window* window=NULL;
 //	SDL_Surface *window_surface=NULL;
 	SDL_Renderer *renderer;
-	SDL_Texture *offline_render_texture;
 	int renderer_width, renderer_height;
 
 	unsigned int updateBgraSize;

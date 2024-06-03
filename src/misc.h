@@ -34,7 +34,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <set>
 #include <stdexcept>
 #include "wrapper.h"
-
+#ifdef __ANDROID__
+    #include <android/log.h>
+#endif								  
 using namespace std;
 
 #ifdef __linux__ 
