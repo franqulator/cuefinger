@@ -7,7 +7,7 @@ In a recording studio this gives the studio musician the possibility to access t
 Multiple connections from different devices at the same time are possible. E.g using an UA Apollo interface with 4 cue busses together with 4 tablet-pcs makes it possible for 4 musicians to each control their individual cue mix.
 
 I use cuefinger in my studio since a few years now. Until now I couldn't find the time to publish it for others to use, but better late than never.
-Cuefinger runs in my studio on 3 low budget HP Stream 7 tablets with Linux Mint and I also use an old win10 tablet (32bit). They remotely control my cascaded Apollo Silver and Apollo 16 black. I also tested it with Apollo Solo. There is no Android-/iOS Version since I have no experience in writing for these platforms.
+Cuefinger runs in my studio on 3 low budget HP Stream 7 tablets with Linux Mint and I also use an old win10 tablet (32bit). They remotely control my cascaded Apollo Silver and Apollo 16 black. I also tested it with Apollo Solo. There is no iOS Version since I have no experience in writing for this platform.
 
 I hope you find this software useful, feel free to contact me or check out my music.
 
@@ -43,6 +43,11 @@ Antonio Radu Varga whose project UA-Midi-Control helped me to get started<br>
 https://github.com/raduvarga/UA-Midi-Control
 
 ---
+
+## Android Preview
+### Sideload APK
+You can download the apk-file here:
+<a href ="https://github.com/franqulator/cuefinger/tree/main/build/android">https://github.com/franqulator/cuefinger/tree/main/build/android</a>
 
 ## Windows 10/11
 ### Use binary
