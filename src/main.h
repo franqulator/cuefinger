@@ -40,7 +40,8 @@ using namespace simdjson;
 const string APP_VERSION = "1.2.0";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
-const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\n\
+const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
+¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\n\
 Idea & code\n\
 Frank Brempel\n\
 \n\
@@ -48,19 +49,17 @@ Graphics\n\
 Michael Brempel\n\
 \n\
 Cuefinger uses SDL2 and simdjson\n\
-www.libsdl.org\n\
-simdjson.org\n\
-\n\
-Copyright © 2021 - 2024 Frank Brempel\n\
-\n\
+www.libsdl.org | simdjson.org\n\
+---\n\
 Donations\n\
 If you like Cuefinger, you can donate by\n\
 buying my music on https://franqulator.de\n\
-\n\
+---\n\
 This program comes with ABSOLUTELY NO WARRANTY.\n\
 This is free software, and you are welcome to redistribute it\n\
 under certain conditions; have a look at the COPYING file for details.\n\
 \n\
+Copyright © 2021 - 2024 Frank Brempel\n\
 https://github.com/franqulator/cuefinger";
 //#define SIMULATION 
 
@@ -99,15 +98,12 @@ https://github.com/franqulator/cuefinger";
 #define BTN_COLOR_GREEN		2
 #define BTN_COLOR_BLUE		3
 
-#define UA_PLUS_12DB		1
-#define UA_PLUS_6DB			0.890909
-#define UA_UNITY			0.781818
-#define UA_MINUS_6DB		0.672727
-#define UA_MINUS_12DB		0.563636
-#define UA_MINUS_20DB		0.447799
-#define UA_MINUS_32DB		0.306623
-#define UA_MINUS_56DB		0.151784
-#define UA_MINUS_INFINITY	0
+#define DB_UNITY			1.0
+#define METER_THRESHOLD		-76.0
+#define METER_COLOR_BORDER	RGB(90, 90, 120)
+#define METER_COLOR_BG		RGB(30, 30, 30)
+#define METER_COLOR_GREEN	RGB(62, 175, 72)
+#define METER_COLOR_YELLOW	RGB(200, 162, 42)
 
 #define UA_SERVER_RESFRESH_TIME	20000 //in ms
 #define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
@@ -205,7 +201,6 @@ public:
 	string ua_id;
 	// string name;
 	double gain;
-	// double gainDb;
 	double pan;
 	bool bypass;
 	double meter_level;
@@ -224,8 +219,7 @@ class Channel {
 public:
 	string ua_id;
 	string name;
-	double level;
-	// double levelDb;
+	double level; // 0 - 4; 1 = unity, 2 = +6 dB, 4 = + 12dB
 	double pan;
 	bool solo;
 	bool mute;
@@ -306,5 +300,24 @@ int GetAllChannelsCount(bool countWithHidden = true);
 void UpdateSubscriptions();
 void InitSettingsDialog();
 void ReleaseSettingsDialog();
+
+
+inline double toDbFS(double linVal) {
+	if (linVal == 0.0)
+		return -144.0;
+	return 20.0 * log10(linVal);
+}
+
+inline double fromDbFS(double dbVal) {
+	return pow(10.0, dbVal / 20.0);
+}
+
+inline double toMeterScale(double dbVal) {
+	return pow(dbVal, 0.2) / pow(4.0, 0.2);
+}
+
+inline double fromMeterScale(double linVal) {
+	return pow(linVal * pow(4.0, 0.2), 1.0 / 0.2);
+}
 
 #endif

@@ -426,6 +426,10 @@ string GFXEngine::_write_get_next_line(GFXFont* fnt, string txt, size_t* txt_ptr
 	}
 	*txt_ptr += txt_line.length();
 
+	while (txt_line.length() > 0 && (txt_line[txt_line.length() - 1] == '\t' || txt_line[txt_line.length() - 1] == '\r' || txt_line[txt_line.length() - 1] == '\n')) {
+		txt_line.erase(txt_line.length() - 1);
+	}
+
 	return txt_line;
 }
 
@@ -623,7 +627,6 @@ void GFXEngine::AbortUpdate()
 				}
 			}
 			if ((*it)->font) {
-				(*it)->font->will_draw = 0;
 				if ((*it)->font->will_delete && (*it)->font->will_draw < 1)
 				{
 					DeleteFont((*it)->font);
@@ -1174,22 +1177,88 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 			}
 		}
 	}
-	else if (shape)//shape
+	else //shape
 	{
-		SDL_SetRenderDrawColor(renderer, GetRValue(color), GetGValue(color), GetBValue(color), (Uint8)(opacity * 255.0f));
-
 		if (shape == GFX_ELLIPSE)
 		{
 		}
 		else //rect
 		{
-			SDL_FRect rc;
-			rc.x = pos_x;
-			rc.y = pos_y;
-			rc.w = l_rc.right - l_rc.left;
-			rc.h = l_rc.bottom - l_rc.top;
+			if (flags || rotation != 0.0f) {
+				float w = (float)l_rc.getWidth() * x_ratio;
+				float h = (float)l_rc.getHeight() * y_ratio;
+				int iw = ceil(w);
+				int ih = ceil(h);
+				SDL_Texture* tx = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, iw, ih);
+				if (!tx) {
+					return false;
+				}
+				unsigned int* pxl = new unsigned int[iw * ih];
+				unsigned int clr = color | 0xFF000000;
+				for (int n = 0; n < iw * ih; n++) {
+					pxl[n] = clr;
+				}
+				SDL_UpdateTexture(tx, NULL, pxl, iw * 4);
+				delete[] pxl;
+				pxl = NULL;
 
-			SDL_RenderFillRectF(renderer, &rc);
+				if (flags & GFX_ADDITIV) {
+					SDL_SetTextureBlendMode(tx, SDL_BLENDMODE_ADD);
+				}
+				else if (opacity < 1.0f) {
+					SDL_SetTextureBlendMode(tx, SDL_BLENDMODE_BLEND);
+				}
+				else {
+					SDL_SetTextureBlendMode(tx, SDL_BLENDMODE_NONE);
+				}
+
+				SDL_SetTextureAlphaMod(tx, (Uint8)(opacity * 255.0f));
+
+				SDL_FRect destRC;
+				destRC.x = pos_x;
+				destRC.y = pos_y;
+				destRC.w = w;
+				destRC.h = h;
+
+				SDL_FPoint center;
+				center.x = w / 2.0f;
+				center.y = h / 2.0f;
+
+				if (rotationOffset)
+				{
+					center.x += rotationOffset->getX();
+					center.y += rotationOffset->getY();
+				}
+
+				int flip = SDL_FLIP_NONE;
+				if (flags & GFX_HFLIP) {
+					flip = SDL_FLIP_HORIZONTAL;
+				}
+				if (flags & GFX_VFLIP) {
+					flip |= SDL_FLIP_VERTICAL;
+				}
+
+				if (SDL_RenderCopyExF(renderer, tx,
+					NULL, &destRC, RAD2DEG(rotation), &center, (SDL_RendererFlip)flip) != 0)
+				{
+					return false;
+				}
+
+				SDL_DestroyTexture(tx);
+				tx = NULL;
+			}
+			else {
+
+				SDL_SetRenderDrawColor(renderer, GetRValue(color), GetGValue(color), GetBValue(color), (Uint8)(opacity * 255.0f));
+
+				SDL_FRect rc;
+				rc.x = pos_x;
+				rc.y = pos_y;
+				rc.w = l_rc.getWidth();
+				rc.h = l_rc.getHeight();
+
+				SDL_RenderFillRectF(renderer, &rc);
+			}
 		}
 	}
 

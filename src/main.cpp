@@ -70,6 +70,7 @@ float g_channel_btn_size;
 
 float g_channel_label_fontsize;
 float g_main_fontsize;
+float g_info_fontsize;
 float g_offline_fontsize;
 float g_btnbold_fontsize;
 float g_faderscale_fontsize;
@@ -104,7 +105,7 @@ TCPClient *g_tcpClient = NULL;
 int g_page = 0;
 
 GFXFont *g_fntMain = NULL;
-GFXFont* g_fntMainBigger = NULL;
+GFXFont* g_fntInfo = NULL;
 GFXFont *g_fntChannelBtn = NULL;
 GFXFont *g_fntLabel = NULL;
 GFXFont *g_fntFaderScale = NULL;
@@ -283,7 +284,7 @@ void UpdateLayout() {
 		g_fntLabel = gfx->CreateFontFromFile(getDataPath("chelseamarket.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
 	}
 
-	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.5f);
+	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
 	//reload mainfont if size changed
 	if (g_main_fontsize != new_main_fontsize) {
 		g_main_fontsize = new_main_fontsize;
@@ -293,14 +294,19 @@ void UpdateLayout() {
 			g_fntMain = NULL;
 		}
 
-		g_fntMain = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f));
+		g_fntMain = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f), false);
+	}
 
-		if (g_fntMainBigger) {
-			gfx->DeleteFont(g_fntMainBigger);
-			g_fntMainBigger = NULL;
+//	float new_info_fontsize = min(win_height / 33.0f, win_width / 33.0f);
+	float new_info_fontsize = min(g_btn_height / 2.0f, g_btn_width / 5.5f);
+	if (g_info_fontsize != new_info_fontsize) {
+		g_info_fontsize = new_info_fontsize;
+		if (g_fntInfo) {
+			gfx->DeleteFont(g_fntInfo);
+			g_fntInfo = NULL;
 		}
 
-		g_fntMainBigger = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_main_fontsize * 1.3f * 96.0f / 100.0f));
+		g_fntInfo = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_info_fontsize * 96.0f / 100.0f));
 	}
 
 	float new_faderscale_fontsize = min(g_channel_btn_size / 4.0f, g_channel_label_fontsize);
@@ -312,7 +318,7 @@ void UpdateLayout() {
 			g_fntFaderScale = NULL;
 		}
 
-		g_fntFaderScale = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
+		g_fntFaderScale = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
 	}
 
 	float new_btnbold_fontsize = g_channel_btn_size / 3;
@@ -324,7 +330,7 @@ void UpdateLayout() {
 			g_fntChannelBtn = NULL;
 		}
 
-		g_fntChannelBtn = gfx->CreateFontFromFile(getDataPath("opensans.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
+		g_fntChannelBtn = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
 	}
 
 	float new_offline_fontsize = min(win_width / 6.0f, win_height / 3.0f);
@@ -416,6 +422,8 @@ void UpdateLayout() {
 	g_btnServerlistScan->rc.w = round(g_btn_width);
 	g_btnServerlistScan->rc.h = round(g_btn_height / 2.0f);
 
+	g_btnInfo->rc.x = g_channel_offset_x + 20.0f;
+	g_btnInfo->rc.y = 20.0f;
 	g_btnInfo->rc.w = round(g_btn_width);
 	g_btnInfo->rc.h = round(g_btn_height / 2.0f);
 
@@ -462,34 +470,35 @@ void Button::DrawButton(int color)
 //	DrawColor(x, y, width, height, bgClr);
 	Vector2D stretch = Vector2D(this->rc.w, this->rc.h);
 
-	if (color == BTN_COLOR_RED)
-	{
-		gfx->Draw(g_gsButtonRed[btn_switch], this->rc.x, this->rc.y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
+	GFXSurface* gs = g_gsButtonYellow[btn_switch];
+	if (color == BTN_COLOR_RED) {
+		gs = g_gsButtonRed[btn_switch];
 	}
-	else if (color == BTN_COLOR_GREEN)
-	{
-		gfx->Draw(g_gsButtonGreen[btn_switch], this->rc.x, this->rc.y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
+	else if (color == BTN_COLOR_GREEN) {
+		gs = g_gsButtonGreen[btn_switch];
 	}
-	else if (color == BTN_COLOR_BLUE)
-	{
-		gfx->Draw(g_gsButtonBlue[btn_switch], this->rc.x, this->rc.y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
-	}
-	else
-	{
-		gfx->Draw(g_gsButtonYellow[btn_switch], this->rc.x, this->rc.y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
+	else if (color == BTN_COLOR_BLUE) {
+		gs = g_gsButtonBlue[btn_switch];
 	}
 
 	COLORREF clr = RGB(0, 0, 0);
-	if (!this->enabled)
-	{
-		clr = RGB(100, 100, 100);
+	if (!this->enabled) {
+		gfx->SetFilter_Saturation(gs, -0.1f);
+		gfx->SetFilter_Brightness(gs, 0.9f);
+		gfx->SetFilter_Contrast(gs, 0.7f);
+		clr = RGB(70, 70, 70);
 	}
+	gfx->Draw(gs, this->rc.x, this->rc.y, NULL, GFX_NONE, 1.0f, 0, NULL, &stretch);
+
+	gfx->SetFilter_Saturation(gs, 0.0f);
+	gfx->SetFilter_Brightness(gs, 1.0f);
+	gfx->SetFilter_Contrast(gs, 1.0f);
 
 	float max_width = (float)this->rc.w * 0.9;
 	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, this->text, GFX_CENTER | GFX_AUTOBREAK, max_width);
 	Vector2D szText(max_width, this->rc.h);
 	gfx->SetColor(g_fntMain, clr);
-	gfx->Write(g_fntMain, this->rc.x + ((float)this->rc.w - max_width) / 2.0f, this->rc.y + this->rc.h / 2 - sz.getY() / 2, this->text, GFX_CENTER | GFX_AUTOBREAK, &szText);
+	gfx->Write(g_fntMain, this->rc.x + ((float)this->rc.w - max_width) / 2.0f, this->rc.y + this->rc.h / 2.0f - sz.getY() / 2.0f, this->text, GFX_CENTER | GFX_AUTOBREAK, &szText, 0, 0.8);
 }
 
 Touchpoint::Touchpoint() {
@@ -517,8 +526,8 @@ void Send::Clear()
 	this->pan = 0;
 	this->bypass = false;
 	this->channel = NULL;
-	this->meter_level = -80.0;
-	this->meter_level2 = -80.0;
+	this->meter_level = -144.0;
+	this->meter_level2 = -144.0;
 	this->subscribed = false;
 }
 
@@ -551,24 +560,24 @@ void Send::ChangePan(double pan_change, bool absolute)
 
 void Send::ChangeGain(double gain_change, bool absolute)
 {
-	double _gain = this->gain + gain_change;
+	double _gain = fromMeterScale(toMeterScale(this->gain) + gain_change);
 	if (absolute)
 		_gain = gain_change;
 
-	if (_gain > 1)
+	if (_gain > 4.0)
 	{
-		_gain = 1;
+		_gain = 4.0;
 	}
-	else if (_gain < 0)
+	else if (_gain < fromDbFS(-144.0))
 	{
-		_gain = 0;
+		_gain = fromDbFS(-144.0);
 	}
 
 	if (this->gain != _gain)
 	{
 		this->gain = _gain;
 
-		string msg = "set /devices/" + this->channel->device->ua_id + "/inputs/" + this->channel->ua_id + "/sends/" + this->ua_id + "/GainTapered/value/ " + to_string(this->gain);
+		string msg = "set /devices/" + this->channel->device->ua_id + "/inputs/" + this->channel->ua_id + "/sends/" + this->ua_id + "/Gain/value/ " + to_string(toDbFS(this->gain));
 		UA_TCPClientSend(msg.c_str());
 	}
 }
@@ -609,7 +618,6 @@ void Channel::Clear()
 	this->ua_id = "";
 	this->name = "";
 	this->level = 0;
-	// this->levelDb = 0;
 	this->pan = 0;
 	this->solo = false;
 	this->mute = false;
@@ -627,8 +635,8 @@ void Channel::Clear()
 
 	this->fader_group = 0;
 
-	this->meter_level = -80.0;
-	this->meter_level2 = -80.0;
+	this->meter_level = -144.0;
+	this->meter_level2 = -144.0;
 
 	this->subscribed = false;
 }
@@ -656,11 +664,8 @@ void Channel::SubscribeSend(bool subscribe, int n)
 			}
 			root += "subscribe /devices/" + this->device->ua_id + "/inputs/" + this->ua_id + "/sends/" + this->sends[n].ua_id;
 
-			string cmd = root + "/GainTapered/";
+			string cmd = root + "/Gain/";
 			UA_TCPClientSend(cmd.c_str());
-
-			//	cmd = root + "/Gain/";
-			//	UA_TCPClientSend(cmd.c_str());
 
 			cmd = root + "/Bypass/";
 			UA_TCPClientSend(cmd.c_str());
@@ -752,13 +757,13 @@ void Channel::ChangePan(double pan_change, bool absolute)
 	if (absolute)
 		_pan = pan_change;
 
-	if (_pan > 1)
+	if (_pan > 1.0)
 	{
-		_pan = 1;
+		_pan = 1.0;
 	}
-	else if (_pan < -1)
+	else if (_pan < -1.0)
 	{
-		_pan = -1;
+		_pan = -1.0;
 	}
 
 	if (this->pan != _pan)
@@ -775,13 +780,13 @@ void Channel::ChangePan2(double pan_change, bool absolute)
 	if (absolute)
 		_pan = pan_change;
 
-	if (_pan > 1)
+	if (_pan > 1.0)
 	{
-		_pan = 1;
+		_pan = 1.0;
 	}
-	else if (_pan < -1)
+	else if (_pan < -1.0)
 	{
-		_pan = -1;
+		_pan = -1.0;
 	}
 
 	char msg[256];
@@ -795,26 +800,25 @@ void Channel::ChangePan2(double pan_change, bool absolute)
 
 void Channel::ChangeLevel(double level_change, bool absolute)
 {
-	double _level = this->level + level_change;
+	double _level = fromMeterScale(toMeterScale(this->level) + level_change);
 
 	if (absolute)
 		_level = level_change;
 
-	if (_level > 1)
+	if (_level > 4.0)
 	{
-		_level = 1;
+		_level = 4.0;
 	}
-	else if (_level < 0)
+	else if (_level < fromDbFS(-144.0))
 	{
-		_level = 0;
+		_level = fromDbFS(-144.0);
 	}
 
 	if (this->level != _level)
 	{
 		this->level = _level;
 
-		string msg;
-		msg = "set /devices/" + this->device->ua_id + "/inputs/" + this->ua_id + "/FaderLevelTapered/value/ " + to_string(_level);
+		string msg = "set /devices/" + this->device->ua_id + "/inputs/" + this->ua_id + "/FaderLevel/value/ " + to_string(toDbFS(_level));
 		UA_TCPClientSend(msg.c_str());
 	}
 }
@@ -1029,11 +1033,8 @@ void UADevice::SubscribeChannel(bool subscribe, int type, int n)
 				root += "subscribe /devices/" + this->ua_id + "/inputs/" + channels[n].ua_id;
 				//	string root = "subscribe /devices/" + this->ua_id + "/bus/" + this->channels[n].ua_id;
 
-				string cmd = root + "/FaderLevelTapered/";
+				string cmd = root + "/FaderLevel/";
 				UA_TCPClientSend(cmd.c_str());
-
-				//	cmd = root + "/FaderLevel/";
-				//	UA_TCPClientSend(cmd.c_str());
 
 				cmd = root + "/Mute/";
 				UA_TCPClientSend(cmd.c_str());
@@ -1812,42 +1813,30 @@ void UA_TCPClientProc(int msg, string data)
 									{
 										if (path_parameter[7] == "0" && path_parameter[8] == "MeterLevel" && path_parameter[9] == "value")//inputs
 										{
-											double old_level = send->meter_level;
-											send->meter_level = element["data"];
-
-											if ((int)(old_level * 10) != (int)(send->meter_level * 10))
-											{
+											double db = element["data"];
+											send->meter_level = fromDbFS(db);
+											if (db >= METER_THRESHOLD) {
 												SetRedrawWindow(true);
 											}
 										}
 
 										if (path_parameter[7] == "1" && path_parameter[8] == "MeterLevel" && path_parameter[9] == "value")//inputs
 										{
-											double old_level = send->meter_level2;
-											send->meter_level2 = element["data"];
-
-											if ((int)(old_level * 10) != (int)(send->meter_level2 * 10))
-											{
+											double db = element["data"];
+											send->meter_level2 = fromDbFS(db);
+											if (db >= METER_THRESHOLD) {
 												SetRedrawWindow(true);
 											}
 										}
 									}
-									else if (path_parameter[6] == "GainTapered" && send->channel->touch_point.action != TOUCH_ACTION_LEVEL)//sends
+									else if (path_parameter[6] == "Gain" && send->channel->touch_point.action != TOUCH_ACTION_LEVEL)//sends
 									{
 										if (path_parameter[7] == "value")
 										{
-											send->gain = element["data"];
+											send->gain = fromDbFS(element["data"]);
 											SetRedrawWindow(true);
 										}
 									}
-									/* else if (path_parameter[6] == "Gain")//sends
-									{
-										if (path_parameter[7] == "value")
-										{
-											send->gainDb = element["data"];
-											SetRedrawWindow(true);
-										}
-									}*/
 									else if (path_parameter[6] == "Pan" && send->channel->touch_point.action != TOUCH_ACTION_PAN)//sends
 									{
 										if (path_parameter[7] == "value")
@@ -1871,41 +1860,29 @@ void UA_TCPClientProc(int msg, string data)
 						{
 							if (path_parameter[5] == "0" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")//inputs
 							{
-								double old_level = channel->meter_level;
-								channel->meter_level = element["data"];
-
-								if ((int)(old_level * 10) != (int)(channel->meter_level * 10))
-								{
+								double db = element["data"];
+								channel->meter_level = fromDbFS(db);
+								if (db >= METER_THRESHOLD) {
 									SetRedrawWindow(true);
 								}
 							}
 							if (path_parameter[5] == "1" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")//inputs
 							{
-								double old_level = channel->meter_level2;
-								channel->meter_level2 = element["data"];
-
-								if ((int)(old_level * 10) != (int)(channel->meter_level2 * 10))
-								{
+								double db = element["data"];
+								channel->meter_level2 = fromDbFS(db);
+								if (db >= METER_THRESHOLD) {
 									SetRedrawWindow(true);
 								}
 							}
 						}
-						else if (path_parameter[4] == "FaderLevelTapered" && channel->touch_point.action != TOUCH_ACTION_LEVEL)//inputs
+						else if (path_parameter[4] == "FaderLevel" && channel->touch_point.action != TOUCH_ACTION_LEVEL)//inputs
 						{
 							if (path_parameter[5] == "value")//inputs
 							{
-								channel->level = element["data"];
+								channel->level = fromDbFS((double)element["data"]);
 								SetRedrawWindow(true);
 							}
 						}
-						/* else if (path_parameter[4] == "FaderLevel")//inputs
-						{
-							if (path_parameter[5] == "value")//inputs
-							{
-								channel->levelDb = element["data"];
-								SetRedrawWindow(true);
-							}
-						}*/
 						else if (path_parameter[4] == "Name")//inputs
 						{
 							if (path_parameter[5] == "value")//inputs
@@ -2030,10 +2007,12 @@ void UA_TCPClientProc(int msg, string data)
 			try
 			{
 				//ua-error
-				string_view sv = element["error"];
-				string s{sv};
-				if (g_settings.extended_logging) {
-					toLog("UA-Error " + s);
+				const char *c;
+				if (element["error"].get_c_str().get(c) == SUCCESS) {
+					string s(c);
+					if (g_settings.extended_logging) {
+						toLog("UA-Error " + s);
+					}
 				}
 			}
 			catch (simdjson_error e) {}
@@ -2059,12 +2038,14 @@ void UA_TCPClientSend(const char *msg)
 	}
 }
 
-void DrawScaleMark(int x, int y, const char *txt, double scale_value, double total_scale) {
-	double marker_y = total_scale - scale_value * total_scale;
-	gfx->DrawShape(GFX_RECTANGLE, RGB(170, 170, 170), x + g_channel_width *0.25, y + g_fadertracker_height / 2 + marker_y, g_channel_width *0.1, 1, GFX_NONE, 0.9);
+void DrawScaleMark(int x, int y, int scale_value, double total_scale) {
 	Vector2D sz = gfx->GetTextBlockSize(g_fntFaderScale, "-1234567890");
-	gfx->Write(g_fntFaderScale, x + g_channel_width * 0.24, y + g_fadertracker_height / 2 + marker_y - sz.getY() * 0.5, txt, GFX_RIGHT, NULL,
-		GFX_NONE, 0.9);
+	double v = fromDbFS((double)scale_value);
+	y = y - toMeterScale(v) * total_scale + total_scale;
+
+	gfx->DrawShape(GFX_RECTANGLE, RGB(170, 170, 170), x + g_channel_width * 0.25, y, g_channel_width * 0.1, 1, GFX_NONE, 0.8f);
+	gfx->Write(g_fntFaderScale, x + g_channel_width * 0.24, y - sz.getY() * 0.5, to_string(scale_value), GFX_RIGHT, NULL,
+		GFX_NONE, 0.8f);
 }
 
 void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _height) {
@@ -2083,8 +2064,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	bool mute = false;
 	double pan = 0;
 	double pan2 = 0;
-	double meter_level = -80.0;
-	double meter_level2 = -80.0;
+	double meter_level = -144.0;
+	double meter_level2 = -144.0;
 
 	Vector2D sz;
 	Vector2D stretch;
@@ -2247,38 +2228,73 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	height -= g_channel_btn_size + sz.getY() + SPACE_Y; //Fader group unterhalb
 	float fader_rail_height = height - g_fadertracker_height;
 	stretch = Vector2D(g_faderrail_width, fader_rail_height);
-	gfx->Draw(g_gsFaderrail, x + (width - g_faderrail_width) / 2, y + g_fadertracker_height / 2, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
+	gfx->Draw(g_gsFaderrail, x + (width - g_faderrail_width) / 2.0f, y + g_fadertracker_height / 2.0f, NULL, GFX_NONE, 1.0f, 0, NULL, &stretch);
 
-	DrawScaleMark(x, y, "+12", UA_PLUS_12DB, fader_rail_height);
-	DrawScaleMark(x, y, "+6", UA_PLUS_6DB, fader_rail_height);
-	DrawScaleMark(x, y, "0", UA_UNITY, fader_rail_height);
-	DrawScaleMark(x, y, "-6", UA_MINUS_6DB, fader_rail_height);
-	DrawScaleMark(x, y, "-12", UA_MINUS_12DB, fader_rail_height);
-	DrawScaleMark(x, y, "-20", UA_MINUS_20DB, fader_rail_height);
-	DrawScaleMark(x, y, "-32", UA_MINUS_32DB, fader_rail_height);
-	DrawScaleMark(x, y, "-56", UA_MINUS_56DB, fader_rail_height);
-	DrawScaleMark(x, y, "-inf" , UA_MINUS_INFINITY, fader_rail_height);
+	float o = g_fadertracker_height / 2.0f; // toMeterScale(12.0f)* fader_rail_height;
+	DrawScaleMark(x, y + o, 12,  fader_rail_height);
+	DrawScaleMark(x, y + o, 6, fader_rail_height);
+	DrawScaleMark(x, y + o, 0, fader_rail_height);
+	DrawScaleMark(x, y + o, -6, fader_rail_height);
+	DrawScaleMark(x, y + o, -12, fader_rail_height);
+	DrawScaleMark(x, y + o, -20, fader_rail_height);
+	DrawScaleMark(x, y + o, -32, fader_rail_height);
+	DrawScaleMark(x, y + o, -52, fader_rail_height);
+	DrawScaleMark(x, y + o, -84, fader_rail_height);
 
 	//tracker
 	stretch = Vector2D(g_fadertracker_width, g_fadertracker_height);
-	gfx->Draw(g_gsFader, x + (width - g_fadertracker_width) / 2, y + height - level * (height - g_fadertracker_height) - g_fadertracker_height, NULL, 
-			GFX_NONE, 1.0, 0, NULL, &stretch);
+	gfx->Draw(g_gsFader, x + (width - g_fadertracker_width) / 2.0f, y + height - toMeterScale(level) * (height - g_fadertracker_height) - g_fadertracker_height, NULL, 
+			GFX_NONE, 1.0f, 0, NULL, &stretch);
 
 	//LEVELMETER
 	g_channel_slider_height = g_channel_height - g_fader_label_height - g_channel_pan_height;
+	float threshold = fader_rail_height * (float)toMeterScale(fromDbFS(METER_THRESHOLD));
 
-	double led_height = round(UA_UNITY * fader_rail_height);
-	double led_top = round(fader_rail_height - led_height);
-	gfx->DrawShape(GFX_RECTANGLE, RGB(50, 50, 50), x + g_channel_width * 0.75, y + g_fadertracker_height / 2 + led_top, 5, led_height);
-	double scale_level = meter_level / -76.0; // eigentlich -80?
-	double level_height = round(led_height * (1 - scale_level));
-	gfx->DrawShape(GFX_RECTANGLE, RGB(20, 200, 50), x + g_channel_width * 0.75 + 1, y + g_fadertracker_height / 2 + led_top + led_height - level_height, 3, level_height);
+	gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f - 1.0f,
+		y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 1.0f,
+		7.0f, fader_rail_height * toMeterScale(DB_UNITY) + 2.0f - threshold);
+
+	gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BG, x + g_channel_width * 0.75f,
+		y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height,
+		5.0f, fader_rail_height * toMeterScale(DB_UNITY) - threshold);
+
+	if (meter_level > fromDbFS(METER_THRESHOLD)) {
+		float amplitude = round(fader_rail_height* (float)toMeterScale(meter_level));
+
+		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_GREEN, x + g_channel_width * 0.75f + 1.0f,
+			y + o + fader_rail_height - amplitude,
+			3.0f, amplitude - threshold);
+
+		if (meter_level > fromDbFS(-9.0)) {
+			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_YELLOW, x + g_channel_width * 0.75f + 1.0f,
+				y + o + fader_rail_height - amplitude,
+				3.0f, amplitude - fader_rail_height * toMeterScale(fromDbFS(-9.0)));
+		}
+	}
 
 	if (channel->stereo) {
-		gfx->DrawShape(GFX_RECTANGLE, RGB(50, 50, 50), x + g_channel_width * 0.75 + 5, y + g_fadertracker_height / 2 + led_top, 5, led_height);
-		scale_level = meter_level2 / -76.0; // eigentlich -80?
-		level_height = round(led_height * (1 - scale_level));
-		gfx->DrawShape(GFX_RECTANGLE, RGB(20, 200, 50), x + g_channel_width * 0.75 + 1 + 5, y + g_fadertracker_height / 2 + led_top + led_height - level_height, 3, level_height);
+
+		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f + 5.0f,
+			y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 1.0f,
+			7.0f, fader_rail_height* toMeterScale(DB_UNITY) + 2.0f - threshold);
+
+			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BG, x + g_channel_width * 0.75f + 6.0f,
+				y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height,
+				5.0f, fader_rail_height * toMeterScale(DB_UNITY) - threshold);
+
+		if (meter_level > fromDbFS(METER_THRESHOLD)) {
+			float amplitude = round(fader_rail_height * (float)toMeterScale(meter_level2));
+
+			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_GREEN, x + g_channel_width * 0.75f + 7.0f,
+				y + o + fader_rail_height - amplitude,
+				3.0f, amplitude - threshold);
+
+			if (meter_level2 > fromDbFS(-9.0)) {
+				gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_YELLOW, x + g_channel_width * 0.75f + 7.0f,
+					y + o + fader_rail_height - amplitude,
+					3.0f, amplitude - fader_rail_height * toMeterScale(fromDbFS(-9.0)));
+			}
+		}
 	}
 
 	if (gray) {
@@ -2433,11 +2449,11 @@ void Draw() {
 		float y = 20.0f;
 		float vspace = 30.0f;
 
-		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, g_btn_width * 4, win_height, 0, 0.3);
-		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2, 2, g_btn_width * 4 - 4, win_height - 4, 0, 0.9);
+		float box_height = g_btn_height * (7.0f + max(1.0f, (float)g_btnsServers.size())) / 2.0f + 4 * vspace + 52.0f;
+		float box_width = g_main_fontsize * 10.0f + 2.0f * g_btn_width + 40.0f;
+		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, box_width, box_height, 0, 0.3);
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2, 2, box_width - 4, box_height - 4, 0, 0.9);
 
-		g_btnInfo->rc.x = x;
-		g_btnInfo->rc.y = y;
 		g_btnInfo->DrawButton(BTN_COLOR_GREEN);
 
 		y += g_btn_height / 2.0f + vspace;
@@ -2524,16 +2540,16 @@ void Draw() {
 	}
 
 	if (g_btnInfo->checked) {
-		sz = gfx->GetTextBlockSize(g_fntMainBigger, INFO_TEXT);
-		gfx->SetColor(g_fntMainBigger, WHITE);
-		gfx->SetShadow(g_fntMainBigger, BLACK, 1.0);
+		sz = gfx->GetTextBlockSize(g_fntInfo, INFO_TEXT);
+		gfx->SetColor(g_fntInfo, RGB(220,220,220));
+		gfx->SetShadow(g_fntInfo, BLACK, 1.0);
 
-		gfx->DrawShape(GFX_RECTANGLE, WHITE, (win_width - sz.getX() - 20) / 2, (win_height - sz.getY() - 20) / 2, sz.getX() + 20, sz.getY() + 20, 0, 0.2);
-		gfx->DrawShape(GFX_RECTANGLE, BLACK, (win_width - sz.getX() - 16) / 2, (win_height - sz.getY() - 16) / 2, sz.getX() + 16, sz.getY() + 16, 0, 0.7);
+		gfx->DrawShape(GFX_RECTANGLE, WHITE, (win_width - sz.getX() - 30) / 2, (win_height - sz.getY() - 30) / 2, sz.getX() + 30, sz.getY() + 30, 0, 0.3);
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, (win_width - sz.getX() - 26) / 2, (win_height - sz.getY() - 26) / 2, sz.getX() + 26, sz.getY() + 26, 0, 0.9);
 
-		gfx->Write(g_fntMainBigger, win_width / 2, (win_height - sz.getY()) / 2, INFO_TEXT, GFX_CENTER);
-		gfx->SetShadow(g_fntMainBigger, BLACK, 0);
-		gfx->SetColor(g_fntMainBigger, BLACK);
+		gfx->Write(g_fntInfo, win_width / 2, (win_height - sz.getY()) / 2, INFO_TEXT, GFX_CENTER);
+		gfx->SetShadow(g_fntInfo, BLACK, 0);
+		gfx->SetColor(g_fntInfo, BLACK);
 	}
 
 	gfx->Update();
@@ -2930,7 +2946,7 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 			else if (channel->IsTouchOnFader(&relative_pos_pt))
 			{
 			/*	string root = "unsubscribe /devices/" + channel->device->ua_id + "/inputs/" + channel->ua_id;
-				string cmd = root + "/FaderLevelTapered";
+				string cmd = root + "/FaderLevel";
 				UA_TCPClientSend(cmd.c_str());*/
 
 				if (channel->fader_group)
@@ -3363,7 +3379,7 @@ void OnTouchUp(bool is_mouse, SDL_TouchFingerEvent *touchinput)
 									if (g_ua_devices[i].inputs[n].touch_point.action == TOUCH_ACTION_LEVEL)
 									{
 										string cmd = "subscribe /devices/" + g_ua_devices[i].inputs[n].device->ua_id + "/inputs/" 
-											+ g_ua_devices[i].inputs[n].ua_id + "/FaderLevelTapered/";
+											+ g_ua_devices[i].inputs[n].ua_id + "/FaderLevel/";
 										UA_TCPClientSend(cmd.c_str());
 									}
 									if(touchinput)
@@ -3385,7 +3401,7 @@ void OnTouchUp(bool is_mouse, SDL_TouchFingerEvent *touchinput)
 			{
 				if (channel->touch_point.action == TOUCH_ACTION_LEVEL)
 				{
-					string cmd = "subscribe /devices/" + channel->device->ua_id + "/inputs/" + channel->ua_id + "/FaderLevelTapered/";
+					string cmd = "subscribe /devices/" + channel->device->ua_id + "/inputs/" + channel->ua_id + "/FaderLevel/";
 					UA_TCPClientSend(cmd.c_str());
 				}
 				if(touchinput)
@@ -3591,7 +3607,7 @@ void UpdateConnectButtons()
 	}
 }
 
-GFXSurface* LoadGfx(string filename) {
+GFXSurface* LoadGfx(string filename, bool keepRAM = false) {
 	string path = getDataPath(filename);
 	GFXSurface *gs = gfx->LoadGfx(path);
 	if (!gs) {
@@ -3600,31 +3616,33 @@ GFXSurface* LoadGfx(string filename) {
 	}
 
 	// usually GFXEngine keeps a copy of the image in RAM but here it's not needed
-	gfx->FreeRAM(gs);
+	if (!keepRAM) {
+		gfx->FreeRAM(gs);
+	}
 
 	return gs;
 }
 
 bool LoadAllGfx() {
 
-	if (!(g_gsButtonYellow[0] = LoadGfx("btn_yellow_off.gfx")))
+	if (!(g_gsButtonYellow[0] = LoadGfx("btn_yellow_off.gfx", true)))
 		return false;
-	if (!(g_gsButtonYellow[1] = LoadGfx("btn_yellow_on.gfx")))
-		return false;
-
-	if (!(g_gsButtonRed[0] = LoadGfx("btn_red_off.gfx")))
-		return false;
-	if (!(g_gsButtonRed[1] = LoadGfx("btn_red_on.gfx")))
+	if (!(g_gsButtonYellow[1] = LoadGfx("btn_yellow_on.gfx", true)))
 		return false;
 
-	if (!(g_gsButtonGreen[0] = LoadGfx("btn_green_off.gfx")))
+	if (!(g_gsButtonRed[0] = LoadGfx("btn_red_off.gfx", true)))
 		return false;
-	if (!(g_gsButtonGreen[1] = LoadGfx("btn_green_on.gfx")))
+	if (!(g_gsButtonRed[1] = LoadGfx("btn_red_on.gfx", true)))
 		return false;
 
-	if (!(g_gsButtonBlue[0] = LoadGfx("btn_blue_off.gfx")))
+	if (!(g_gsButtonGreen[0] = LoadGfx("btn_green_off.gfx", true)))
 		return false;
-	if (!(g_gsButtonBlue[1] = LoadGfx("btn_blue_on.gfx")))
+	if (!(g_gsButtonGreen[1] = LoadGfx("btn_green_on.gfx", true)))
+		return false;
+
+	if (!(g_gsButtonBlue[0] = LoadGfx("btn_blue_off.gfx", true)))
+		return false;
+	if (!(g_gsButtonBlue[1] = LoadGfx("btn_blue_on.gfx", true)))
 		return false;
 
 	if (!(g_gsChannelBg = LoadGfx("channelbg.gfx")))
@@ -3914,6 +3932,22 @@ void ConvertToDpiAware(float *fx, float *fy, bool round_values)
 }
 
 bool Settings::load() {
+
+#ifdef __ANDROID__
+
+    SDL_Rect rc;
+    if (SDL_GetDisplayBounds(0, &rc) != 0) {
+        toLog("SDL_GetDisplayBounds failed: " + string(SDL_GetError()));
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","SDL_GetDisplayBounds failed", NULL);
+        return false;
+    }
+
+    g_settings.fullscreen = true;
+    g_settings.x = 0;
+    g_settings.y = 0;
+    g_settings.w=rc.w;
+    g_settings.h=rc.h;
+#else
 	string filename = GetFileName("settings");
 
 	//JSON
@@ -3985,7 +4019,7 @@ bool Settings::load() {
 	catch (simdjson_error e) {
 		return false;
 	}
-
+#endif
 	return true;
 }
 
@@ -4058,9 +4092,9 @@ bool Settings::save()
 	return true;
 }
 
-
 #ifdef __ANDROID__
-extern "C" void Java_org_libsdl_app_SDLActivity_load(JNIEnv *env, jobject obj, jobject assetManager){
+extern "C" void Java_franqulator_cuefinger_Cuefinger_load(JNIEnv *env, jobject obj, jobject assetManager){
+
     AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
     if (mgr == NULL) {
         toLog("error loading asset manager");
@@ -4069,6 +4103,70 @@ extern "C" void Java_org_libsdl_app_SDLActivity_load(JNIEnv *env, jobject obj, j
         android_fopen_set_asset_manager(mgr);
     }
 }
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setLockSettings(JNIEnv *env, jobject obj,
+                                                                  jboolean lockSettings){
+    g_settings.lock_settings = (bool)lockSettings;
+}
+
+extern "C" jboolean Java_franqulator_cuefinger_Cuefinger_getLockSettings(JNIEnv *env, jobject obj){
+    return g_settings.lock_settings;
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setLockToMix(JNIEnv *env, jobject obj,
+                                                                  jstring lockToMix){
+    g_settings.lock_to_mix = string((const char*)env->GetStringUTFChars(lockToMix, NULL));
+}
+
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getLockToMix(JNIEnv *env, jobject obj){
+    return env->NewStringUTF(g_settings.lock_to_mix.c_str());
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setReconnect(JNIEnv *env, jobject obj,
+                                                                     jint reconnect){
+    g_settings.reconnect_time = (int)reconnect;
+}
+
+extern "C" jint Java_franqulator_cuefinger_Cuefinger_getReconnect(JNIEnv *env, jobject obj){
+    return g_settings.reconnect_time;
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setChannelWidth(JNIEnv *env, jobject obj,
+                                                                  jint channelWidth){
+    g_settings.channel_width = (int)channelWidth;
+}
+
+extern "C" jint Java_franqulator_cuefinger_Cuefinger_getChannelWidth(JNIEnv *env, jobject obj){
+    return g_settings.channel_width;
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer1(JNIEnv *env, jobject obj,
+                                                                  jstring server){
+    g_settings.serverlist[0] = string((const char*)env->GetStringUTFChars(server, NULL));
+}
+
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer1(JNIEnv *env, jobject obj){
+    return env->NewStringUTF(g_settings.serverlist[0].c_str());
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer2(JNIEnv *env, jobject obj,
+                                                                jstring server){
+    g_settings.serverlist[1] = string((const char*)env->GetStringUTFChars(server, NULL));
+}
+
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer2(JNIEnv *env, jobject obj){
+    return env->NewStringUTF(g_settings.serverlist[1].c_str());
+}
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer3(JNIEnv *env, jobject obj,
+                                                                jstring server){
+    g_settings.serverlist[2] = string((const char*)env->GetStringUTFChars(server, NULL));
+}
+
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer3(JNIEnv *env, jobject obj){
+    return env->NewStringUTF(g_settings.serverlist[2].c_str());
+}
+
 #endif
 
 #ifdef _WIN32
@@ -4131,18 +4229,10 @@ int main(int argc, char* argv[]) {
 			return 1;       
 		}
 		
-#ifdef __ANDROID__
-        g_settings.fullscreen = true;
-		g_settings.x = 0;
-		g_settings.y = 0;
-		g_settings.w=rc.w;
-		g_settings.h=rc.h;
-#else
 		g_settings.x = rc.w / 4;
 		g_settings.y = rc.h / 4;
 		g_settings.w=rc.w / 2;
-		g_settings.h=rc.h / 2;
-#endif								  
+		g_settings.h=rc.h / 2;						  
 	}
 
 	CreateStaticButtons();
@@ -4579,7 +4669,7 @@ int main(int argc, char* argv[]) {
 														{
 															if (g_btnMix->checked)
 															{
-																channel->ChangeLevel(UA_UNITY, true);
+																channel->ChangeLevel(DB_UNITY, true);
 															}
 															else
 															{
@@ -4587,7 +4677,7 @@ int main(int argc, char* argv[]) {
 																{
 																	if (g_btnSends[n]->checked)
 																	{
-																		channel->sends[n].ChangeGain(UA_UNITY, true);
+																		channel->sends[n].ChangeGain(DB_UNITY, true);
 																		break;
 																	}
 																}
@@ -4912,7 +5002,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	gfx->DeleteFont(g_fntMain);
-	gfx->DeleteFont(g_fntMainBigger);
+	gfx->DeleteFont(g_fntInfo);
 	gfx->DeleteFont(g_fntChannelBtn);
 	gfx->DeleteFont(g_fntLabel);
 	gfx->DeleteFont(g_fntFaderScale);
