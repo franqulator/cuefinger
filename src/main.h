@@ -34,10 +34,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gfx2d_sdl.h"
 #include "simdjson.h"
+#include <map>
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.2.0";
+const string APP_VERSION = "1.3.0";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -140,6 +141,7 @@ public:
 	string serverlist[UA_MAX_SERVER_LIST];
 	bool extended_logging;
 	unsigned int reconnect_time;
+	bool show_offline_devices;
 
 	Settings() {
 		x = 0;
@@ -152,9 +154,11 @@ public:
 		lock_settings = false;
 		extended_logging = false;
 		reconnect_time = 10000;
+		show_offline_devices = false;
 	}
-	bool load();
+	bool load(string *json = NULL);
 	bool save();
+    string toJSON();
 };
 
 class Button {
@@ -300,6 +304,7 @@ int GetAllChannelsCount(bool countWithHidden = true);
 void UpdateSubscriptions();
 void InitSettingsDialog();
 void ReleaseSettingsDialog();
+void CleanUp();
 
 
 inline double toDbFS(double linVal) {

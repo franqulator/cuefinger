@@ -36,6 +36,7 @@ SDL_TimerID g_timer_network_timeout = 0;
 SDL_TimerID g_timer_network_send_timeout_msg = 0;
 
 Settings g_settings;
+map<string, string> serverSettingsJSON;
 
 string g_msg = "";
 
@@ -85,6 +86,7 @@ Button *g_btnMix=NULL;
 Button *g_btnSettings=NULL;
 
 Button* g_btnLockSettings = NULL;
+Button* g_btnShowOfflineDevices = NULL;
 Button* g_btnLockToMixMIX = NULL;
 Button* g_btnLockToMixCUE1 = NULL;
 Button* g_btnLockToMixCUE2 = NULL;
@@ -122,6 +124,8 @@ GFXSurface *g_gsFader;
 GFXSurface *g_gsPan;
 GFXSurface *g_gsPanPointer;
 GFXSurface *g_gsLabel[4];
+
+vector<SDL_Thread*> pingThreadsList;
 
 unsigned long long g_server_refresh_start_time = -UA_SERVER_RESFRESH_TIME;
 UADevice g_ua_devices[MAX_UA_DEVICES];
@@ -399,6 +403,9 @@ void UpdateLayout() {
 	g_btnLockSettings->rc.w = round(g_btn_width);
 	g_btnLockSettings->rc.h = round(g_btn_height / 2.0f);
 
+	g_btnShowOfflineDevices->rc.w = round(g_btn_width);
+	g_btnShowOfflineDevices->rc.h = round(g_btn_height / 2.0f);
+
 	g_btnLockToMixMIX->rc.w = round(g_btn_width);
 	g_btnLockToMixMIX->rc.h = round(g_btn_height / 2.0f);
 	g_btnLockToMixHP->rc.w = round(g_btn_width);
@@ -521,8 +528,7 @@ void Send::Clear()
 {
 	this->ua_id = "";
 	// this->name = "";
-	this->gain = 0;
-	// this->gainDb = 0;
+	this->gain = fromDbFS(-144.0);
 	this->pan = 0;
 	this->bypass = false;
 	this->channel = NULL;
@@ -617,7 +623,7 @@ void Channel::Clear()
 {
 	this->ua_id = "";
 	this->name = "";
-	this->level = 0;
+	this->level = fromDbFS(-144.0);
 	this->pan = 0;
 	this->solo = false;
 	this->mute = false;
@@ -1162,7 +1168,7 @@ int GetAllChannelsCount(bool countWithHidden)
 
 	for (int i = 0; i < MAX_UA_DEVICES; i++)
 	{
-		if (g_ua_devices[i].ua_id.length())
+		if (g_ua_devices[i].ua_id.length() && (g_ua_devices[i].online || g_settings.show_offline_devices))
 		{
 			if (countWithHidden)
 				channelCount += g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_ALL_ENABLED_AND_ACTIVE);
@@ -1402,10 +1408,14 @@ void UA_GetServerListCallback(string ip) {
 			ip.copy(scanIpBuffer, ip.length());
 			scanIpBuffer[ip.length()] = '\0';
 			string threadName = "PingUAServer on " + ip;
-			if (!SDL_CreateThread(UA_PingServer, threadName.c_str(), (void*)scanIpBuffer)) {
+			SDL_Thread *thread = SDL_CreateThread(UA_PingServer, threadName.c_str(), (void*)scanIpBuffer);
+			if (!thread) {
 				if (g_settings.extended_logging) {
 					toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
 				}
+			}
+			else {
+				pingThreadsList.push_back(thread);
 			}
 		}
 		else {
@@ -1425,10 +1435,14 @@ void UA_GetServerListCallback(string ip) {
 				ip.copy(scanIpBuffer, ip.length());
 				scanIpBuffer[ip.length()] = '\0';
 				string threadName = "PingUAServer on " + ip;
-				if (!SDL_CreateThread(UA_PingServer, threadName.c_str(), scanIpBuffer)) {
+				SDL_Thread *thread = SDL_CreateThread(UA_PingServer, threadName.c_str(), scanIpBuffer);
+				if (!thread) {
 					if (g_settings.extended_logging) {
 						toLog("Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
 					}
+				}
+				else {
+					pingThreadsList.push_back(thread);
 				}
 			}
 			else {
@@ -1438,6 +1452,13 @@ void UA_GetServerListCallback(string ip) {
 			}
 		}
 	}
+}
+
+void TerminateAllPingThreads() {
+	for (vector<SDL_Thread*>::iterator it = pingThreadsList.begin(); it != pingThreadsList.end(); ++it) {
+		SDL_DetachThread(*it);
+	}
+	pingThreadsList.clear();
 }
 
 
@@ -1570,6 +1591,8 @@ bool UA_GetServerList()
 	if (IS_UA_SERVER_REFRESHING)
 		return false;
 
+	TerminateAllPingThreads();
+
 	g_ua_server_last_connection = -1;
 	g_ua_server_list.clear();
 
@@ -1604,6 +1627,11 @@ void UA_TCPClientProc(int msg, string data)
 		break;
 	case MSG_CLIENT_CONNECTION_LOST:
 	{
+		// try to reconnect
+		if (g_settings.reconnect_time && g_timer_network_reconnect == 0) {
+			g_timer_network_reconnect = SDL_AddTimer(g_settings.reconnect_time, TimerCallbackReconnect, NULL);
+		}
+
 		//send message disconnect
 		SDL_Event event;
 		memset(&event, 0, sizeof(SDL_Event));
@@ -1686,7 +1714,7 @@ void UA_TCPClientProc(int msg, string data)
 					//	string msg = "subscribe /devices/" + dev->ua_id + "/MultiUnitOrder";
 					//	UA_TCPClientSend(msg.c_str());
 
-						if (dev->online) { // load device
+					//	if (dev->online) { // load device
 
 							if (dev == &g_ua_devices[0]) { // CueBusCount nur für erstes device erfragen
 								string msg = "subscribe /devices/" + dev->ua_id + "/CueBusCount";
@@ -1695,11 +1723,11 @@ void UA_TCPClientProc(int msg, string data)
 
 							string msg = "get /devices/" + dev->ua_id + "/inputs";
 							UA_TCPClientSend(msg.c_str());
-						}
-						else {
+					//	}
+					/*	else {
 							dev->ClearChannels();
 							SetRedrawWindow(true);
-						}
+						}*/
 					}
 				}
 				else if (path_parameter[2] == "CueBusCount")
@@ -2322,6 +2350,10 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 
 	Vector2D max_size = Vector2D(_width , g_fader_label_height);
 
+	if (name[0] == '!' || name[0] == '#') {
+		name = name.substr(1);
+	}
+
 	do {
 		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
 		if (sz.getX() > _width)
@@ -2409,7 +2441,9 @@ void Draw() {
 			GFX_NONE, 1.0, 0, NULL, &stretch);
 
 		for (int i = 0; i < MAX_UA_DEVICES; i++) {
-			if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
+			if (g_ua_devices[i].ua_id.length() && 
+				(g_ua_devices[i].online || g_settings.show_offline_devices) && 
+				g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
 				for (int n = 0; n < g_ua_devices[i].inputsCount; n++) {
 					if (!g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
 						continue;
@@ -2449,7 +2483,7 @@ void Draw() {
 		float y = 20.0f;
 		float vspace = 30.0f;
 
-		float box_height = g_btn_height * (7.0f + max(1.0f, (float)g_btnsServers.size())) / 2.0f + 4 * vspace + 52.0f;
+		float box_height = g_btn_height * (8.0f + max(1.0f, (float)g_btnsServers.size())) / 2.0f + 5 * vspace + 52.0f;
 		float box_width = g_main_fontsize * 10.0f + 2.0f * g_btn_width + 40.0f;
 		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, box_width, box_height, 0, 0.3);
 		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2, 2, box_width - 4, box_height - 4, 0, 0.9);
@@ -2509,6 +2543,15 @@ void Draw() {
 		g_btnLockToMixCUE4->rc.y = y;
 		g_btnLockToMixCUE4->DrawButton(BTN_COLOR_GREEN);
 
+		y += g_btn_height / 2.0f + 2.0f + vspace;
+
+		s = "Show offline devices";
+		sz = gfx->GetTextBlockSize(g_fntMain, s);
+		gfx->SetColor(g_fntMain, WHITE);
+		gfx->Write(g_fntMain, x, y + (g_btn_height / 2.0f - sz.getY()) / 2.0f, s, GFX_LEFT);
+		g_btnShowOfflineDevices->rc.x = x + g_main_fontsize * 10.0f;
+		g_btnShowOfflineDevices->rc.y = y;
+		g_btnShowOfflineDevices->DrawButton(BTN_COLOR_GREEN);
 		y += g_btn_height / 2.0f + 2.0f + vspace;
 
 		s = "Try to reconnect\nautomatically";
@@ -3477,6 +3520,7 @@ void CreateStaticButtons()
 	g_btnMix = new Button(ID_BTN_MIX, "MIX", 0, 0, g_btn_width, g_btn_height, true,false);
 
 	g_btnLockSettings = new Button(0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_settings, true);
+	g_btnShowOfflineDevices = new Button(0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.show_offline_devices, true);
 	g_btnLockToMixMIX = new Button(0, "MIX", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "MIX", !g_settings.lock_settings);
 	g_btnLockToMixCUE1 = new Button(0, "CUE 1", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "CUE 1", !g_settings.lock_settings);
 	g_btnLockToMixCUE2 = new Button(0, "CUE 2", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "CUE 2", !g_settings.lock_settings);
@@ -3503,6 +3547,7 @@ void CleanUpStaticButtons()
 	SAFE_DELETE(g_btnMix);
 
 	SAFE_DELETE(g_btnLockSettings);
+	SAFE_DELETE(g_btnShowOfflineDevices);
 	SAFE_DELETE(g_btnLockToMixMIX);
 	SAFE_DELETE(g_btnLockToMixCUE1);
 	SAFE_DELETE(g_btnLockToMixCUE2);
@@ -3740,13 +3785,19 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 		return false;
 
 	bool result = true;
-	string filename = GetFileName(server_name);
 
 	//JSON
 	try
 	{
 		dom::parser parser;
-		dom::element element = parser.load(getPrefPath(filename));
+		dom::element element;
+
+#ifdef __ANDROID__
+		element = parser.parse(serverSettingsJSON[server_name]);
+#else
+		string filename = GetFileName(server_name);
+		element = parser.load(getPrefPath(filename));
+#endif
 
 		string_view selected_send = element["ua_server"]["selected_mix"];
 
@@ -3789,7 +3840,7 @@ bool LoadServerSettings(string server_name, Button *btnSend)
 	return result;
 }
 
-bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-select & group-setting f�r das jeweilige device
+bool LoadServerSettings(string server_name, UADevice *ua_dev) // läd channel-select & group-setting für das jeweilige device
 {
 	if (server_name.length() == 0 || !ua_dev)
 		return false;
@@ -3800,7 +3851,14 @@ bool LoadServerSettings(string server_name, UADevice *ua_dev) // l�d channel-s
 	try
 	{
 		dom::parser parser;
-		dom::element element = parser.load(getPrefPath(filename));
+		dom::element element;
+
+#ifdef __ANDROID__
+		element = parser.parse(serverSettingsJSON[server_name]);
+#else
+		string filename = GetFileName(server_name);
+		element = parser.load(getPrefPath(filename));
+#endif
 
 		for (int n = 0; n < ua_dev->inputsCount; n++)
 		{
@@ -3838,76 +3896,83 @@ bool SaveServerSettings(string server_name)
 	if (server_name.length() == 0)
 		return false;
 
+	string json = "{\n";
+
+	if (g_ua_server_connected.length())
+	{
+		json += "\"ua_server\": {\n";
+		json += "\"name\": \"" + g_ua_server_connected  + "\",\n";
+
+		json += "\"selected_mix\": ";
+
+		if (g_btnMix->checked)
+		{
+			json += "\"MIX\",\n";
+		}
+		else
+		{
+			for (int n = 0; n < g_btnSends.size(); n++)
+			{
+				if (g_btnSends[n]->checked)
+				{
+					json += "\"" + g_btnSends[n]->text + "\",\n";
+					break;
+				}
+			}
+		}
+
+		bool set_komma = false;
+		for (int n = 0; n < MAX_UA_DEVICES; n++)
+		{
+			if (g_ua_devices[n].ua_id.length() == 0)
+				continue;
+
+			if (set_komma)
+				json += ",\n";
+
+				json += "\"" + g_ua_devices[n].ua_id + "\": {\n";
+			if (g_ua_devices[n].inputs)
+			{
+				bool set_komma2 = false;
+				for (int i = 0; i < g_ua_devices[n].inputsCount; i++)
+				{
+					if (set_komma2)
+						json += ",\n";
+
+						json += "\"" + g_ua_devices[n].inputs[i].ua_id + " group\": " + to_string(g_ua_devices[n].inputs[i].fader_group) + "\n,";
+
+						json += "\"" + g_ua_devices[n].inputs[i].ua_id + " selected\": ";
+					if (g_ua_devices[n].inputs[i].selected_to_show)
+						json += "true";
+					else
+						json += "false";
+					set_komma2 = true;
+				}
+			}
+			json += "}";
+			set_komma = true;
+		}
+		json += "}\n";
+	}
+
+	json += "}";
+
+#ifdef __ANDROID__
+	serverSettingsJSON.insert_or_assign(server_name, json);
+	// store to map and save map @ onPause in Cuefinger-class (java)
+#else
 	string filename = GetFileName(server_name);
 	string path = getPrefPath(filename);
 
 	FILE* fh = NULL;
-	if (fopen_s(&fh, path.c_str(), "w") == 0)
-	{
-		fprintf(fh, "{\n");
-
-		if (g_ua_server_connected.length())
-		{
-			fprintf(fh, "\"ua_server\": {\n");
-			fprintf(fh, "\"name\": \"%s\",\n", g_ua_server_connected.c_str());
-
-			fprintf(fh, "\"selected_mix\": ");
-			
-			if (g_btnMix->checked)
-			{
-				fprintf(fh, "\"MIX\",\n");
-			}
-			else
-			{
-				for (int n = 0; n < g_btnSends.size(); n++)
-				{
-					if (g_btnSends[n]->checked)
-					{
-						fprintf(fh, "\"%s\",\n", g_btnSends[n]->text.c_str());
-						break;
-					}
-				}
-			}
-
-			bool set_komma = false;
-			for (int n = 0; n < MAX_UA_DEVICES; n++)
-			{
-				if (g_ua_devices[n].ua_id.length() == 0)
-					continue;
-
-				if(set_komma)
-					fprintf(fh, ",\n");
-
-				fprintf(fh, "\"%s\": {\n", g_ua_devices[n].ua_id.c_str());
-				if (g_ua_devices[n].inputs)
-				{
-					bool set_komma2 = false;
-					for (int i = 0; i < g_ua_devices[n].inputsCount; i++)
-					{
-						if (set_komma2)
-							fprintf(fh, ",\n");
-
-						fprintf(fh, "\"%s group\": %d\n,", g_ua_devices[n].inputs[i].ua_id.c_str(), g_ua_devices[n].inputs[i].fader_group);
-
-						fprintf(fh, "\"%s selected\": ", g_ua_devices[n].inputs[i].ua_id.c_str());
-						if (g_ua_devices[n].inputs[i].selected_to_show)
-							fprintf(fh, "true");
-						else
-							fprintf(fh, "false");
-						set_komma2 = true;
-					}
-				}
-				fprintf(fh, "}");
-				set_komma = true;
-			}
-			fprintf(fh, "}\n");
-		}
-
-		fprintf(fh, "}");
+	if (fopen_s(&fh, path.c_str(), "w") == 0) {
+		fputs(json.c_str(), fh);
 		fclose(fh);
 	}
-	else
+	else {
 		return false;
+	}
+#endif
 
 	return true;
 }
@@ -3931,32 +3996,26 @@ void ConvertToDpiAware(float *fx, float *fy, bool round_values)
 	}
 }
 
-bool Settings::load() {
-
-#ifdef __ANDROID__
-
-    SDL_Rect rc;
-    if (SDL_GetDisplayBounds(0, &rc) != 0) {
-        toLog("SDL_GetDisplayBounds failed: " + string(SDL_GetError()));
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","SDL_GetDisplayBounds failed", NULL);
-        return false;
-    }
-
-    g_settings.fullscreen = true;
-    g_settings.x = 0;
-    g_settings.y = 0;
-    g_settings.w=rc.w;
-    g_settings.h=rc.h;
-#else
-	string filename = GetFileName("settings");
-
+bool Settings::load(string *json) {
 	//JSON
 	try {
-		dom::parser parser;
-		dom::element element = parser.load(getPrefPath(filename));
+        dom::parser parser;
+        dom::element element;
+        if (!json) {
+            string filename = GetFileName("settings");
+            element = parser.load(getPrefPath(filename));
+        }
+        else {
+            element = parser.parse(*json);
+        }
 
 		try {
 			this->lock_settings = element["general"]["lock_settings"];
+		}
+		catch (simdjson_error e) {}
+
+		try {
+			this->show_offline_devices = element["general"]["show_offline_devices"];
 		}
 		catch (simdjson_error e) {}
 
@@ -4019,8 +4078,75 @@ bool Settings::load() {
 	catch (simdjson_error e) {
 		return false;
 	}
-#endif
+
 	return true;
+}
+
+string Settings::toJSON() {
+    string json;
+
+    json = "{\n";
+
+    //STARTUP
+    json+= "\"general\": {\n";
+    if(this->lock_settings)
+        json+="\"lock_settings\": true,\n";
+    else
+        json+="\"lock_settings\": false,\n";
+	if (this->show_offline_devices)
+		json += "\"show_offline_devices\": true,\n";
+	else
+		json += "\"show_offline_devices\": false,\n";
+    json+="\"lock_to_mix\": \"" + this->lock_to_mix + "\",\n";
+    json+="\"reconnect_time\": " + to_string(this->reconnect_time) + ",\n";
+    if(this->extended_logging)
+        json+="\"extended_logging\": true\n";
+    else
+        json+="\"extended_logging\": false\n";
+    json+="},\n";
+
+    //WINDOW
+    int x, y, w, h;
+    SDL_GetWindowSize(g_window, &w, &h);
+    SDL_GetWindowPosition(g_window, &x, &y);
+
+    Uint32 flags = SDL_GetWindowFlags(g_window);
+
+    json+="\"window\": {\n";
+    if(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)
+        json+="\"fullscreen\": true,\n";
+    else
+        json+="\"fullscreen\": false,\n";
+    if(flags & SDL_WINDOW_MAXIMIZED)
+        json+="\"maximized\": true,\n";
+    else
+        json+="\"maximized\": false,\n";
+    json+="\"x\": " + to_string(x) + ",\n";
+    json+="\"y\": "+ to_string(y) + ",\n";
+    json+="\"width\": " + to_string(w) + ",\n";
+    json+="\"height\": " + to_string(h) + "\n";
+    json+="},\n";
+
+    //VIEW
+    json+="\"view\": {\n";
+    json+="\"channel_width\": " + to_string(this->channel_width) + "\n";
+    json+="},\n";
+
+    //SERVERLIST
+    json+="\"serverlist\": {\n";
+    for (int n = 0; n < UA_MAX_SERVER_LIST; n++)
+    {
+        json+="\"" + to_string(n + 1) + "\": \"" + this->serverlist[n] + "\"";
+        if(n == UA_MAX_SERVER_LIST - 1)
+            json+="\n";
+        else
+            json+=",\n";
+    }
+    json+="}\n";
+
+    json+="}";
+
+    return json;
 }
 
 bool Settings::save()
@@ -4031,59 +4157,8 @@ bool Settings::save()
 	FILE* fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "w") == 0)
 	{
-		fprintf(fh, "{\n");
+        fputs(this->toJSON().c_str(), fh);
 
-		//STARTUP
-		fprintf(fh, "\"general\": {\n");
-		if(this->lock_settings)
-			fprintf(fh, "\"lock_settings\": true,\n");
-		else
-			fprintf(fh, "\"lock_settings\": false,\n");
-		fprintf(fh, "\"lock_to_mix\": \"%s\",\n", this->lock_to_mix.c_str());
-		fprintf(fh, "\"reconnect_time\": %d,\n", this->reconnect_time);
-		fprintf(fh, "\"extended_logging\": %s\n", this->extended_logging ? "true" : "false");
-		fprintf(fh, "},\n");
-
-		//WINDOW
-		int x, y, w, h;
-		SDL_GetWindowSize(g_window, &w, &h);
-		SDL_GetWindowPosition(g_window, &x, &y);
-
-		Uint32 flags = SDL_GetWindowFlags(g_window);
-
-		fprintf(fh, "\"window\": {\n");
-		if(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)
-			fprintf(fh, "\"fullscreen\": true,\n");
-		else
-			fprintf(fh, "\"fullscreen\": false,\n");
-		if(flags & SDL_WINDOW_MAXIMIZED)
-			fprintf(fh, "\"maximized\": true,\n");
-		else
-			fprintf(fh, "\"maximized\": false,\n");
-		fprintf(fh, "\"x\": %d,\n", x);
-		fprintf(fh, "\"y\": %d,\n", y);
-		fprintf(fh, "\"width\": %d,\n", w);
-		fprintf(fh, "\"height\": %d\n", h);
-		fprintf(fh, "},\n");
-
-		//VIEW
-		fprintf(fh, "\"view\": {\n");
-		fprintf(fh, "\"channel_width\": %d\n", this->channel_width);
-		fprintf(fh, "},\n");
-
-		//SERVERLIST
-		fprintf(fh, "\"serverlist\": {\n");
-		for (int n = 0; n < UA_MAX_SERVER_LIST; n++)
-		{
-			fprintf(fh, "\"%d\": \"%s\"", n + 1, this->serverlist[n].c_str());
-			if(n == UA_MAX_SERVER_LIST - 1)
-				fputs("\n", fh);
-			else
-				fputs(",\n", fh);
-		}
-		fprintf(fh, "}\n");
-
-		fprintf(fh, "}");
 		fclose(fh);
 	}
 	else
@@ -4104,67 +4179,61 @@ extern "C" void Java_franqulator_cuefinger_Cuefinger_load(JNIEnv *env, jobject o
     }
 }
 
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setLockSettings(JNIEnv *env, jobject obj,
-                                                                  jboolean lockSettings){
-    g_settings.lock_settings = (bool)lockSettings;
+
+extern "C" void Java_franqulator_cuefinger_Cuefinger_loadSettings(JNIEnv *env, jobject obj, jstring json){
+    string njson((const char*)env->GetStringUTFChars(json, NULL));
+    g_settings.load(&njson);
+    g_settings.fullscreen = true; // auf android immer im fullscreen starten
 }
 
-extern "C" jboolean Java_franqulator_cuefinger_Cuefinger_getLockSettings(JNIEnv *env, jobject obj){
-    return g_settings.lock_settings;
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getSettingsJSON(JNIEnv *env, jobject obj){
+    return env->NewStringUTF(g_settings.toJSON().c_str());
 }
 
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setLockToMix(JNIEnv *env, jobject obj,
-                                                                  jstring lockToMix){
-    g_settings.lock_to_mix = string((const char*)env->GetStringUTFChars(lockToMix, NULL));
+extern "C" void Java_franqulator_cuefinger_Cuefinger_loadServerSettings(JNIEnv* env, jobject obj, jstring json) {
+	string njson((const char*)env->GetStringUTFChars(json, NULL));
+
+	size_t posSvr = njson.find("svr=", 0);
+	while (posSvr != string::npos) {
+		posSvr += 4;
+
+		size_t posSet = njson.find("set=", posSvr);
+		if (posSet == string::npos) {
+			break;
+		}
+		string server = njson.substr(posSvr, posSet - posSvr);
+		
+		posSet += 4;
+		posSvr = njson.find("svr=", posSet);
+        if(posSvr == string::npos) {
+            posSvr = njson.length();
+        }
+		string settings = njson.substr(posSet, posSvr - posSet);
+
+		serverSettingsJSON.insert_or_assign(server, settings);
+	}
 }
 
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getLockToMix(JNIEnv *env, jobject obj){
-    return env->NewStringUTF(g_settings.lock_to_mix.c_str());
+extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServerSettingsJSON(JNIEnv* env, jobject obj) {
+	string njson;
+
+    if(g_ua_server_connected.length() != 0) {
+        SaveServerSettings(g_ua_server_connected);
+    }
+
+	for (map<string, string>::iterator it = serverSettingsJSON.begin(); it != serverSettingsJSON.end(); ++it) {
+		njson += "svr=" + it->first + "set=" +  it->second;
+	}
+
+	return env->NewStringUTF(njson.c_str());
 }
 
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setReconnect(JNIEnv *env, jobject obj,
-                                                                     jint reconnect){
-    g_settings.reconnect_time = (int)reconnect;
+extern "C" void Java_franqulator_cuefinger_Cuefinger_terminateAllPingThreads(JNIEnv* env, jobject obj) {
+	TerminateAllPingThreads(); // also stores serverdata at disconnect()
 }
 
-extern "C" jint Java_franqulator_cuefinger_Cuefinger_getReconnect(JNIEnv *env, jobject obj){
-    return g_settings.reconnect_time;
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setChannelWidth(JNIEnv *env, jobject obj,
-                                                                  jint channelWidth){
-    g_settings.channel_width = (int)channelWidth;
-}
-
-extern "C" jint Java_franqulator_cuefinger_Cuefinger_getChannelWidth(JNIEnv *env, jobject obj){
-    return g_settings.channel_width;
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer1(JNIEnv *env, jobject obj,
-                                                                  jstring server){
-    g_settings.serverlist[0] = string((const char*)env->GetStringUTFChars(server, NULL));
-}
-
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer1(JNIEnv *env, jobject obj){
-    return env->NewStringUTF(g_settings.serverlist[0].c_str());
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer2(JNIEnv *env, jobject obj,
-                                                                jstring server){
-    g_settings.serverlist[1] = string((const char*)env->GetStringUTFChars(server, NULL));
-}
-
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer2(JNIEnv *env, jobject obj){
-    return env->NewStringUTF(g_settings.serverlist[1].c_str());
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_setServer3(JNIEnv *env, jobject obj,
-                                                                jstring server){
-    g_settings.serverlist[2] = string((const char*)env->GetStringUTFChars(server, NULL));
-}
-
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServer3(JNIEnv *env, jobject obj){
-    return env->NewStringUTF(g_settings.serverlist[2].c_str());
+extern "C" void Java_franqulator_cuefinger_Cuefinger_cleanUp(JNIEnv *env, jobject obj){
+    CleanUp(); // also stores serverdata at disconnect()
 }
 
 #endif
@@ -4217,7 +4286,8 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	SetProcessDPIAware();
 #endif
-	
+
+#ifndef __ANDROID__
 	if (!g_settings.load())
 	{
 		toLog("settings.load failed");
@@ -4234,6 +4304,19 @@ int main(int argc, char* argv[]) {
 		g_settings.w=rc.w / 2;
 		g_settings.h=rc.h / 2;						  
 	}
+#else
+    SDL_Rect rc;
+    if (SDL_GetDisplayBounds(0, &rc) != 0) {
+        toLog("SDL_GetDisplayBounds failed: " + string(SDL_GetError()));
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","SDL_GetDisplayBounds failed", NULL);
+        return 1;
+    }
+
+    g_settings.x = 0;
+    g_settings.y = 0;
+    g_settings.w=rc.w;
+    g_settings.h=rc.h;
+#endif
 
 	CreateStaticButtons();
 
@@ -4263,754 +4346,695 @@ int main(int argc, char* argv[]) {
 	}
 	SDL_SetWindowMinimumSize(g_window, 320, 240);
 	if (LoadAllGfx()) {
-		UpdateLayout();
+        UpdateLayout();
 
 #ifdef _WIN32
-		InitNetwork();
+        InitNetwork();
 #endif
-		for (int n = 0; n < UA_MAX_SERVER_LIST; n++)
-		{
-			if (g_settings.serverlist[n].length() > 0)
-			{
-				g_ua_server_list.push_back(g_settings.serverlist[n]);
-			}
-		}
-		if (g_ua_server_list.size()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
-		{
-			g_serverlist_defined = true;
-			UpdateConnectButtons();
-		}
-		else // Serverliste wurde nicht definiert, automatische Suche wird ausgeführt
-		{
-			g_serverlist_defined = false;
-			UA_GetServerList();
-		}
-		bool running=true;
-		SDL_Event e;
-		while(running)
-		{
-			if (SDL_WaitEventTimeout(&e, 33) > 0)
-		//	while (SDL_PollEvent(&e) > 0)
-			{
-				switch (e.type)
-				{
-				case SDL_FINGERDOWN:
-				{
-					if (!g_btnSettings->checked) {
-						OnTouchDown(NULL, &e.tfinger);
-					}
-					break;
-				}
-				case SDL_FINGERUP:
-				{
-					if (!g_btnSettings->checked) {
-						OnTouchUp(false, &e.tfinger);
-					}
-					break;
-				}
-				case SDL_FINGERMOTION:
-				{
-					if (!g_btnSettings->checked) {
-						//only use last fingermotion event
-						SDL_Event events[20];
-						events[0] = e;
-						SDL_PumpEvents();
-						int ev_num = SDL_PeepEvents(&events[1], 19, SDL_GETEVENT, SDL_FINGERMOTION, SDL_FINGERMOTION) + 1;
+        for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
+            if (g_settings.serverlist[n].length() > 0) {
+                g_ua_server_list.push_back(g_settings.serverlist[n]);
+            }
+        }
+        if (g_ua_server_list.size()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
+        {
+            g_serverlist_defined = true;
+            UpdateConnectButtons();
+        } else // Serverliste wurde nicht definiert, automatische Suche wird ausgeführt
+        {
+            g_serverlist_defined = false;
+            UA_GetServerList();
+        }
+        bool running = true;
+        SDL_Event e;
+        while (running) {
+            if (SDL_WaitEventTimeout(&e, 33) > 0)
+                //	while (SDL_PollEvent(&e) > 0)
+            {
+                switch (e.type) {
+                    case SDL_FINGERDOWN: {
+                        if (!g_btnSettings->checked) {
+                            OnTouchDown(NULL, &e.tfinger);
+                        }
+                        break;
+                    }
+                    case SDL_FINGERUP: {
+                        if (!g_btnSettings->checked) {
+                            OnTouchUp(false, &e.tfinger);
+                        }
+                        break;
+                    }
+                    case SDL_FINGERMOTION: {
+                        if (!g_btnSettings->checked) {
+                            //only use last fingermotion event
+                            SDL_Event events[20];
+                            events[0] = e;
+                            SDL_PumpEvents();
+                            int ev_num =
+                                    SDL_PeepEvents(&events[1], 19, SDL_GETEVENT, SDL_FINGERMOTION,
+                                                   SDL_FINGERMOTION) + 1;
 
-						for (int n = ev_num - 1; n >= 0; n--)
-						{
-							bool drop_event = false;
+                            for (int n = ev_num - 1; n >= 0; n--) {
+                                bool drop_event = false;
 
-							for (int i = n + 1; i < ev_num; i++)
-							{
-								if (events[n].tfinger.fingerId == events[i].tfinger.fingerId)
-								{
-									drop_event = true;
-									break;
-								}
-							}
+                                for (int i = n + 1; i < ev_num; i++) {
+                                    if (events[n].tfinger.fingerId == events[i].tfinger.fingerId) {
+                                        drop_event = true;
+                                        break;
+                                    }
+                                }
 
-							if (!drop_event)
-							{
-								OnTouchDrag(NULL, &events[n].tfinger);
-							}
-						}
-					}
-					break;
-				}
-				case SDL_MOUSEBUTTONDOWN:
-				{
-					if (e.button.button == SDL_BUTTON_LEFT) {
-						bool handled = false;
+                                if (!drop_event) {
+                                    OnTouchDrag(NULL, &events[n].tfinger);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_MOUSEBUTTONDOWN: {
+                        if (e.button.button == SDL_BUTTON_LEFT) {
+                            bool handled = false;
 
-						SDL_Point pt = { e.button.x, e.button.y };
+                            SDL_Point pt = {e.button.x, e.button.y};
 
-						if (g_btnInfo->checked) {
-							g_btnInfo->checked = false;
-							SetRedrawWindow(true);
-						}
-						else {
-							if (g_btnSettings->IsClicked(&pt)) {
-								g_btnSettings->checked = !g_btnSettings->checked;
-								if (g_btnSettings->checked) {
-									InitSettingsDialog();
-								}
-								else {
-									ReleaseSettingsDialog();
-								}
-								SetRedrawWindow(true);
-								handled = true;
-							}
+                            if (g_btnInfo->checked) {
+                                g_btnInfo->checked = false;
+                                SetRedrawWindow(true);
+                            } else {
+                                if (g_btnSettings->IsClicked(&pt)) {
+                                    g_btnSettings->checked = !g_btnSettings->checked;
+                                    if (g_btnSettings->checked) {
+                                        InitSettingsDialog();
+                                    } else {
+                                        ReleaseSettingsDialog();
+                                    }
+                                    SetRedrawWindow(true);
+                                    handled = true;
+                                }
 
-							if (g_btnSettings->checked) {
-								if (g_btnInfo->IsClicked(&pt)) {
-									g_btnInfo->checked = true;
-									SetRedrawWindow(true);
-								}
-								if (g_btnLockSettings->IsClicked(&pt)) {
-									g_btnLockSettings->checked = !g_btnLockSettings->checked;
-									g_settings.lock_settings = g_btnLockSettings->checked;
+                                if (g_btnSettings->checked) {
+                                    if (g_btnInfo->IsClicked(&pt)) {
+                                        g_btnInfo->checked = true;
+                                        SetRedrawWindow(true);
+                                    }
+                                    if (g_btnLockSettings->IsClicked(&pt)) {
+                                        g_btnLockSettings->checked = !g_btnLockSettings->checked;
+                                        g_settings.lock_settings = g_btnLockSettings->checked;
 
-									if (g_settings.lock_settings)
-										g_settings.save();
+                                        if (g_settings.lock_settings)
+                                            g_settings.save();
 
-									if (g_btnLockSettings->checked) {
-										g_btnLockToMixMIX->enabled = false;
-										g_btnLockToMixHP->enabled = false;
-										g_btnLockToMixAUX1->enabled = false;
-										g_btnLockToMixAUX2->enabled = false;
-										g_btnLockToMixCUE1->enabled = false;
-										g_btnLockToMixCUE2->enabled = false;
-										g_btnLockToMixCUE3->enabled = false;
-										g_btnLockToMixCUE4->enabled = false;
+                                        if (g_btnLockSettings->checked) {
+                                            g_btnLockToMixMIX->enabled = false;
+                                            g_btnLockToMixHP->enabled = false;
+                                            g_btnLockToMixAUX1->enabled = false;
+                                            g_btnLockToMixAUX2->enabled = false;
+                                            g_btnLockToMixCUE1->enabled = false;
+                                            g_btnLockToMixCUE2->enabled = false;
+                                            g_btnLockToMixCUE3->enabled = false;
+                                            g_btnLockToMixCUE4->enabled = false;
 
-										g_btnReconnectOn->enabled = false;
+                                            g_btnReconnectOn->enabled = false;
 
-										g_btnServerlistScan->enabled = false;
-										for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
-											(*it)->enabled = false;
-										}
+                                            g_btnServerlistScan->enabled = false;
+                                            for (vector<Button *>::iterator it = g_btnsServers.begin();
+                                                 it != g_btnsServers.end(); ++it) {
+                                                (*it)->enabled = false;
+                                            }
+                                        } else {
+                                            g_btnLockToMixMIX->enabled = true;
+                                            g_btnLockToMixHP->enabled = true;
+                                            g_btnLockToMixAUX1->enabled = true;
+                                            g_btnLockToMixAUX2->enabled = true;
+                                            g_btnLockToMixCUE1->enabled = true;
+                                            g_btnLockToMixCUE2->enabled = true;
+                                            g_btnLockToMixCUE3->enabled = true;
+                                            g_btnLockToMixCUE4->enabled = true;
+
+                                            g_btnReconnectOn->enabled = true;
+
+                                            g_btnServerlistScan->enabled = true;
+                                            for (vector<Button *>::iterator it = g_btnsServers.begin();
+                                                 it != g_btnsServers.end(); ++it) {
+                                                (*it)->enabled = true;
+                                            }
+                                        }
+
+                                        SetRedrawWindow(true);
 									}
-									else {
-										g_btnLockToMixMIX->enabled = true;
-										g_btnLockToMixHP->enabled = true;
-										g_btnLockToMixAUX1->enabled = true;
-										g_btnLockToMixAUX2->enabled = true;
-										g_btnLockToMixCUE1->enabled = true;
-										g_btnLockToMixCUE2->enabled = true;
-										g_btnLockToMixCUE3->enabled = true;
-										g_btnLockToMixCUE4->enabled = true;
-
-										g_btnReconnectOn->enabled = true;
-
-										g_btnServerlistScan->enabled = true;
-										for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
-											(*it)->enabled = true;
-										}
-									}
-
-									SetRedrawWindow(true);
-								}
-								else if (g_btnLockToMixMIX->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixMIX);
-								}
-								else if (g_btnLockToMixHP->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixHP);
-								}
-								else if (g_btnLockToMixAUX1->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixAUX1);
-								}
-								else if (g_btnLockToMixAUX2->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixAUX2);
-								}
-								else if (g_btnLockToMixCUE1->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixCUE1);
-								}
-								else if (g_btnLockToMixCUE2->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixCUE2);
-								}
-								else if (g_btnLockToMixCUE3->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixCUE3);
-								}
-								else if (g_btnLockToMixCUE4->IsClicked(&pt)) {
-									UpdateLockToMixSetting(g_btnLockToMixCUE4);
-								}
-								else if (g_btnReconnectOn->IsClicked(&pt)) {
-									g_btnReconnectOn->checked = !g_btnReconnectOn->checked;
-									g_settings.reconnect_time = g_btnReconnectOn->checked ? 10000 : 0;
-									SetRedrawWindow(true);
-								}
-								else if (g_btnServerlistScan->IsClicked(&pt)) {
-									g_btnServerlistScan->checked = true;
-
-									for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
-										(*it)->checked = false;
-									}
-									for (int i = 0; i < UA_MAX_SERVER_LIST; i++) {
-										g_settings.serverlist[i] = "";
-									}
-
-									g_serverlist_defined = false;
-									Disconnect();
-									UA_GetServerList();
-
-									SetRedrawWindow(true);
-								}
-								else {
-									bool updateBtns = false;
-									for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
-										if ((*it)->IsClicked(&pt)) {
-
-											if ((*it)->checked) {
-												int count = 0;
-												for (vector<Button*>::iterator it2 = g_btnsServers.begin(); it2 != g_btnsServers.end(); ++it2) {
-													if ((*it2)->checked)
-														count++;
-												}
-												if (count > 1) {
-													(*it)->checked = false;
-													if ((*it)->text == g_ua_server_connected) {
-														Disconnect();
-														g_ua_server_last_connection = -1;
-													}
-												}
-											}
-											else {
-												if (g_btnServerlistScan->checked) {
-													g_btnServerlistScan->checked = false;
-													Disconnect();
-													g_ua_server_last_connection = -1;
-												}
-												int count = 0;
-												for (vector<Button*>::iterator it2 = g_btnsServers.begin(); it2 != g_btnsServers.end(); ++it2) {
-													if ((*it2)->checked)
-														count++;
-												}
-												if (count < UA_MAX_SERVER_LIST) {
-													(*it)->checked = true;
-													g_serverlist_defined = true;
-												}
-											}
-
-											for (int i = 0; i < UA_MAX_SERVER_LIST; i++) {
-												g_settings.serverlist[i] = "";
-											}
-											int i = 0;
-											for (vector<Button*>::iterator it2 = g_btnsServers.begin(); it2 != g_btnsServers.end(); ++it2) {
-												if ((*it2)->checked) {
-													g_settings.serverlist[i] = (*it2)->text;
-													i++;
-												}
-											}
-
-											updateBtns = true;
-											SetRedrawWindow(true);
-										}
-									}
-									if (updateBtns) {
-										UpdateConnectButtons();
-									}
-								}
-							}
-							else {
-								if (g_msg.length()) {
-									g_msg = "";
-									SetRedrawWindow(true);
-								}
-
-								//Click Send Buttons
-								for (int sel = 0; sel < g_btnSends.size(); sel++) {
-									if (g_btnSends[sel]->IsClicked(&pt)) {
-
-										for (int n = 0; n < g_btnSends.size(); n++) {
-											g_btnSends[n]->checked = false;
-										}
-										g_btnMix->checked = false;
-										g_btnSends[sel]->checked = true;
-
-										UpdateSubscriptions();
-										SetRedrawWindow(true);
-										handled = true;
-									}
-								}
-								//click Mix Buttons
-								if (g_btnMix->IsClicked(&pt)) {
-
-									for (int n = 0; n < g_btnSends.size(); n++) {
-										g_btnSends[n]->checked = false;
-									}
-									g_btnMix->checked = true;
-
-									UpdateSubscriptions();
-									SetRedrawWindow(true);
-									handled = true;
-								}
-								//Click Connect Buttons
-								for (int sel = 0; sel < g_btnConnect.size(); sel++) {
-									if (g_btnConnect[sel]->IsClicked(&pt)) {
-										if (!g_btnConnect[sel]->checked) {
-											Disconnect();
-											Connect(g_btnConnect[sel]->id - ID_BTN_CONNECT);
-										}
-										else {
-											Disconnect();
-										}
-										handled = true;
-									}
-								}
-								//Click Select Channels
-								if (g_btnSelectChannels->IsClicked(&pt)) {
-									g_btnSelectChannels->checked = !g_btnSelectChannels->checked;
-									if (!g_btnSelectChannels->checked) {
-										UpdateLayout();
-									}
-									UpdateMaxPages();
-									UpdateSubscriptions();
-									SetRedrawWindow(true);
-									handled = true;
-								}
-								if (g_btnChannelWidth->IsClicked(&pt)) {
-
-									if (g_settings.channel_width == 0)
-										g_settings.channel_width = 2;
-
-									g_settings.channel_width++;
-									if (g_settings.channel_width > 3)
-										g_settings.channel_width = 1;
-
-									UpdateLayout();
-									UpdateChannelWidthButton();
-									UpdateMaxPages();
-									UpdateSubscriptions();
-									SetRedrawWindow(true);
-									handled = true;
-								}
-								if (g_btnPageLeft->IsClicked(&pt)) {
-									if (g_page > 0) {
-										g_page--;
-										UpdateSubscriptions();
+									else if (g_btnShowOfflineDevices->IsClicked(&pt)) {
+										g_btnShowOfflineDevices->checked = !g_btnShowOfflineDevices->checked;
+										g_settings.show_offline_devices = g_btnShowOfflineDevices->checked;
+										UpdateMaxPages();
 										SetRedrawWindow(true);
 									}
-									handled = true;
-								}
-								if (g_btnPageRight->IsClicked(&pt)) {
-									if (g_page < (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage()) {
-										g_page++;
-										UpdateSubscriptions();
-										SetRedrawWindow(true);
-									}
-									handled = true;
-								}
+									else if (g_btnLockToMixMIX->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixMIX);
+                                    } else if (g_btnLockToMixHP->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixHP);
+                                    } else if (g_btnLockToMixAUX1->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixAUX1);
+                                    } else if (g_btnLockToMixAUX2->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixAUX2);
+                                    } else if (g_btnLockToMixCUE1->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixCUE1);
+                                    } else if (g_btnLockToMixCUE2->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixCUE2);
+                                    } else if (g_btnLockToMixCUE3->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixCUE3);
+                                    } else if (g_btnLockToMixCUE4->IsClicked(&pt)) {
+                                        UpdateLockToMixSetting(g_btnLockToMixCUE4);
+                                    } else if (g_btnReconnectOn->IsClicked(&pt)) {
+                                        g_btnReconnectOn->checked = !g_btnReconnectOn->checked;
+                                        g_settings.reconnect_time = g_btnReconnectOn->checked ? 10000 : 0;
+                                        SetRedrawWindow(true);
+                                    } else if (g_btnServerlistScan->IsClicked(&pt)) {
+                                        g_btnServerlistScan->checked = true;
 
-								if (!handled) {
-									SDL_Rect rc;
-									rc.x = g_channel_offset_x;
-									rc.y = 0;
-									SDL_GetWindowSize(g_window, &rc.w, &rc.h);
-									rc.w -= 2 * g_channel_offset_x;
-									if (g_ua_server_connected.length() == 0 && SDL_PointInRect(&pt, &rc))//offline
-									{
-										if (!IS_UA_SERVER_REFRESHING)
-										{
-											UA_GetServerList();
-										}
-									}
-									else
-									{
-										if (e.button.clicks == 2)
-										{
-											Vector2D cursor_pt = { (float)e.button.x, (float)e.button.y };
+                                        for (vector<Button *>::iterator it = g_btnsServers.begin();
+                                             it != g_btnsServers.end(); ++it) {
+                                            (*it)->checked = false;
+                                        }
+                                        for (int i = 0; i < UA_MAX_SERVER_LIST; i++) {
+                                            g_settings.serverlist[i] = "";
+                                        }
 
-											ChannelIndex channelIndex = GetChannelIdByPosition(cursor_pt);
-											if (channelIndex.IsValid())
-											{
-												handled = true;
-												if (!g_btnSelectChannels->checked)
-												{
-													Channel* channel = GetChannelPtr(&channelIndex);
-													if (channel)
-													{
-														Vector2D relative_cursor_pt = cursor_pt;
-														relative_cursor_pt.subtractX(g_channel_offset_x);
-														relative_cursor_pt.setX((int)relative_cursor_pt.getX() % (int)g_channel_width);
-														relative_cursor_pt.subtractY(g_channel_offset_y);
+                                        g_serverlist_defined = false;
+                                        Disconnect();
+                                        UA_GetServerList();
 
-														if (channel->IsTouchOnPan(&relative_cursor_pt))
-														{
-															if (g_btnMix->checked)
-															{
-																if (channel->stereo)
-																	channel->ChangePan(-1, true);
-																else
-																	channel->ChangePan(0, true);
-															}
-															else
-															{
-																for (int n = 0; n < g_btnSends.size(); n++)
-																{
-																	if (g_btnSends[n]->checked)
-																	{
-																		channel->sends[n].ChangePan(0, true);
-																		break;
-																	}
-																}
-															}
-															SetRedrawWindow(true);
-														}
-														else if (channel->IsTouchOnPan2(&relative_cursor_pt))
-														{
-															if (g_btnMix->checked)
-															{
-																channel->ChangePan2(1, true);
-															}
-															SetRedrawWindow(true);
-														}
-														else if (channel->IsTouchOnFader(&relative_cursor_pt)) //level
-														{
-															if (g_btnMix->checked)
-															{
-																channel->ChangeLevel(DB_UNITY, true);
-															}
-															else
-															{
-																for (int n = 0; n < g_btnSends.size(); n++)
-																{
-																	if (g_btnSends[n]->checked)
-																	{
-																		channel->sends[n].ChangeGain(DB_UNITY, true);
-																		break;
-																	}
-																}
-															}
-															SetRedrawWindow(true);
-														}
-													}
-												}
-											}
-											if (!handled)
-											{
-												SDL_Event event;
-												event.type = SDL_KEYDOWN;
-												event.key.keysym.sym = SDLK_f;
-												SDL_PushEvent(&event);
-											}
-										}
-										if (e.button.which != SDL_TOUCH_MOUSEID)
-										{
-											Vector2D pt = Vector2D(e.button.x, e.button.y);
-											OnTouchDown(&pt, NULL);
-										}
-									}
-								}
-							}
-						}
-					}
-					break;
-				}
-				case SDL_MOUSEMOTION:
-				{
-					if (!g_btnSettings->checked) {
-						SDL_Event* p_event = &e;
+                                        SetRedrawWindow(true);
+                                    } else {
+                                        bool updateBtns = false;
+                                        for (vector<Button *>::iterator it = g_btnsServers.begin();
+                                             it != g_btnsServers.end(); ++it) {
+                                            if ((*it)->IsClicked(&pt)) {
 
-						//only use last mousemotion event
-						SDL_Event events[16];
-						SDL_PumpEvents();
-						int ev_num = SDL_PeepEvents(events, 16, SDL_GETEVENT, SDL_MOUSEMOTION, SDL_MOUSEMOTION);
+                                                if ((*it)->checked) {
+                                                    int count = 0;
+                                                    for (vector<Button *>::iterator it2 = g_btnsServers.begin();
+                                                         it2 != g_btnsServers.end(); ++it2) {
+                                                        if ((*it2)->checked)
+                                                            count++;
+                                                    }
+                                                    if (count > 1) {
+                                                        (*it)->checked = false;
+                                                        if ((*it)->text == g_ua_server_connected) {
+                                                            Disconnect();
+                                                            g_ua_server_last_connection = -1;
+                                                        }
+                                                    }
+                                                } else {
+                                                    if (g_btnServerlistScan->checked) {
+                                                        g_btnServerlistScan->checked = false;
+                                                        Disconnect();
+                                                        g_ua_server_last_connection = -1;
+                                                    }
+                                                    int count = 0;
+                                                    for (vector<Button *>::iterator it2 = g_btnsServers.begin();
+                                                         it2 != g_btnsServers.end(); ++it2) {
+                                                        if ((*it2)->checked)
+                                                            count++;
+                                                    }
+                                                    if (count < UA_MAX_SERVER_LIST) {
+                                                        (*it)->checked = true;
+                                                        g_serverlist_defined = true;
+                                                    }
+                                                }
 
-						if (ev_num)
-						{
-							p_event = &events[ev_num - 1];
-						}
+                                                for (int i = 0; i < UA_MAX_SERVER_LIST; i++) {
+                                                    g_settings.serverlist[i] = "";
+                                                }
+                                                int i = 0;
+                                                for (vector<Button *>::iterator it2 = g_btnsServers.begin();
+                                                     it2 != g_btnsServers.end(); ++it2) {
+                                                    if ((*it2)->checked) {
+                                                        g_settings.serverlist[i] = (*it2)->text;
+                                                        i++;
+                                                    }
+                                                }
 
-						if (p_event->motion.which != SDL_TOUCH_MOUSEID)
-						{
-							if (p_event->motion.state & SDL_BUTTON_LMASK)
-							{
-								Vector2D pt = Vector2D(p_event->button.x, p_event->button.y);
-								OnTouchDrag(&pt, NULL);
-							}
-						}
-					}
-					break;
-				}
-				case SDL_MOUSEBUTTONUP:
-				{
-					if (!g_btnSettings->checked) {
-						if (e.button.which != SDL_TOUCH_MOUSEID)
-						{
-							if (e.button.button == SDL_BUTTON_LEFT)
-							{
-								OnTouchUp(true, NULL);
-							}
-						}
-					}
-					break;
-				}
-				case SDL_MOUSEWHEEL:
-				{
-					if (!g_btnSettings->checked) {
-						if (g_msg.length()) {
-							g_msg = "";
-							SetRedrawWindow(true);
-						}
+                                                updateBtns = true;
+                                                SetRedrawWindow(true);
+                                            }
+                                        }
+                                        if (updateBtns) {
+                                            UpdateConnectButtons();
+                                        }
+                                    }
+                                } else {
+                                    if (g_msg.length()) {
+                                        g_msg = "";
+                                        SetRedrawWindow(true);
+                                    }
 
-						int x, y;
-						SDL_GetMouseState(&x, &y);
-						Vector2D cursor_pt = { (float)x,(float)y };
+                                    //Click Send Buttons
+                                    for (int sel = 0; sel < g_btnSends.size(); sel++) {
+                                        if (g_btnSends[sel]->IsClicked(&pt)) {
 
-						ChannelIndex channelIndex = GetChannelIdByPosition(cursor_pt);
-						if (channelIndex.IsValid())
-						{
-							Channel* channel = GetChannelPtr(&channelIndex);
-							if (channel)
-							{
-								Vector2D relative_cursor_pt = cursor_pt;
-								relative_cursor_pt.subtractX(g_channel_offset_x);
-								relative_cursor_pt.setX((int)relative_cursor_pt.getX() % (int)g_channel_width);
-								relative_cursor_pt.subtractY(g_channel_offset_y);
+                                            for (int n = 0; n < g_btnSends.size(); n++) {
+                                                g_btnSends[n]->checked = false;
+                                            }
+                                            g_btnMix->checked = false;
+                                            g_btnSends[sel]->checked = true;
 
-								double move = (float)e.wheel.y / 50;
+                                            UpdateSubscriptions();
+                                            SetRedrawWindow(true);
+                                            handled = true;
+                                        }
+                                    }
+                                    //click Mix Buttons
+                                    if (g_btnMix->IsClicked(&pt)) {
 
-								if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
-								{
-									move = -move;
-								}
+                                        for (int n = 0; n < g_btnSends.size(); n++) {
+                                            g_btnSends[n]->checked = false;
+                                        }
+                                        g_btnMix->checked = true;
 
-								if (channel->IsTouchOnPan(&relative_cursor_pt))
-								{
-									if (g_btnMix->checked)
-									{
-										channel->ChangePan(move * 2);
-									}
-									else
-									{
-										for (int n = 0; n < g_btnSends.size(); n++)
-										{
-											if (g_btnSends[n]->checked)
-											{
-												channel->sends[n].ChangePan(move);
-												break;
-											}
-										}
-									}
-									SetRedrawWindow(true);
-								}
-								else if (channel->IsTouchOnPan2(&relative_cursor_pt))
-								{
-									if (g_btnMix->checked)
-									{
-										channel->ChangePan2(move * 2);
-										SetRedrawWindow(true);
-									}
-								}
-								else if (channel->IsTouchOnFader(&relative_cursor_pt))
-								{
-									if (channel->fader_group)
-									{
-										for (int i = 0; i < MAX_UA_DEVICES; i++)
-										{
-											if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
-											{
-												for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
-												{
-													if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
-													{
-														if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
-														{
-															if (g_btnMix->checked)
-															{
-																g_ua_devices[i].inputs[n].ChangeLevel(move);
-																SetRedrawWindow(true);
-															}
-															else
-															{
-																for (int v = 0; v < g_btnSends.size(); v++)
-																{
-																	if (g_btnSends[v]->checked)
-																	{
-																		g_ua_devices[i].inputs[n].sends[v].ChangeGain(move);
-																		SetRedrawWindow(true);
-																		break;
-																	}
-																}
-															}
-														}
-													}
-												}
-											}
-										}
-									}
-									else
-									{
-										if (g_btnMix->checked)
-										{
-											channel->ChangeLevel(move);
-											SetRedrawWindow(true);
-										}
-										else
-										{
-											for (int n = 0; n < g_btnSends.size(); n++)
-											{
-												if (g_btnSends[n]->checked)
-												{
-													channel->sends[n].ChangeGain(move);
-													SetRedrawWindow(true);
-													break;
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					break;
-				}
-				case SDL_KEYDOWN:
-				{
-					switch (e.key.keysym.sym)
-					{
-					case SDLK_ESCAPE:
-					{
-						SDL_SetWindowFullscreen(g_window, 0);
-						break;
-					}
-					case SDLK_f:
-					{
-						int x, y;
-						SDL_GetGlobalMouseState(&x, &y);
-						if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN_DESKTOP)
-						{
-							SDL_SetWindowFullscreen(g_window, 0);
+                                        UpdateSubscriptions();
+                                        SetRedrawWindow(true);
+                                        handled = true;
+                                    }
+                                    //Click Connect Buttons
+                                    for (int sel = 0; sel < g_btnConnect.size(); sel++) {
+                                        if (g_btnConnect[sel]->IsClicked(&pt)) {
+                                            if (!g_btnConnect[sel]->checked) {
+                                                Disconnect();
+                                                Connect(g_btnConnect[sel]->id - ID_BTN_CONNECT);
+                                            } else {
+                                                Disconnect();
+                                            }
+                                            handled = true;
+                                        }
+                                    }
+                                    //Click Select Channels
+                                    if (g_btnSelectChannels->IsClicked(&pt)) {
+                                        g_btnSelectChannels->checked = !g_btnSelectChannels->checked;
+                                        if (!g_btnSelectChannels->checked) {
+                                            UpdateLayout();
+                                        }
+                                        UpdateMaxPages();
+                                        UpdateSubscriptions();
+                                        SetRedrawWindow(true);
+                                        handled = true;
+                                    }
+                                    if (g_btnChannelWidth->IsClicked(&pt)) {
 
-							int x, y, w, h;
-							SDL_GetWindowPosition(g_window, &x, &y);
-							SDL_GetWindowSize(g_window, &w, &h);
+                                        if (g_settings.channel_width == 0)
+                                            g_settings.channel_width = 2;
 
-							int t, l, b, r;
-							SDL_GetWindowBordersSize(g_window, &t, &l, &b, &r);
+                                        g_settings.channel_width++;
+                                        if (g_settings.channel_width > 3)
+                                            g_settings.channel_width = 1;
 
-							SDL_Rect rc;
-							if (SDL_GetDisplayUsableBounds(0, &rc) == 0)
-							{
-								if (x < rc.x + l)
-									x = rc.x + l;
-								if (y < rc.y + t)
-									y = rc.y + t;
-								if (w > rc.w - x - r)
-									w = rc.w - x - r;
-								if (h > rc.h - y - b)
-									h = rc.h - y - b;
-							}
-							SDL_SetWindowPosition(g_window, x, y);
-							SDL_SetWindowSize(g_window, w, h);
-						}
-						else
-							SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-						SDL_WarpMouseGlobal(x, y);
-						break;
-					}
-					}
-					break;
-				}
-				case SDL_DISPLAYEVENT: {
-					if (e.display.event == SDL_DISPLAYEVENT_ORIENTATION) {
-						int w, h;
-						SDL_GetWindowSize(g_window, &w, &h);
-						float win_width = (float)w;
-						float win_height = (float)h;
-						gfx->AbortUpdate();
-						gfx->DrawShape(0, 0, 0, 0, win_width, win_height);
-						gfx->Update();
-					}
-					break;
-				}
-				case SDL_WINDOWEVENT:
-				{
-					switch (e.window.event)
-					{
-					case SDL_WINDOWEVENT_EXPOSED:
-					{
-						SetRedrawWindow(true);
-						break;
-					}
-					case SDL_WINDOWEVENT_SIZE_CHANGED:
-					case SDL_WINDOWEVENT_RESIZED:
-					case SDL_WINDOWEVENT_MAXIMIZED:
-					case SDL_WINDOWEVENT_RESTORED:
-					{
-						gfx->Resize();
-						UpdateLayout();
-						UpdateMaxPages();
-						UpdateSubscriptions();
-						SetRedrawWindow(true);
-						break;
-					}
-					}
-					break;
-				}
-				case SDL_QUIT:
-				case SDL_APP_TERMINATING:
-				{
-					running = false;
-					break;
-				}
-				case SDL_USEREVENT:
-				{
-					if (e.user.code == EVENT_CONNECT) {
-						Disconnect();
-						if (g_ua_server_last_connection == -1 && g_btnConnect.size() > 0) {
-							Connect(g_btnConnect[0]->id - ID_BTN_CONNECT);
-						}
-						else {
-							Connect(g_ua_server_last_connection);
-						}
-					}
-					else if(e.user.code == EVENT_DISCONNECT) {
-						Disconnect();
-					}
-					break;
-				}
-				default:
-					continue;
-				}
-			}
+                                        UpdateLayout();
+                                        UpdateChannelWidthButton();
+                                        UpdateMaxPages();
+                                        UpdateSubscriptions();
+                                        SetRedrawWindow(true);
+                                        handled = true;
+                                    }
+                                    if (g_btnPageLeft->IsClicked(&pt)) {
+                                        if (g_page > 0) {
+                                            g_page--;
+                                            UpdateSubscriptions();
+                                            SetRedrawWindow(true);
+                                        }
+                                        handled = true;
+                                    }
+                                    if (g_btnPageRight->IsClicked(&pt)) {
+                                        if (g_page < (GetAllChannelsCount(false) - 1) /
+                                                     CalculateChannelsPerPage()) {
+                                            g_page++;
+                                            UpdateSubscriptions();
+                                            SetRedrawWindow(true);
+                                        }
+                                        handled = true;
+                                    }
 
-			if(GetRedrawWindow()) {
-				SetRedrawWindow(false);
-				Draw();
-			}
-		}
+                                    if (!handled) {
+                                        SDL_Rect rc;
+                                        rc.x = g_channel_offset_x;
+                                        rc.y = 0;
+                                        SDL_GetWindowSize(g_window, &rc.w, &rc.h);
+                                        rc.w -= 2 * g_channel_offset_x;
+                                        if (g_ua_server_connected.length() == 0 &&
+                                            SDL_PointInRect(&pt, &rc))//offline
+                                        {
+                                            if (!IS_UA_SERVER_REFRESHING) {
+                                                UA_GetServerList();
+                                            }
+                                        } else {
+                                            if (e.button.clicks == 2) {
+                                                Vector2D cursor_pt = {(float) e.button.x,
+                                                                      (float) e.button.y};
 
+                                                ChannelIndex channelIndex = GetChannelIdByPosition(
+                                                        cursor_pt);
+                                                if (channelIndex.IsValid()) {
+                                                    handled = true;
+                                                    if (!g_btnSelectChannels->checked) {
+                                                        Channel *channel = GetChannelPtr(
+                                                                &channelIndex);
+                                                        if (channel) {
+                                                            Vector2D relative_cursor_pt = cursor_pt;
+                                                            relative_cursor_pt.subtractX(
+                                                                    g_channel_offset_x);
+                                                            relative_cursor_pt.setX(
+                                                                    (int) relative_cursor_pt.getX() %
+                                                                    (int) g_channel_width);
+                                                            relative_cursor_pt.subtractY(
+                                                                    g_channel_offset_y);
+
+                                                            if (channel->IsTouchOnPan(
+                                                                    &relative_cursor_pt)) {
+                                                                if (g_btnMix->checked) {
+                                                                    if (channel->stereo)
+                                                                        channel->ChangePan(-1,
+                                                                                           true);
+                                                                    else
+                                                                        channel->ChangePan(0, true);
+                                                                } else {
+                                                                    for (int n = 0; n <
+                                                                                    g_btnSends.size(); n++) {
+                                                                        if (g_btnSends[n]->checked) {
+                                                                            channel->sends[n].ChangePan(
+                                                                                    0, true);
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
+                                                                SetRedrawWindow(true);
+                                                            } else if (channel->IsTouchOnPan2(
+                                                                    &relative_cursor_pt)) {
+                                                                if (g_btnMix->checked) {
+                                                                    channel->ChangePan2(1, true);
+                                                                }
+                                                                SetRedrawWindow(true);
+                                                            } else if (channel->IsTouchOnFader(
+                                                                    &relative_cursor_pt)) //level
+                                                            {
+                                                                if (g_btnMix->checked) {
+                                                                    channel->ChangeLevel(DB_UNITY,
+                                                                                         true);
+                                                                } else {
+                                                                    for (int n = 0; n <
+                                                                                    g_btnSends.size(); n++) {
+                                                                        if (g_btnSends[n]->checked) {
+                                                                            channel->sends[n].ChangeGain(
+                                                                                    DB_UNITY, true);
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
+                                                                SetRedrawWindow(true);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (!handled) {
+                                                    SDL_Event event;
+                                                    event.type = SDL_KEYDOWN;
+                                                    event.key.keysym.sym = SDLK_f;
+                                                    SDL_PushEvent(&event);
+                                                }
+                                            }
+                                            if (e.button.which != SDL_TOUCH_MOUSEID) {
+                                                Vector2D pt = Vector2D(e.button.x, e.button.y);
+                                                OnTouchDown(&pt, NULL);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_MOUSEMOTION: {
+                        if (!g_btnSettings->checked) {
+                            SDL_Event *p_event = &e;
+
+                            //only use last mousemotion event
+                            SDL_Event events[16];
+                            SDL_PumpEvents();
+                            int ev_num = SDL_PeepEvents(events, 16, SDL_GETEVENT, SDL_MOUSEMOTION,
+                                                        SDL_MOUSEMOTION);
+
+                            if (ev_num) {
+                                p_event = &events[ev_num - 1];
+                            }
+
+                            if (p_event->motion.which != SDL_TOUCH_MOUSEID) {
+                                if (p_event->motion.state & SDL_BUTTON_LMASK) {
+                                    Vector2D pt = Vector2D(p_event->button.x, p_event->button.y);
+                                    OnTouchDrag(&pt, NULL);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_MOUSEBUTTONUP: {
+                        if (!g_btnSettings->checked) {
+                            if (e.button.which != SDL_TOUCH_MOUSEID) {
+                                if (e.button.button == SDL_BUTTON_LEFT) {
+                                    OnTouchUp(true, NULL);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_MOUSEWHEEL: {
+                        if (!g_btnSettings->checked) {
+                            if (g_msg.length()) {
+                                g_msg = "";
+                                SetRedrawWindow(true);
+                            }
+
+                            int x, y;
+                            SDL_GetMouseState(&x, &y);
+                            Vector2D cursor_pt = {(float) x, (float) y};
+
+                            ChannelIndex channelIndex = GetChannelIdByPosition(cursor_pt);
+                            if (channelIndex.IsValid()) {
+                                Channel *channel = GetChannelPtr(&channelIndex);
+                                if (channel) {
+                                    Vector2D relative_cursor_pt = cursor_pt;
+                                    relative_cursor_pt.subtractX(g_channel_offset_x);
+                                    relative_cursor_pt.setX((int) relative_cursor_pt.getX() %
+                                                            (int) g_channel_width);
+                                    relative_cursor_pt.subtractY(g_channel_offset_y);
+
+                                    double move = (float) e.wheel.y / 50;
+
+                                    if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                                        move = -move;
+                                    }
+
+                                    if (channel->IsTouchOnPan(&relative_cursor_pt)) {
+                                        if (g_btnMix->checked) {
+                                            channel->ChangePan(move * 2);
+                                        } else {
+                                            for (int n = 0; n < g_btnSends.size(); n++) {
+                                                if (g_btnSends[n]->checked) {
+                                                    channel->sends[n].ChangePan(move);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        SetRedrawWindow(true);
+                                    } else if (channel->IsTouchOnPan2(&relative_cursor_pt)) {
+                                        if (g_btnMix->checked) {
+                                            channel->ChangePan2(move * 2);
+                                            SetRedrawWindow(true);
+                                        }
+                                    } else if (channel->IsTouchOnFader(&relative_cursor_pt)) {
+                                        if (channel->fader_group) {
+                                            for (int i = 0; i < MAX_UA_DEVICES; i++) {
+                                                if (g_ua_devices[i].ua_id.length() &&
+                                                    g_ua_devices[i].inputs) {
+                                                    for (int n = 0;
+                                                         n < g_ua_devices[i].inputsCount; n++) {
+                                                        if (g_ua_devices[i].inputs[n].ua_id.length() &&
+                                                            !g_ua_devices[i].inputs[n].hidden &&
+                                                            g_ua_devices[i].inputs[n].selected_to_show) {
+                                                            if (g_ua_devices[i].inputs[n].fader_group ==
+                                                                channel->fader_group) {
+                                                                if (g_btnMix->checked) {
+                                                                    g_ua_devices[i].inputs[n].ChangeLevel(
+                                                                            move);
+                                                                    SetRedrawWindow(true);
+                                                                } else {
+                                                                    for (int v = 0; v <
+                                                                                    g_btnSends.size(); v++) {
+                                                                        if (g_btnSends[v]->checked) {
+                                                                            g_ua_devices[i].inputs[n].sends[v].ChangeGain(
+                                                                                    move);
+                                                                            SetRedrawWindow(true);
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            if (g_btnMix->checked) {
+                                                channel->ChangeLevel(move);
+                                                SetRedrawWindow(true);
+                                            } else {
+                                                for (int n = 0; n < g_btnSends.size(); n++) {
+                                                    if (g_btnSends[n]->checked) {
+                                                        channel->sends[n].ChangeGain(move);
+                                                        SetRedrawWindow(true);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_KEYDOWN: {
+                        switch (e.key.keysym.sym) {
+                            case SDLK_ESCAPE: {
+                                SDL_SetWindowFullscreen(g_window, 0);
+                                break;
+                            }
+                            case SDLK_f: {
+                                int x, y;
+                                SDL_GetGlobalMouseState(&x, &y);
+                                if (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+                                    SDL_SetWindowFullscreen(g_window, 0);
+
+                                    int x, y, w, h;
+                                    SDL_GetWindowPosition(g_window, &x, &y);
+                                    SDL_GetWindowSize(g_window, &w, &h);
+
+                                    int t, l, b, r;
+                                    SDL_GetWindowBordersSize(g_window, &t, &l, &b, &r);
+
+                                    SDL_Rect rc;
+                                    if (SDL_GetDisplayUsableBounds(0, &rc) == 0) {
+                                        if (x < rc.x + l)
+                                            x = rc.x + l;
+                                        if (y < rc.y + t)
+                                            y = rc.y + t;
+                                        if (w > rc.w - x - r)
+                                            w = rc.w - x - r;
+                                        if (h > rc.h - y - b)
+                                            h = rc.h - y - b;
+                                    }
+                                    SDL_SetWindowPosition(g_window, x, y);
+                                    SDL_SetWindowSize(g_window, w, h);
+                                } else
+                                    SDL_SetWindowFullscreen(g_window,
+                                                            SDL_WINDOW_FULLSCREEN_DESKTOP);
+                                SDL_WarpMouseGlobal(x, y);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_DISPLAYEVENT: {
+                        if (e.display.event == SDL_DISPLAYEVENT_ORIENTATION) {
+                            int w, h;
+                            SDL_GetWindowSize(g_window, &w, &h);
+                            float win_width = (float) w;
+                            float win_height = (float) h;
+                            gfx->AbortUpdate();
+                            gfx->DrawShape(0, 0, 0, 0, win_width, win_height);
+                            gfx->Update();
+                        }
+                        break;
+                    }
+                    case SDL_WINDOWEVENT: {
+                        switch (e.window.event) {
+                            case SDL_WINDOWEVENT_EXPOSED: {
+                                SetRedrawWindow(true);
+                                break;
+                            }
+                            case SDL_WINDOWEVENT_SIZE_CHANGED:
+                            case SDL_WINDOWEVENT_RESIZED:
+                            case SDL_WINDOWEVENT_MAXIMIZED:
+                            case SDL_WINDOWEVENT_RESTORED: {
+                                gfx->Resize();
+                                UpdateLayout();
+                                UpdateMaxPages();
+                                UpdateSubscriptions();
+                                SetRedrawWindow(true);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case SDL_QUIT:
+                    case SDL_APP_TERMINATING: {
+                        running = false;
+                        break;
+                    }
+                    case SDL_USEREVENT: {
+                        if (e.user.code == EVENT_CONNECT) {
+                            Disconnect();
+                            if (g_ua_server_last_connection == -1 && g_btnConnect.size() > 0) {
+                                Connect(g_btnConnect[0]->id - ID_BTN_CONNECT);
+                            } else {
+                                Connect(g_ua_server_last_connection);
+                            }
+                        } else if (e.user.code == EVENT_DISCONNECT) {
+                            Disconnect();
+                        }
+                        break;
+                    }
+                    default:
+                        continue;
+                }
+            }
+
+            if (GetRedrawWindow()) {
+                SetRedrawWindow(false);
+                Draw();
+            }
+        }
+    }
+    else
+    {
+        toLog("LoadGfx failed");
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadGfx failed", NULL);
+    }
+
+#ifndef __ANDROID__
 		if(!g_settings.lock_settings)
 			g_settings.save();
-
-		Disconnect();
-
-#ifdef _WIN32
-		ReleaseNetwork();
 #endif
-
-		CleanUpConnectionButtons();
-
-		CleanUpStaticButtons();
-	}
-	else
-	{
-		toLog("LoadGfx failed");
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","LoadGfx failed", NULL);
-	}
-
-	gfx->DeleteFont(g_fntMain);
-	gfx->DeleteFont(g_fntInfo);
-	gfx->DeleteFont(g_fntChannelBtn);
-	gfx->DeleteFont(g_fntLabel);
-	gfx->DeleteFont(g_fntFaderScale);
-	gfx->DeleteFont(g_fntOffline);
-	ReleaseAllGfx();
-	
-	delete gfx;
-	gfx = NULL;
+    CleanUp();
 
 	return 0;
+}
+
+void CleanUp() {
+	TerminateAllPingThreads();
+    Disconnect();
+
+#ifdef _WIN32
+    ReleaseNetwork();
+#endif
+
+    CleanUpConnectionButtons();
+    CleanUpStaticButtons();
+
+    gfx->DeleteFont(g_fntMain);
+    gfx->DeleteFont(g_fntInfo);
+    gfx->DeleteFont(g_fntChannelBtn);
+    gfx->DeleteFont(g_fntLabel);
+    gfx->DeleteFont(g_fntFaderScale);
+    gfx->DeleteFont(g_fntOffline);
+    ReleaseAllGfx();
+
+    delete gfx;
+    gfx = NULL;
 }
