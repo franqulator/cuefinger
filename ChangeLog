@@ -1,9 +1,11 @@
 --- v1.3.0 ---
 - Setting to show/hide offline devices
+- Setting to switch MIX meter to pre/post
 - Save and restore scroll state for each server
 - Fader optimized and new meterscale
 - Layout optimized
 - Performance optimized
+- Fixed reload when session loaded in Console
 - Bugfixes
 
 --- v1.2.0 ---

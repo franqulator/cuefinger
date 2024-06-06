@@ -72,6 +72,7 @@ https://github.com/franqulator/cuefinger";
 #define WM_CONNECTION_LOST			WM_APP+11
 
 #define UA_SENDVALUE_RESOLUTION	0.005 // auflösung um performance zu verbessern und netzwerklast zu reduzieren => entspricht einer Rasterung auf 200 Stufen (1 / 0.005)
+#define UA_METER_PRECISION	800.0
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
@@ -304,6 +305,7 @@ void ReleaseSettingsDialog();
 void CleanUp();
 void BrowseToChannel(string ua_dev, int channel);
 void GetMiddleVisibleChannel(string* ua_dev, int* channel);
+void CleanUpUADevices();
 
 
 inline double toDbFS(double linVal) {

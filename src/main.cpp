@@ -89,6 +89,7 @@ Button *g_btnMix=NULL;
 Button *g_btnSettings=NULL;
 
 Button* g_btnLockSettings = NULL;
+Button* g_btnPostFaderMeter = NULL;
 Button* g_btnShowOfflineDevices = NULL;
 Button* g_btnLockToMixMIX = NULL;
 Button* g_btnLockToMixCUE1 = NULL;
@@ -407,6 +408,9 @@ void UpdateLayout() {
 	g_btnLockSettings->rc.w = round(g_btn_width);
 	g_btnLockSettings->rc.h = round(g_btn_height / 2.0f);
 
+	g_btnPostFaderMeter->rc.w = round(g_btn_width);
+	g_btnPostFaderMeter->rc.h = round(g_btn_height / 2.0f);
+
 	g_btnShowOfflineDevices->rc.w = round(g_btn_width);
 	g_btnShowOfflineDevices->rc.h = round(g_btn_height / 2.0f);
 
@@ -539,8 +543,8 @@ void Send::Clear()
 	this->pan = 0;
 	this->bypass = false;
 	this->channel = NULL;
-	this->meter_level = -144.0;
-	this->meter_level2 = -144.0;
+	this->meter_level = fromDbFS(-144.0);
+	this->meter_level2 = fromDbFS(-144.0);
 	this->subscribed = false;
 }
 
@@ -648,8 +652,8 @@ void Channel::Clear()
 
 	this->fader_group = 0;
 
-	this->meter_level = -144.0;
-	this->meter_level2 = -144.0;
+	this->meter_level = fromDbFS (-144.0);
+	this->meter_level2 = fromDbFS(-144.0);
 
 	this->subscribed = false;
 }
@@ -1547,7 +1551,7 @@ Uint32 TimerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_time
 
 void SetNetworkTimeout() {
 #ifndef SIMULATION
-	/*
+	
 	if (g_timer_network_send_timeout_msg != 0) {
 		SDL_RemoveTimer(g_timer_network_send_timeout_msg);
 	}
@@ -1556,7 +1560,7 @@ void SetNetworkTimeout() {
 	if (g_timer_network_timeout != 0) {
 		SDL_RemoveTimer(g_timer_network_timeout);
 	}
-	g_timer_network_timeout = SDL_AddTimer(10000, TimerCallbackNetworkTimeout, NULL);*/
+	g_timer_network_timeout = SDL_AddTimer(10000, TimerCallbackNetworkTimeout, NULL);
 #endif
 }
 
@@ -1654,7 +1658,7 @@ void UA_TCPClientProc(int msg, string data)
 			//path
 			dom::element element = parser.parse(json); // parse a string
 			string_view sv = element["path"];
-			string path{sv};
+			string path{ sv };
 
 			//path aufsplitten
 			int i = 0;
@@ -1676,17 +1680,25 @@ void UA_TCPClientProc(int msg, string data)
 			} while (lpos != -1 && i < 12);
 
 			//daten anhand path_parameter verarbeiten
-			if (path_parameter[0] == "devices") // devices laden
+			if (path_parameter[0] == "Session") // devices laden
+			{	
+				CleanUpUADevices();
+				UA_TCPClientSend("get /devices");
+			}
+			else if (path_parameter[0] == "PostFaderMetering") // devices laden
+			{
+				g_btnPostFaderMeter->enabled = !g_settings.lock_settings;
+				g_btnPostFaderMeter->checked = element["data"];
+				SetRedrawWindow(true);
+			}
+			else if (path_parameter[0] == "devices") // devices laden
 			{
 				if (path_parameter[1].length() == 0)
 				{
 					int i = 0;
 					const dom::object obj = element["data"]["children"];
 
-					for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
-						SAFE_DELETE(*it);
-					}
-					g_ua_devices.clear();
+					CleanUpUADevices();
 
 					//load device info
 					for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
@@ -1842,8 +1854,10 @@ void UA_TCPClientProc(int msg, string data)
 										if (path_parameter[7] == "0" && path_parameter[8] == "MeterLevel" && path_parameter[9] == "value")//inputs
 										{
 											double db = element["data"];
+											double prev_meter_level = send->meter_level;
 											send->meter_level = fromDbFS(db);
-											if (db >= METER_THRESHOLD) {
+											if (db >= METER_THRESHOLD && 
+												((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(send->meter_level) * UA_METER_PRECISION))) {
 												SetRedrawWindow(true);
 											}
 										}
@@ -1851,8 +1865,10 @@ void UA_TCPClientProc(int msg, string data)
 										if (path_parameter[7] == "1" && path_parameter[8] == "MeterLevel" && path_parameter[9] == "value")//inputs
 										{
 											double db = element["data"];
+											double prev_meter_level2 = send->meter_level2;
 											send->meter_level2 = fromDbFS(db);
-											if (db >= METER_THRESHOLD) {
+											if (db >= METER_THRESHOLD && 
+												((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(send->meter_level2) * UA_METER_PRECISION))) {
 												SetRedrawWindow(true);
 											}
 										}
@@ -1889,16 +1905,20 @@ void UA_TCPClientProc(int msg, string data)
 							if (path_parameter[5] == "0" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")//inputs
 							{
 								double db = element["data"];
+								double prev_meter_level = channel->meter_level;
 								channel->meter_level = fromDbFS(db);
-								if (db >= METER_THRESHOLD) {
+								if (db >= METER_THRESHOLD &&
+									((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level) * UA_METER_PRECISION))) {
 									SetRedrawWindow(true);
 								}
 							}
 							if (path_parameter[5] == "1" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")//inputs
 							{
 								double db = element["data"];
+								double prev_meter_level2 = channel->meter_level2;
 								channel->meter_level2 = fromDbFS(db);
-								if (db >= METER_THRESHOLD) {
+								if (db >= METER_THRESHOLD && 
+									((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
 									SetRedrawWindow(true);
 								}
 							}
@@ -2098,8 +2118,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	bool mute = false;
 	double pan = 0;
 	double pan2 = 0;
-	double meter_level = -144.0;
-	double meter_level2 = -144.0;
+	double meter_level = fromDbFS(-144.0);
+	double meter_level2 = fromDbFS(-144.0);
 
 	Vector2D sz;
 	Vector2D stretch;
@@ -2360,10 +2380,34 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 		name = name.substr(1);
 	}
 
+	// remove spaces if name too long
+	size_t n = name.length() - 1;
 	do {
 		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
-		if (sz.getX() > _width)
+		if (sz.getX() > _width && (name[n] == ' ' || name[n] == '\t')) {
+			name = name.substr(0, n) + name.substr(n + 1, name.length() - n + 1);
+		}
+		n--;
+	} while (sz.getX() > _width && n > 0);
+
+	// remove vowels if name too long
+	n = name.length() - 1;
+	do {
+		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
+		if (sz.getX() > _width && 
+			(name[n] == 'a' || name[n] == 'e' || name[n] == 'i' || name[n] == 'o' || name[n] == 'u'
+			|| name[n] == 'A' || name[n] == 'E' || name[n] == 'I' || name[n] == 'O' || name[n] == 'U')) {
+			name = name.substr(0, n) + name.substr(n + 1, name.length() - n + 1);
+		}
+		n--;
+	} while (sz.getX() > _width && n > 0);
+
+	// if name still too long remove chars from the end
+	do {
+		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
+		if (sz.getX() > _width) {
 			name = name.substr(0, name.length() - 1);
+		}
 	} while (sz.getX() > _width);
 
 	gfx->Write(g_fntLabel, _x, _y + (g_fader_label_height - sz.getY()) / 2, name, GFX_CENTER, &max_size);
@@ -2414,6 +2458,7 @@ void BrowseToChannel(string ua_dev, int channel) {
 					continue;
 
 				if (g_ua_devices[i]->ua_id == ua_dev && n == channel) {
+					i = g_ua_devices.size();
 					break;
 				}
 
@@ -2547,7 +2592,7 @@ void Draw() {
 		float y = 20.0f;
 		float vspace = 30.0f;
 
-		float box_height = g_btn_height * (8.0f + max(1.0f, (float)g_btnsServers.size())) / 2.0f + 5 * vspace + 52.0f;
+		float box_height = g_btn_height * (9.0f + max(1.0f, (float)g_btnsServers.size())) / 2.0f + 6.0f * vspace + 52.0f;
 		float box_width = g_main_fontsize * 10.0f + 2.0f * g_btn_width + 40.0f;
 		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, box_width, box_height, 0, 0.3);
 		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2, 2, box_width - 4, box_height - 4, 0, 0.9);
@@ -2607,6 +2652,15 @@ void Draw() {
 		g_btnLockToMixCUE4->rc.y = y;
 		g_btnLockToMixCUE4->DrawButton(BTN_COLOR_GREEN);
 
+		y += g_btn_height / 2.0f + 2.0f + vspace;
+
+		s = "MIX Meter";
+		sz = gfx->GetTextBlockSize(g_fntMain, s);
+		gfx->SetColor(g_fntMain, WHITE);
+		gfx->Write(g_fntMain, x, y + (g_btn_height / 2.0f - sz.getY()) / 2.0f, s, GFX_LEFT);
+		g_btnPostFaderMeter->rc.x = x + g_main_fontsize * 10.0f;
+		g_btnPostFaderMeter ->rc.y = y;
+		g_btnPostFaderMeter->DrawButton(BTN_COLOR_GREEN);
 		y += g_btn_height / 2.0f + 2.0f + vspace;
 
 		s = "Show offline devices";
@@ -2718,6 +2772,8 @@ bool Connect(int connection_index)
 		g_ua_server_connected = g_ua_server_list[connection_index];
 		toLog("UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
 
+		UA_TCPClientSend("subscribe /Session");
+		UA_TCPClientSend("subscribe /PostFaderMetering");
 		UA_TCPClientSend("get /devices");
 
 		g_btnSelectChannels->enabled = true;
@@ -2766,6 +2822,7 @@ void Disconnect()
 	g_btnPageLeft->enabled=false;
 	g_btnPageRight->enabled=false;
 	g_btnMix->enabled=false;
+	g_btnPostFaderMeter->enabled = false;
 
 	SaveServerSettings(g_ua_server_connected);
 
@@ -2781,10 +2838,7 @@ void Disconnect()
 
 	CleanUpSendButtons();
 
-	for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
-		SAFE_DELETE(*it);
-	}
-	g_ua_devices.clear();
+	CleanUpUADevices();
 
 	for (int n = 0; n < g_btnConnect.size(); n++)
 	{
@@ -3581,7 +3635,8 @@ void CreateStaticButtons()
 	g_btnMix = new Button(ID_BTN_MIX, "MIX", 0, 0, g_btn_width, g_btn_height, true,false);
 
 	g_btnLockSettings = new Button(0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_settings, true);
-	g_btnShowOfflineDevices = new Button(0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.show_offline_devices, true);
+	g_btnPostFaderMeter = new Button(0, "Post Fader", 0, 0, g_btn_width, g_btn_height / 2.0f, false, false);
+	g_btnShowOfflineDevices = new Button(0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.show_offline_devices, !g_settings.lock_settings);
 	g_btnLockToMixMIX = new Button(0, "MIX", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "MIX", !g_settings.lock_settings);
 	g_btnLockToMixCUE1 = new Button(0, "CUE 1", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "CUE 1", !g_settings.lock_settings);
 	g_btnLockToMixCUE2 = new Button(0, "CUE 2", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_to_mix == "CUE 2", !g_settings.lock_settings);
@@ -3608,6 +3663,7 @@ void CleanUpStaticButtons()
 	SAFE_DELETE(g_btnMix);
 
 	SAFE_DELETE(g_btnLockSettings);
+	SAFE_DELETE(g_btnPostFaderMeter);
 	SAFE_DELETE(g_btnShowOfflineDevices);
 	SAFE_DELETE(g_btnLockToMixMIX);
 	SAFE_DELETE(g_btnLockToMixCUE1);
@@ -3816,6 +3872,14 @@ void InitSettingsDialog() {
 		if (g_btnsServers.size() >= UA_MAX_SERVER_LIST_SETTING)
 			break;
 	}
+}
+
+void CleanUpUADevices() {
+
+	for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
+		SAFE_DELETE(*it);
+	}
+	g_ua_devices.clear();
 }
 
 void ReleaseSettingsDialog() {
@@ -4516,6 +4580,8 @@ int main(int argc, char* argv[]) {
                                             g_settings.save();
 
                                         if (g_btnLockSettings->checked) {
+											g_btnPostFaderMeter->enabled = false;
+											g_btnShowOfflineDevices->enabled = false;
                                             g_btnLockToMixMIX->enabled = false;
                                             g_btnLockToMixHP->enabled = false;
                                             g_btnLockToMixAUX1->enabled = false;
@@ -4533,6 +4599,8 @@ int main(int argc, char* argv[]) {
                                                 (*it)->enabled = false;
                                             }
                                         } else {
+											g_btnPostFaderMeter->enabled = !g_ua_devices.empty();
+											g_btnShowOfflineDevices->enabled = true;
                                             g_btnLockToMixMIX->enabled = true;
                                             g_btnLockToMixHP->enabled = true;
                                             g_btnLockToMixAUX1->enabled = true;
@@ -4552,6 +4620,18 @@ int main(int argc, char* argv[]) {
                                         }
 
                                         SetRedrawWindow(true);
+									}
+									else if (g_btnPostFaderMeter->IsClicked(&pt)) {
+										g_btnPostFaderMeter->checked = !g_btnPostFaderMeter->checked;
+
+										if (g_btnPostFaderMeter->checked) {
+											UA_TCPClientSend("set /PostFaderMetering/value true");
+										}
+										else {
+											UA_TCPClientSend("set /PostFaderMetering/value false");
+										}
+
+										SetRedrawWindow(true);
 									}
 									else if (g_btnShowOfflineDevices->IsClicked(&pt)) {
 										g_btnShowOfflineDevices->checked = !g_btnShowOfflineDevices->checked;
@@ -4700,11 +4780,13 @@ int main(int argc, char* argv[]) {
                                     }
                                     //Click Select Channels
                                     if (g_btnSelectChannels->IsClicked(&pt)) {
+										GetMiddleVisibleChannel(&g_first_visible_device, &g_first_visible_channel);
                                         g_btnSelectChannels->checked = !g_btnSelectChannels->checked;
                                         if (!g_btnSelectChannels->checked) {
                                             UpdateLayout();
                                         }
                                         UpdateMaxPages();
+										BrowseToChannel(g_first_visible_device, g_first_visible_channel);
                                         UpdateSubscriptions();
                                         SetRedrawWindow(true);
                                         handled = true;

@@ -338,6 +338,11 @@ GFXEngine::~GFXEngine() {
 		}
 	}
 
+	for (map<string, GFXTextRenderCache*>::iterator it = textRenderCache.begin(); it != textRenderCache.end(); ++it) {
+		SAFE_DELETE(it->second);
+	}
+	textRenderCache.clear();
+
 	if (renderer) {
 		SDL_DestroyRenderer(renderer);
 		renderer = NULL;
@@ -637,6 +642,17 @@ void GFXEngine::AbortUpdate()
 		jobsIterator[layer] = jobsList[layer].begin();
 		spriteBatchRequests[layer].clear();
 		zorder[layer] = 0;
+	}
+
+	// update textrendercache
+	for (map<string, GFXTextRenderCache*>::iterator it = textRenderCache.begin(); it != textRenderCache.end(); ++it) {
+		if (!it->second->used) {
+			SDL_DestroyTexture(it->second->tx);
+			it = textRenderCache.erase(it);
+		}
+		else {
+			it->second->used = false;
+		}
 	}
 }
 
@@ -1455,6 +1471,13 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 	if (!_font)
 		return;
 
+	float xscale, yscale;
+	SDL_RenderGetScale(renderer, &xscale, &yscale);
+
+	float max_width = 0;
+	if (_max_size)
+		max_width = _max_size->getX();
+
 	SDL_Color color = { GetRValue(_color),
 					GetGValue(_color),
 					GetBValue(_color),
@@ -1465,95 +1488,112 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 	int line_nr = 0;
 	string txt_line;
 
-	float max_width = 0;
-	if (_max_size)
-		max_width = _max_size->getX();
-
-	float xscale, yscale;
-	SDL_RenderGetScale(renderer, &xscale, &yscale);
-
 	float line_height = (float)TTF_FontHeight(_font->ttf) / yscale;
 
 	do
 	{
 		string txt_line = _write_get_next_line(_font, _text, &txt_ptr, max_width * xscale, (_alignment & GFX_AUTOBREAK));
 
-		SDL_Surface* sf_text = TTF_RenderUTF8_Blended(_font->ttf, txt_line.c_str(), color);
-		if (sf_text)
-		{
-			float sf_width = (float)sf_text->w / xscale;
-			float sf_height = (float)sf_text->h / yscale;
-
-            SDL_Texture *tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
-            if(tx_text)
-            {
-                float x_ratio = 1.0f;
-                float y_ratio = 1.0f;
-
-                if (_stretch)
-                {
-                    if (!isnan(_stretch->getX()) && !isnan(_stretch->getY()) && sf_width > 0.0f && sf_height > 0.0f)
-                    {
-                        x_ratio = _stretch->getX() / sf_width;
-                        y_ratio = _stretch->getY() / sf_height;
-                    }
-                }
-
-                SDL_FRect destRC;
-                destRC.x = _x;
-                destRC.y = _y + (float)line_nr * line_height;
-
-                destRC.w = sf_width * x_ratio;
-                destRC.h = sf_height * y_ratio;
-
-                if ((_alignment & GFX_CENTER))
-                {
-                    destRC.x -= sf_width / 2.0f;
-                    destRC.x += max_width / 2.0f;
-                }
-                else if ((_alignment & GFX_RIGHT))
-                {
-                    destRC.x -= sf_width;
-                    destRC.x += max_width;
-                }
-
-                if (_flags & GFX_ADDITIV)
-                {
-                    SDL_SetTextureBlendMode(tx_text, SDL_BLENDMODE_ADD);
-                }
-                else if (_opacity < 1.0f)
-                {
-                    SDL_SetTextureBlendMode(tx_text, SDL_BLENDMODE_BLEND);
-                }
-
-                SDL_SetTextureAlphaMod(tx_text, (Uint8)(_opacity * 255.0f));
-
-                SDL_FPoint center;
-                center.x = destRC.w / 2.0f;
-                center.y = destRC.h / 2.0f;
-
-                if (_rotationOffset)
-                {
-                    center.x += _rotationOffset->getX();
-                    center.y += _rotationOffset->getY();
-                }
-
-                int flip = SDL_FLIP_NONE;
-                if (_flags & GFX_HFLIP)
-                {
-                    flip = SDL_FLIP_HORIZONTAL;
-                }
-                if (_flags & GFX_VFLIP)
-                {
-                    flip |= SDL_FLIP_VERTICAL;
-                }
-
-                SDL_RenderCopyExF(renderer, tx_text, &sf_text->clip_rect, &destRC, RAD2DEG(_rotation), &center, (SDL_RendererFlip)flip);
-
-                SDL_DestroyTexture(tx_text);
-            }
-			SDL_FreeSurface(sf_text);
+		string uid = to_string((long)_font) + to_string(_color) + txt_line + to_string(_alignment);
+		if (_max_size) {
+			uid += to_string(_max_size->getX());
+			uid += to_string(_max_size->getY());
 		}
+
+		SDL_Texture* tx_text = NULL;
+		map<string, GFXTextRenderCache*>::iterator it = this->textRenderCache.find(uid);
+		if (it != this->textRenderCache.end()) { // use cache
+			tx_text = it->second->tx;
+			it->second->used = true;
+		}
+		else { // not in cache -> render
+
+			SDL_Surface* sf_text = TTF_RenderUTF8_Blended(_font->ttf, txt_line.c_str(), color);
+			if (sf_text)
+			{
+				tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
+				if (tx_text) {
+					this->textRenderCache.insert_or_assign(uid, new GFXTextRenderCache(tx_text));
+				}
+
+				SDL_FreeSurface(sf_text);
+			}
+		}
+
+		if (tx_text)
+		{
+			int w, h;
+			SDL_QueryTexture(tx_text, NULL, NULL, &w, &h);
+
+			SDL_Rect rc = { 0, 0, w, h };
+
+			float fw = (float)w / xscale;
+			float fh = (float)h / yscale;
+
+			float x_ratio = 1.0f;
+			float y_ratio = 1.0f;
+
+			if (_stretch)
+			{
+				if (!isnan(_stretch->getX()) && !isnan(_stretch->getY()) && fw > 0.0f && fh > 0.0f)
+				{
+					x_ratio = _stretch->getX() / fw;
+					y_ratio = _stretch->getY() / fh;
+				}
+			}
+
+			SDL_FRect destRC;
+			destRC.x = _x;
+			destRC.y = _y + (float)line_nr * line_height;;
+
+			destRC.w = fw * x_ratio;
+			destRC.h = fh * y_ratio;
+
+			if ((_alignment & GFX_CENTER))
+			{
+				destRC.x -= fw / 2.0f;
+				destRC.x += max_width / 2.0f;
+			}
+			else if ((_alignment & GFX_RIGHT))
+			{
+				destRC.x -= fw;
+				destRC.x += max_width;
+			}
+
+			if (_flags & GFX_ADDITIV)
+			{
+				SDL_SetTextureBlendMode(tx_text, SDL_BLENDMODE_ADD);
+			}
+			else if (_opacity < 1.0f)
+			{
+				SDL_SetTextureBlendMode(tx_text, SDL_BLENDMODE_BLEND);
+			}
+
+			SDL_SetTextureAlphaMod(tx_text, (Uint8)(_opacity * 255.0f));
+
+			SDL_FPoint center;
+			center.x = destRC.w / 2.0f;
+			center.y = destRC.h / 2.0f;
+
+			if (_rotationOffset)
+			{
+				center.x += _rotationOffset->getX();
+				center.y += _rotationOffset->getY();
+			}
+
+			int flip = SDL_FLIP_NONE;
+			if (_flags & GFX_HFLIP)
+			{
+				flip = SDL_FLIP_HORIZONTAL;
+			}
+			if (_flags & GFX_VFLIP)
+			{
+				flip |= SDL_FLIP_VERTICAL;
+			}
+
+			SDL_RenderCopyExF(renderer, tx_text, &rc, &destRC, RAD2DEG(_rotation), &center, (SDL_RendererFlip)flip);
+		}
+
 		line_nr++;
 	} while (txt_ptr < _text.length());
 }

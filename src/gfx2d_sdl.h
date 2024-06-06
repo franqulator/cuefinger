@@ -65,6 +65,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "vector2d.h"
 #include <deque>
 #include <map>
+#include <unordered_map>
 
 using namespace std;
 
@@ -297,6 +298,19 @@ public:
 	}
 };
 
+class GFXTextRenderCache {
+public:
+	SDL_Texture* tx;
+	bool used;
+	GFXTextRenderCache(SDL_Texture *tx) {
+		this->used = true;
+		this->tx = tx;
+	}
+	~GFXTextRenderCache() {
+		SDL_DestroyTexture(tx);
+	}
+};
+
 class GFXEngine {
 private:
 	SDL_Window* window=NULL;
@@ -312,6 +326,8 @@ private:
 
 	set<GFXSurface*> spriteBatchRequests[MAX_LAYERS];
 	int zorder[MAX_LAYERS];
+
+	map<string, GFXTextRenderCache*> textRenderCache;
 
 public:
 
