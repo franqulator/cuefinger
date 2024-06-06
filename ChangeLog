@@ -1,7 +1,9 @@
 --- v1.3.0 ---
 - Setting to show/hide offline devices
-- Fader optimized and new Meterscale
+- Save and restore scroll state for each server
+- Fader optimized and new meterscale
 - Layout optimized
+- Performance optimized
 - Bugfixes
 
 --- v1.2.0 ---

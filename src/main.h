@@ -71,7 +71,6 @@ https://github.com/franqulator/cuefinger";
 #define WM_UPDATE_CONNECTBUTTONS	WM_APP+8
 #define WM_CONNECTION_LOST			WM_APP+11
 
-#define MAX_UA_DEVICES		16
 #define UA_SENDVALUE_RESOLUTION	0.005 // auflösung um performance zu verbessern und netzwerklast zu reduzieren => entspricht einer Rasterung auf 200 Stufen (1 / 0.005)
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
@@ -277,16 +276,14 @@ public:
 	int auxsCount;
 	Channel *auxs;
 
-	UADevice();
+	UADevice(string us_deviceId);
 	~UADevice();
-	void LoadDevice(string us_deviceId);
 	void AllocChannels(int type, int _channelCount); // UA_INPUT or UA_AUX
 	bool LoadChannels(int type, int channelIndex, string us_inputId);
 	void SubscribeChannel(bool subscribe, int type, int n);
 	bool IsChannelVisible(int type, int index, bool only_selected);
 	int GetActiveChannelsCount(int type, int flag);
 	void ClearChannels();
-	void Release();
 };
 
 void UA_TCPClientSend(const char* msg);
@@ -305,6 +302,8 @@ void UpdateSubscriptions();
 void InitSettingsDialog();
 void ReleaseSettingsDialog();
 void CleanUp();
+void BrowseToChannel(string ua_dev, int channel);
+void GetMiddleVisibleChannel(string* ua_dev, int* channel);
 
 
 inline double toDbFS(double linVal) {

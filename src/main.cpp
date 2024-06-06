@@ -44,6 +44,9 @@ vector<string> g_ua_server_list;
 string g_ua_server_connected = "";
 int g_ua_server_last_connection = -1;
 
+string g_first_visible_device;
+int g_first_visible_channel = 0;
+
 bool g_redraw = true;
 bool g_serverlist_defined = false;
 
@@ -128,7 +131,7 @@ GFXSurface *g_gsLabel[4];
 vector<SDL_Thread*> pingThreadsList;
 
 unsigned long long g_server_refresh_start_time = -UA_SERVER_RESFRESH_TIME;
-UADevice g_ua_devices[MAX_UA_DEVICES];
+vector<UADevice*> g_ua_devices;
 
 string json_workaround_secure_unicode_characters(string input)
 {
@@ -218,6 +221,7 @@ void UpdateMaxPages() {
 	int max_pages = (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage();
 	if (g_page >= max_pages) {
 		g_page = max_pages;
+		GetMiddleVisibleChannel(&g_first_visible_device, &g_first_visible_channel);
 	}
 }
 
@@ -438,6 +442,9 @@ void UpdateLayout() {
 		(*it)->rc.w = round(g_btn_width);
 		(*it)->rc.h = round(g_btn_height / 2.0f);
 	}
+
+	BrowseToChannel(g_first_visible_device, g_first_visible_channel);
+	GetMiddleVisibleChannel(&g_first_visible_device, &g_first_visible_channel);
 }
 
 Button::Button(int _id, std::string _text, int _x, int _y, int _w, int _h,
@@ -876,21 +883,13 @@ bool Channel::IsOverriddenHide(bool ignoreStereoname) {
 	return (name.length() > 0 && name.substr(0, 1) == "#");
 }
 
-UADevice::UADevice()
-{
-	this->ua_id = "";
+UADevice::UADevice(string us_deviceId) {
 	this->inputsCount = 0;
 	this->inputs = NULL;
 	this->auxsCount = 0;
 	this->auxs = NULL;
 	this->online = false;
-}
-UADevice::~UADevice()
-{
-	this->Release();
-}
-void UADevice::LoadDevice(string us_deviceId)
-{
+
 	this->ua_id = us_deviceId;
 
 	//more device info
@@ -899,11 +898,14 @@ void UADevice::LoadDevice(string us_deviceId)
 	string msg = "subscribe /devices/" + this->ua_id + "/DeviceOnline/";
 	UA_TCPClientSend(msg.c_str());
 
-//	msg = "subscribe /devices/" + this->ua_id;
-//	UA_TCPClientSend(msg.c_str());
+	//	msg = "subscribe /devices/" + this->ua_id;
+	//	UA_TCPClientSend(msg.c_str());
 
-//	msg = "subscribe /MeterPulse/";
-//	UA_TCPClientSend(msg.c_str());
+	//	msg = "subscribe /MeterPulse/";
+	//	UA_TCPClientSend(msg.c_str());
+}
+UADevice::~UADevice() {
+	this->ClearChannels();
 }
 void UADevice::AllocChannels(int type, int _channelCount)
 {
@@ -1135,28 +1137,22 @@ void UADevice::ClearChannels() {
 	auxsCount = 0;
 }
 
-void UADevice::Release()
-{
-	this->ClearChannels();
-	ua_id = "";
-}
-
 void UpdateSubscriptions() {
 
 	int count = 0;
 	int channels_per_page = CalculateChannelsPerPage();
 
-	for (int i = 0; i < MAX_UA_DEVICES; i++) {
-		if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
-			for (int n = 0; n < g_ua_devices[i].inputsCount; n++) {
+	for (int i = 0; i < g_ua_devices.size(); i++) {
+		if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs) {
+			for (int n = 0; n < g_ua_devices[i]->inputsCount; n++) {
 				bool subscribe = false;
-				if (g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked)) {
+				if (g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked)) {
 					if (count >= g_page * channels_per_page && count < (g_page + 1) * channels_per_page) {
 						subscribe = true;
 					}
 					count++;
 				}
-				g_ua_devices[i].SubscribeChannel(subscribe, UA_INPUT, n);
+				g_ua_devices[i]->SubscribeChannel(subscribe, UA_INPUT, n);
 			}
 		}
 	}
@@ -1166,14 +1162,14 @@ int GetAllChannelsCount(bool countWithHidden)
 {
 	int channelCount = 0;
 
-	for (int i = 0; i < MAX_UA_DEVICES; i++)
+	for (int i = 0; i < g_ua_devices.size(); i++)
 	{
-		if (g_ua_devices[i].ua_id.length() && (g_ua_devices[i].online || g_settings.show_offline_devices))
+		if (g_ua_devices[i]->ua_id.length() && (g_ua_devices[i]->online || g_settings.show_offline_devices))
 		{
 			if (countWithHidden)
-				channelCount += g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_ALL_ENABLED_AND_ACTIVE);
+				channelCount += g_ua_devices[i]->GetActiveChannelsCount(UA_INPUT, UA_ALL_ENABLED_AND_ACTIVE);
 			else
-				channelCount += g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_VISIBLE);
+				channelCount += g_ua_devices[i]->GetActiveChannelsCount(UA_INPUT, UA_VISIBLE);
 		}
 	}
 	return channelCount;
@@ -1184,7 +1180,7 @@ Channel *GetChannelPtr(ChannelIndex *cIndex)
 	if (!cIndex->IsValid())
 		return NULL;
 
-	return &g_ua_devices[cIndex->deviceIndex].inputs[cIndex->inputIndex];
+	return &g_ua_devices[cIndex->deviceIndex]->inputs[cIndex->inputIndex];
 }
 
 Channel *GetChannelPtr(int deviceIndex, int inputIndex)
@@ -1198,11 +1194,11 @@ UADevice *GetDevicePtrByUAId(string ua_device_id)
 	if (ua_device_id.length() == 0)
 		return NULL;
 
-	for (int n = 0; n < MAX_UA_DEVICES; n++)
+	for (int n = 0; n < g_ua_devices.size(); n++)
 	{
-		if (g_ua_devices[n].ua_id == ua_device_id)
+		if (g_ua_devices[n]->ua_id == ua_device_id)
 		{
-			return &g_ua_devices[n];
+			return g_ua_devices[n];
 		}
 	}
 	return NULL;
@@ -1269,18 +1265,18 @@ ChannelIndex GetChannelIdByTouchpointId(bool _is_mouse, SDL_TouchFingerEvent *to
 
 	bool btn_select = (g_btnSelectChannels->checked);
 
-	for (int i = 0; i < MAX_UA_DEVICES; i++)
+	for (int i = 0; i < g_ua_devices.size(); i++)
 	{
-		if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
+		if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs)
 		{
-			for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+			for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 			{
-				if (!g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !btn_select))
+				if (!g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !btn_select))
 					continue;
 
-				if (touch_input && g_ua_devices[i].inputs[n].touch_point.id == touch_input->touchId 
-					&& g_ua_devices[i].inputs[n].touch_point.finger_id == touch_input->fingerId
-					|| _is_mouse && g_ua_devices[i].inputs[n].touch_point.is_mouse)
+				if (touch_input && g_ua_devices[i]->inputs[n].touch_point.id == touch_input->touchId 
+					&& g_ua_devices[i]->inputs[n].touch_point.finger_id == touch_input->fingerId
+					|| _is_mouse && g_ua_devices[i]->inputs[n].touch_point.is_mouse)
 				{
 					return ChannelIndex(i, n);
 				}
@@ -1311,11 +1307,11 @@ ChannelIndex GetChannelIdByPosition(Vector2D pt) // client-position; e.g. touch 
 
 			channelIndex += g_page * channels_per_page;
 
-			for (int i = 0; i < MAX_UA_DEVICES; i++)
+			for (int i = 0; i < g_ua_devices.size(); i++)
 			{
-				if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputsCount && g_ua_devices[i].inputs)
+				if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs)
 				{
-					int visibleChannelsCount = g_ua_devices[i].GetActiveChannelsCount(UA_INPUT, UA_VISIBLE);
+					int visibleChannelsCount = g_ua_devices[i]->GetActiveChannelsCount(UA_INPUT, UA_VISIBLE);
 					if (channelIndex >= visibleChannelsCount)
 					{
 						channelIndex -= visibleChannelsCount;
@@ -1327,7 +1323,7 @@ ChannelIndex GetChannelIdByPosition(Vector2D pt) // client-position; e.g. touch 
 						bool btn_select = (g_btnSelectChannels->checked);
 						for (int n = 0; n <= channelIndex; n++)
 						{
-							if (!g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !btn_select))
+							if (!g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !btn_select))
 							{
 								channelIndex++;
 							}
@@ -1339,12 +1335,12 @@ ChannelIndex GetChannelIdByPosition(Vector2D pt) // client-position; e.g. touch 
 
 
 			//überprüfen ob channel existiert
-			if (g_ua_devices[deviceIndex].ua_id.length() == 0)
+			if (g_ua_devices[deviceIndex]->ua_id.length() == 0)
 			{
 				deviceIndex = -1;
 				channelIndex = -1;
 			}
-			else if(channelIndex >= g_ua_devices[deviceIndex].inputsCount)
+			else if(channelIndex >= g_ua_devices[deviceIndex]->inputsCount)
 			{
 				channelIndex = -1;
 			}
@@ -1551,7 +1547,7 @@ Uint32 TimerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_time
 
 void SetNetworkTimeout() {
 #ifndef SIMULATION
-
+	/*
 	if (g_timer_network_send_timeout_msg != 0) {
 		SDL_RemoveTimer(g_timer_network_send_timeout_msg);
 	}
@@ -1560,7 +1556,7 @@ void SetNetworkTimeout() {
 	if (g_timer_network_timeout != 0) {
 		SDL_RemoveTimer(g_timer_network_timeout);
 	}
-	g_timer_network_timeout = SDL_AddTimer(10000, TimerCallbackNetworkTimeout, NULL);
+	g_timer_network_timeout = SDL_AddTimer(10000, TimerCallbackNetworkTimeout, NULL);*/
 #endif
 }
 
@@ -1687,12 +1683,16 @@ void UA_TCPClientProc(int msg, string data)
 					int i = 0;
 					const dom::object obj = element["data"]["children"];
 
+					for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
+						SAFE_DELETE(*it);
+					}
+					g_ua_devices.clear();
+
 					//load device info
 					for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
-						string value{ it.key() };
-						g_ua_devices[i].LoadDevice(value);
-						i++;
-					}
+						string id { it.key() };
+						g_ua_devices.push_back(new UADevice(id));
+					}					
 				}
 			/*	else if (path_parameter[2] == "MultiUnitOrder")
 				{
@@ -1716,7 +1716,7 @@ void UA_TCPClientProc(int msg, string data)
 
 					//	if (dev->online) { // load device
 
-							if (dev == &g_ua_devices[0]) { // CueBusCount nur für erstes device erfragen
+							if (dev == g_ua_devices[0]) { // CueBusCount nur für erstes device erfragen
 								string msg = "subscribe /devices/" + dev->ua_id + "/CueBusCount";
 								UA_TCPClientSend(msg.c_str());
 							}
@@ -2007,6 +2007,10 @@ void UA_TCPClientProc(int msg, string data)
 							{
 								channel->hidden = element["data"];
 								UpdateSubscriptions();
+								if (channel->ua_id == g_first_visible_device) {
+									int debug = 0;
+								}
+								BrowseToChannel(g_first_visible_device, g_first_visible_channel);
 								SetRedrawWindow(true);
 							}
 						}
@@ -2016,6 +2020,7 @@ void UA_TCPClientProc(int msg, string data)
 							{
 								channel->enabledByUser = element["data"];
 								UpdateSubscriptions();
+								BrowseToChannel(g_first_visible_device, g_first_visible_channel);
 								SetRedrawWindow(true);
 							}
 						}
@@ -2025,6 +2030,7 @@ void UA_TCPClientProc(int msg, string data)
 							{
 								channel->active = element["data"];
 								UpdateSubscriptions();
+								BrowseToChannel(g_first_visible_device, g_first_visible_channel);
 								SetRedrawWindow(true);
 							}
 						}
@@ -2363,6 +2369,64 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	gfx->Write(g_fntLabel, _x, _y + (g_fader_label_height - sz.getY()) / 2, name, GFX_CENTER, &max_size);
 }
 
+void GetMiddleVisibleChannel(string *ua_dev, int *channel) {
+
+	int channels_per_page = CalculateChannelsPerPage();
+	int count = 0;
+
+	*ua_dev = "";
+	*channel = 0;
+
+	for (int i = 0; i < g_ua_devices.size(); i++) {
+		if (g_ua_devices[i]->ua_id.length() &&
+			(g_ua_devices[i]->online || g_settings.show_offline_devices) &&
+			g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs) {
+			for (int n = 0; n < g_ua_devices[i]->inputsCount; n++) {
+				if (!g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
+					continue;
+
+				*ua_dev = g_ua_devices[i]->ua_id;
+				*channel = n;
+
+				if (count >= g_page * channels_per_page + channels_per_page / 2) {
+					return;
+				}
+				count++;
+			}
+		}
+	}
+}
+
+void BrowseToChannel(string ua_dev, int channel) {
+
+	if (ua_dev.length() == 0)
+		return;
+
+	int channels_per_page = CalculateChannelsPerPage();
+	int count = 0;
+
+	for (int i = 0; i < g_ua_devices.size(); i++) {
+		if (g_ua_devices[i]->ua_id.length() && 
+			(g_ua_devices[i]->online || g_settings.show_offline_devices) &&
+			g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs) {
+			for (int n = 0; n < g_ua_devices[i]->inputsCount; n++) {
+				if (!g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
+					continue;
+
+				if (g_ua_devices[i]->ua_id == ua_dev && n == channel) {
+					break;
+				}
+
+				count++;
+			}
+		}
+	}
+
+	if (channels_per_page) {
+		g_page = count / channels_per_page;
+	}
+}
+
 void Draw() {
 	int w, h;
 	SDL_GetWindowSize(g_window, &w, &h);
@@ -2440,12 +2504,12 @@ void Draw() {
 		gfx->Draw(g_gsChannelBg, g_channel_offset_x, 0, NULL, 
 			GFX_NONE, 1.0, 0, NULL, &stretch);
 
-		for (int i = 0; i < MAX_UA_DEVICES; i++) {
-			if (g_ua_devices[i].ua_id.length() && 
-				(g_ua_devices[i].online || g_settings.show_offline_devices) && 
-				g_ua_devices[i].inputsCount && g_ua_devices[i].inputs) {
-				for (int n = 0; n < g_ua_devices[i].inputsCount; n++) {
-					if (!g_ua_devices[i].IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
+		for (int i = 0; i < g_ua_devices.size(); i++) {
+			if (g_ua_devices[i]->ua_id.length() && 
+				(g_ua_devices[i]->online || g_settings.show_offline_devices) && 
+				g_ua_devices[i]->inputsCount && g_ua_devices[i]->inputs) {
+				for (int n = 0; n < g_ua_devices[i]->inputsCount; n++) {
+					if (!g_ua_devices[i]->IsChannelVisible(UA_INPUT, n, !g_btnSelectChannels->checked))
 						continue;
 
 					if (count >= g_page * channels_per_page && count < (g_page + 1) * channels_per_page) {
@@ -2717,13 +2781,10 @@ void Disconnect()
 
 	CleanUpSendButtons();
 
-	for (int n = 0; n < MAX_UA_DEVICES; n++)
-	{
-		if (g_ua_devices[n].ua_id.length())
-		{
-			g_ua_devices[n].Release();
-		}
+	for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
+		SAFE_DELETE(*it);
 	}
+	g_ua_devices.clear();
 
 	for (int n = 0; n < g_btnConnect.size(); n++)
 	{
@@ -2848,17 +2909,17 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 					if (channel->fader_group)
 					{
 						int state = (int)!channel->mute;
-						for (int i = 0; i < MAX_UA_DEVICES; i++)
+						for (int i = 0; i < g_ua_devices.size(); i++)
 						{
-							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+							if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 							{
-								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+								for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 									{
-										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+										if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 										{
-											g_ua_devices[i].inputs[n].PressMute(state);
+											g_ua_devices[i]->inputs[n].PressMute(state);
 											SetRedrawWindow(true);
 										}
 									}
@@ -2881,17 +2942,17 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 							if (channel->fader_group)
 							{
 								int state = (int)!channel->sends[v].bypass;
-								for (int i = 0; i < MAX_UA_DEVICES; i++)
+								for (int i = 0; i < g_ua_devices.size(); i++)
 								{
-									if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+									if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 									{
-										for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+										for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 										{
-											if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+											if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 											{
-												if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+												if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 												{
-													g_ua_devices[i].inputs[n].sends[v].PressBypass(state);
+													g_ua_devices[i]->inputs[n].sends[v].PressBypass(state);
 													SetRedrawWindow(true);
 												}
 											}
@@ -2925,17 +2986,17 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 					if (channel->fader_group)
 					{
 						int state = (int)!channel->solo;
-						for (int i = 0; i < MAX_UA_DEVICES; i++)
+						for (int i = 0; i < g_ua_devices.size(); i++)
 						{
-							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+							if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 							{
-								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+								for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 									{
-										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+										if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 										{
-											g_ua_devices[i].inputs[n].PressSolo(state);
+											g_ua_devices[i]->inputs[n].PressSolo(state);
 											SetRedrawWindow(true);
 										}
 									}
@@ -2994,30 +3055,30 @@ void OnTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 
 				if (channel->fader_group)
 				{
-					for (int i = 0; i < MAX_UA_DEVICES; i++)
+					for (int i = 0; i < g_ua_devices.size(); i++)
 					{
-						if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+						if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 						{
-							for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+							for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 							{
-								if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+								if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 								{
-									if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+									if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 									{
 										if (touchinput)
 										{
-											g_ua_devices[i].inputs[n].touch_point.id = touchinput->touchId;
-											g_ua_devices[i].inputs[n].touch_point.finger_id = touchinput->fingerId;
-											g_ua_devices[i].inputs[n].touch_point.pt_start_x = pos_pt.getX();
-											g_ua_devices[i].inputs[n].touch_point.pt_start_y = pos_pt.getY();
-											g_ua_devices[i].inputs[n].touch_point.action = TOUCH_ACTION_LEVEL;
+											g_ua_devices[i]->inputs[n].touch_point.id = touchinput->touchId;
+											g_ua_devices[i]->inputs[n].touch_point.finger_id = touchinput->fingerId;
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_x = pos_pt.getX();
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_y = pos_pt.getY();
+											g_ua_devices[i]->inputs[n].touch_point.action = TOUCH_ACTION_LEVEL;
 										}
 										else if (mouse_pt)
 										{
-											g_ua_devices[i].inputs[n].touch_point.is_mouse = true;
-											g_ua_devices[i].inputs[n].touch_point.pt_start_x = mouse_pt->getX();
-											g_ua_devices[i].inputs[n].touch_point.pt_start_y = mouse_pt->getY();
-											g_ua_devices[i].inputs[n].touch_point.action = TOUCH_ACTION_LEVEL;
+											g_ua_devices[i]->inputs[n].touch_point.is_mouse = true;
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_x = mouse_pt->getX();
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_y = mouse_pt->getY();
+											g_ua_devices[i]->inputs[n].touch_point.action = TOUCH_ACTION_LEVEL;
 										}
 									}
 								}
@@ -3119,19 +3180,19 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 								if (hover_channel->fader_group)
 								{
 									int state = (int)channel->mute;
-									for (int i = 0; i < MAX_UA_DEVICES; i++)
+									for (int i = 0; i < g_ua_devices.size(); i++)
 									{
-										if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+										if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 										{
-											for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+											for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 											{
-												if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+												if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 												{
-													if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
+													if (g_ua_devices[i]->inputs[n].fader_group == hover_channel->fader_group)
 													{
-														if (g_ua_devices[i].inputs[n].mute != (bool)state)
+														if (g_ua_devices[i]->inputs[n].mute != (bool)state)
 														{
-															g_ua_devices[i].inputs[n].PressMute(state);
+															g_ua_devices[i]->inputs[n].PressMute(state);
 															SetRedrawWindow(true);
 														}
 													}
@@ -3158,19 +3219,19 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 										if (hover_channel->fader_group)
 										{
 											int state = (int)channel->sends[v].bypass;
-											for (int i = 0; i < MAX_UA_DEVICES; i++)
+											for (int i = 0; i < g_ua_devices.size(); i++)
 											{
-												if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+												if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 												{
-													for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+													for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 													{
-														if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+														if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 														{
-															if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
+															if (g_ua_devices[i]->inputs[n].fader_group == hover_channel->fader_group)
 															{
-																if (g_ua_devices[i].inputs[n].sends[v].bypass != (bool)state)
+																if (g_ua_devices[i]->inputs[n].sends[v].bypass != (bool)state)
 																{
-																	g_ua_devices[i].inputs[n].sends[v].PressBypass(state);
+																	g_ua_devices[i]->inputs[n].sends[v].PressBypass(state);
 																	SetRedrawWindow(true);
 																}
 															}
@@ -3215,19 +3276,19 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 								if (hover_channel->fader_group)
 								{
 									int state = (int)channel->solo;
-									for (int i = 0; i < MAX_UA_DEVICES; i++)
+									for (int i = 0; i < g_ua_devices.size(); i++)
 									{
-										if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+										if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 										{
-											for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+											for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 											{
-												if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+												if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 												{
-													if (g_ua_devices[i].inputs[n].fader_group == hover_channel->fader_group)
+													if (g_ua_devices[i]->inputs[n].fader_group == hover_channel->fader_group)
 													{
-														if (g_ua_devices[i].inputs[n].solo != (bool)state)
+														if (g_ua_devices[i]->inputs[n].solo != (bool)state)
 														{
-															g_ua_devices[i].inputs[n].PressSolo(state);
+															g_ua_devices[i]->inputs[n].PressSolo(state);
 															SetRedrawWindow(true);
 														}
 													}
@@ -3328,22 +3389,22 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 				{
 					if (channel->fader_group)
 					{
-						for (int i = 0; i < MAX_UA_DEVICES; i++)
+						for (int i = 0; i < g_ua_devices.size(); i++)
 						{
-							if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+							if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 							{
-								for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+								for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 								{
-									if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+									if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 									{
-										if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+										if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 										{
-											g_ua_devices[i].inputs[n].touch_point.pt_start_x = g_ua_devices[i].inputs[n].touch_point.pt_end_x;
-											g_ua_devices[i].inputs[n].touch_point.pt_start_y = g_ua_devices[i].inputs[n].touch_point.pt_end_y;
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_x = g_ua_devices[i]->inputs[n].touch_point.pt_end_x;
+											g_ua_devices[i]->inputs[n].touch_point.pt_start_y = g_ua_devices[i]->inputs[n].touch_point.pt_end_y;
 
 											if (g_btnMix->checked)
 											{
-												g_ua_devices[i].inputs[n].ChangeLevel(fader_move);
+												g_ua_devices[i]->inputs[n].ChangeLevel(fader_move);
 												SetRedrawWindow(true);
 											}
 											else
@@ -3352,7 +3413,7 @@ void OnTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 												{
 													if (g_btnSends[v]->checked)
 													{
-														g_ua_devices[i].inputs[n].sends[v].ChangeGain(fader_move);
+														g_ua_devices[i]->inputs[n].sends[v].ChangeGain(fader_move);
 														SetRedrawWindow(true);
 														break;
 													}
@@ -3409,31 +3470,31 @@ void OnTouchUp(bool is_mouse, SDL_TouchFingerEvent *touchinput)
 		{
 			if (channel->fader_group)
 			{
-				for (int i = 0; i < MAX_UA_DEVICES; i++)
+				for (int i = 0; i < g_ua_devices.size(); i++)
 				{
-					if (g_ua_devices[i].ua_id.length() && g_ua_devices[i].inputs)
+					if (g_ua_devices[i]->ua_id.length() && g_ua_devices[i]->inputs)
 					{
-						for (int n = 0; n < g_ua_devices[i].inputsCount; n++)
+						for (int n = 0; n < g_ua_devices[i]->inputsCount; n++)
 						{
-							if (g_ua_devices[i].inputs[n].ua_id.length() && !g_ua_devices[i].inputs[n].hidden && g_ua_devices[i].inputs[n].selected_to_show)
+							if (g_ua_devices[i]->inputs[n].ua_id.length() && !g_ua_devices[i]->inputs[n].hidden && g_ua_devices[i]->inputs[n].selected_to_show)
 							{
-								if (g_ua_devices[i].inputs[n].fader_group == channel->fader_group)
+								if (g_ua_devices[i]->inputs[n].fader_group == channel->fader_group)
 								{
-									if (g_ua_devices[i].inputs[n].touch_point.action == TOUCH_ACTION_LEVEL)
+									if (g_ua_devices[i]->inputs[n].touch_point.action == TOUCH_ACTION_LEVEL)
 									{
-										string cmd = "subscribe /devices/" + g_ua_devices[i].inputs[n].device->ua_id + "/inputs/" 
-											+ g_ua_devices[i].inputs[n].ua_id + "/FaderLevel/";
+										string cmd = "subscribe /devices/" + g_ua_devices[i]->inputs[n].device->ua_id + "/inputs/" 
+											+ g_ua_devices[i]->inputs[n].ua_id + "/FaderLevel/";
 										UA_TCPClientSend(cmd.c_str());
 									}
 									if(touchinput)
 									{
-										g_ua_devices[i].inputs[n].touch_point.id = 0;
-										g_ua_devices[i].inputs[n].touch_point.finger_id = 0;
+										g_ua_devices[i]->inputs[n].touch_point.id = 0;
+										g_ua_devices[i]->inputs[n].touch_point.finger_id = 0;
 									}
 									if(is_mouse)
-										g_ua_devices[i].inputs[n].touch_point.is_mouse = false;
+										g_ua_devices[i]->inputs[n].touch_point.is_mouse = false;
 
-									g_ua_devices[i].inputs[n].touch_point.action = TOUCH_ACTION_NONE;
+									g_ua_devices[i]->inputs[n].touch_point.action = TOUCH_ACTION_NONE;
 								}
 							}
 						}
@@ -3883,6 +3944,10 @@ bool LoadServerSettings(string server_name, UADevice *ua_dev) // läd channel-se
 			}
 			catch (simdjson_error e) {}
 		}
+
+		string_view sv = element["ua_server"]["first_visible_device"];
+		g_first_visible_device = string{ sv };
+		g_first_visible_channel = (int)((int64_t)element["ua_server"]["first_visible_channel"]);
 	}
 	catch (simdjson_error e)
 	{
@@ -3921,28 +3986,34 @@ bool SaveServerSettings(string server_name)
 			}
 		}
 
+		string ua_dev;
+		int channel;
+		GetMiddleVisibleChannel(&ua_dev, &channel);
+		json += "\"first_visible_device\": \"" + ua_dev + "\",\n";
+		json += "\"first_visible_channel\": " + to_string(channel) + ",\n";
+
 		bool set_komma = false;
-		for (int n = 0; n < MAX_UA_DEVICES; n++)
+		for (int n = 0; n < g_ua_devices.size(); n++)
 		{
-			if (g_ua_devices[n].ua_id.length() == 0)
+			if (g_ua_devices[n]->ua_id.length() == 0)
 				continue;
 
 			if (set_komma)
 				json += ",\n";
 
-				json += "\"" + g_ua_devices[n].ua_id + "\": {\n";
-			if (g_ua_devices[n].inputs)
+				json += "\"" + g_ua_devices[n]->ua_id + "\": {\n";
+			if (g_ua_devices[n]->inputs)
 			{
 				bool set_komma2 = false;
-				for (int i = 0; i < g_ua_devices[n].inputsCount; i++)
+				for (int i = 0; i < g_ua_devices[n]->inputsCount; i++)
 				{
 					if (set_komma2)
 						json += ",\n";
 
-						json += "\"" + g_ua_devices[n].inputs[i].ua_id + " group\": " + to_string(g_ua_devices[n].inputs[i].fader_group) + "\n,";
+						json += "\"" + g_ua_devices[n]->inputs[i].ua_id + " group\": " + to_string(g_ua_devices[n]->inputs[i].fader_group) + "\n,";
 
-						json += "\"" + g_ua_devices[n].inputs[i].ua_id + " selected\": ";
-					if (g_ua_devices[n].inputs[i].selected_to_show)
+						json += "\"" + g_ua_devices[n]->inputs[i].ua_id + " selected\": ";
+					if (g_ua_devices[n]->inputs[i].selected_to_show)
 						json += "true";
 					else
 						json += "false";
@@ -4650,6 +4721,7 @@ int main(int argc, char* argv[]) {
                                         UpdateLayout();
                                         UpdateChannelWidthButton();
                                         UpdateMaxPages();
+										BrowseToChannel(g_first_visible_device, g_first_visible_channel);
                                         UpdateSubscriptions();
                                         SetRedrawWindow(true);
                                         handled = true;
@@ -4658,15 +4730,16 @@ int main(int argc, char* argv[]) {
                                         if (g_page > 0) {
                                             g_page--;
                                             UpdateSubscriptions();
+											GetMiddleVisibleChannel(&g_first_visible_device, &g_first_visible_channel);
                                             SetRedrawWindow(true);
                                         }
                                         handled = true;
                                     }
                                     if (g_btnPageRight->IsClicked(&pt)) {
-                                        if (g_page < (GetAllChannelsCount(false) - 1) /
-                                                     CalculateChannelsPerPage()) {
+                                        if (g_page < (GetAllChannelsCount(false) - 1) / CalculateChannelsPerPage()) {
                                             g_page++;
                                             UpdateSubscriptions();
+											GetMiddleVisibleChannel(&g_first_visible_device, &g_first_visible_channel);
                                             SetRedrawWindow(true);
                                         }
                                         handled = true;
@@ -4849,25 +4922,25 @@ int main(int argc, char* argv[]) {
                                         }
                                     } else if (channel->IsTouchOnFader(&relative_cursor_pt)) {
                                         if (channel->fader_group) {
-                                            for (int i = 0; i < MAX_UA_DEVICES; i++) {
-                                                if (g_ua_devices[i].ua_id.length() &&
-                                                    g_ua_devices[i].inputs) {
+                                            for (int i = 0; i < g_ua_devices.size(); i++) {
+                                                if (g_ua_devices[i]->ua_id.length() &&
+                                                    g_ua_devices[i]->inputs) {
                                                     for (int n = 0;
-                                                         n < g_ua_devices[i].inputsCount; n++) {
-                                                        if (g_ua_devices[i].inputs[n].ua_id.length() &&
-                                                            !g_ua_devices[i].inputs[n].hidden &&
-                                                            g_ua_devices[i].inputs[n].selected_to_show) {
-                                                            if (g_ua_devices[i].inputs[n].fader_group ==
+                                                         n < g_ua_devices[i]->inputsCount; n++) {
+                                                        if (g_ua_devices[i]->inputs[n].ua_id.length() &&
+                                                            !g_ua_devices[i]->inputs[n].hidden &&
+                                                            g_ua_devices[i]->inputs[n].selected_to_show) {
+                                                            if (g_ua_devices[i]->inputs[n].fader_group ==
                                                                 channel->fader_group) {
                                                                 if (g_btnMix->checked) {
-                                                                    g_ua_devices[i].inputs[n].ChangeLevel(
+                                                                    g_ua_devices[i]->inputs[n].ChangeLevel(
                                                                             move);
                                                                     SetRedrawWindow(true);
                                                                 } else {
                                                                     for (int v = 0; v <
                                                                                     g_btnSends.size(); v++) {
                                                                         if (g_btnSends[v]->checked) {
-                                                                            g_ua_devices[i].inputs[n].sends[v].ChangeGain(
+                                                                            g_ua_devices[i]->inputs[n].sends[v].ChangeGain(
                                                                                     move);
                                                                             SetRedrawWindow(true);
                                                                             break;
