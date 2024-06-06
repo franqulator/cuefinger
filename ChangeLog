@@ -3,6 +3,7 @@
 - Setting to switch MIX meter to pre/post
 - Save and restore scroll state for each server
 - Fader optimized and new meterscale
+- Clip LED
 - Layout optimized
 - Performance optimized
 - Fixed reload when session loaded in Console

@@ -546,6 +546,8 @@ void Send::Clear()
 	this->meter_level = fromDbFS(-144.0);
 	this->meter_level2 = fromDbFS(-144.0);
 	this->subscribed = false;
+	this->clip = false;
+	this->clip2 = false;
 }
 
 void Send::ChangePan(double pan_change, bool absolute)
@@ -656,6 +658,9 @@ void Channel::Clear()
 	this->meter_level2 = fromDbFS(-144.0);
 
 	this->subscribed = false;
+
+	this->clip = false;
+	this->clip2 = false;
 }
 void Channel::AllocSends(int _sendCount)
 {
@@ -693,7 +698,13 @@ void Channel::SubscribeSend(bool subscribe, int n)
 			cmd = root + "/meters/0/MeterLevel/";
 			UA_TCPClientSend(cmd.c_str());
 
+			cmd = root + "/meters/0/MeterClip/";
+			UA_TCPClientSend(cmd.c_str());
+
 			cmd = root + "/meters/1/MeterLevel/";
+			UA_TCPClientSend(cmd.c_str());
+
+			cmd = root + "/meters/1/MeterClip/";
 			UA_TCPClientSend(cmd.c_str());
 
 			//	cmd = root + "/Pan2/";
@@ -1063,7 +1074,13 @@ void UADevice::SubscribeChannel(bool subscribe, int type, int n)
 				cmd = root + "/meters/0/MeterLevel/";
 				UA_TCPClientSend(cmd.c_str());
 
+				cmd = root + "/meters/0/MeterClip/";
+				UA_TCPClientSend(cmd.c_str());
+
 				cmd = root + "/meters/1/MeterLevel/";
+				UA_TCPClientSend(cmd.c_str());
+
+				cmd = root + "/meters/1/MeterClip/";
 				UA_TCPClientSend(cmd.c_str());
 			}
 			
@@ -1862,6 +1879,12 @@ void UA_TCPClientProc(int msg, string data)
 											}
 										}
 
+										if (path_parameter[7] == "0" && path_parameter[8] == "MeterClip" && path_parameter[9] == "value")//inputs
+										{
+											send->clip = element["data"];
+											SetRedrawWindow(true);
+										}
+
 										if (path_parameter[7] == "1" && path_parameter[8] == "MeterLevel" && path_parameter[9] == "value")//inputs
 										{
 											double db = element["data"];
@@ -1871,6 +1894,12 @@ void UA_TCPClientProc(int msg, string data)
 												((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(send->meter_level2) * UA_METER_PRECISION))) {
 												SetRedrawWindow(true);
 											}
+										}
+
+										if (path_parameter[7] == "1" && path_parameter[8] == "MeterClip" && path_parameter[9] == "value")//inputs
+										{
+											send->clip2 = element["data"];
+											SetRedrawWindow(true);
 										}
 									}
 									else if (path_parameter[6] == "Gain" && send->channel->touch_point.action != TOUCH_ACTION_LEVEL)//sends
@@ -1912,6 +1941,11 @@ void UA_TCPClientProc(int msg, string data)
 									SetRedrawWindow(true);
 								}
 							}
+							if (path_parameter[5] == "0" && path_parameter[6] == "MeterClip" && path_parameter[7] == "value")//inputs
+							{
+								channel->clip = element["data"];
+								SetRedrawWindow(true);
+							}
 							if (path_parameter[5] == "1" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")//inputs
 							{
 								double db = element["data"];
@@ -1921,6 +1955,11 @@ void UA_TCPClientProc(int msg, string data)
 									((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
 									SetRedrawWindow(true);
 								}
+							}
+							if (path_parameter[5] == "1" && path_parameter[6] == "MeterClip" && path_parameter[7] == "value")//inputs
+							{
+								channel->clip2 = element["data"];
+								SetRedrawWindow(true);
 							}
 						}
 						else if (path_parameter[4] == "FaderLevel" && channel->touch_point.action != TOUCH_ACTION_LEVEL)//inputs
@@ -2120,6 +2159,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	double pan2 = 0;
 	double meter_level = fromDbFS(-144.0);
 	double meter_level2 = fromDbFS(-144.0);
+	bool clip = false;
+	bool clip2 = false;
 
 	Vector2D sz;
 	Vector2D stretch;
@@ -2131,6 +2172,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 		pan2 = channel->pan2;
 		meter_level = channel->meter_level;
 		meter_level2 = channel->meter_level2;
+		clip = channel->clip;
+		clip2 = channel->clip2;
 	}
 	else if(channel) {
 		for (int n = 0; n < channel->sendCount && n < g_btnSends.size(); n++) {
@@ -2140,6 +2183,8 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 				pan = channel->sends[n].pan;
 				meter_level = channel->sends[n].meter_level;
 				meter_level2 = channel->sends[n].meter_level2;
+				clip = channel->sends[n].clip;
+				clip2 = channel->sends[n].clip2;
 				break;
 			}
 		}
@@ -2299,6 +2344,25 @@ void DrawChannel(ChannelIndex index, float _x, float _y, float _width, float _he
 	stretch = Vector2D(g_fadertracker_width, g_fadertracker_height);
 	gfx->Draw(g_gsFader, x + (width - g_fadertracker_width) / 2.0f, y + height - toMeterScale(level) * (height - g_fadertracker_height) - g_fadertracker_height, NULL, 
 			GFX_NONE, 1.0f, 0, NULL, &stretch);
+
+	//Clip LED
+	gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f - 1.0f,
+		y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 1.0f - 7.0f,
+		7.0f, 7.0f);
+
+	gfx->DrawShape(GFX_RECTANGLE, clip ? METER_COLOR_RED : METER_COLOR_BG, x + g_channel_width * 0.75f,
+		y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 6.0f,
+		5.0f, 5.0f);
+
+	if (channel->stereo) {
+		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f + 5.0f,
+			y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 1.0f - 7.0f,
+			7.0f, 7.0f);
+
+		gfx->DrawShape(GFX_RECTANGLE, clip2 ? METER_COLOR_RED : METER_COLOR_BG, x + g_channel_width * 0.75f + 6.0f,
+			y + o - toMeterScale(DB_UNITY) * fader_rail_height + fader_rail_height - 6.0f,
+			5.0f, 5.0f);
+	}
 
 	//LEVELMETER
 	g_channel_slider_height = g_channel_height - g_fader_label_height - g_channel_pan_height;

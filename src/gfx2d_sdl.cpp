@@ -649,6 +649,8 @@ void GFXEngine::AbortUpdate()
 		if (!it->second->used) {
 			SDL_DestroyTexture(it->second->tx);
 			it = textRenderCache.erase(it);
+			if (it == textRenderCache.end())
+				break;
 		}
 		else {
 			it->second->used = false;
@@ -1513,7 +1515,7 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 			{
 				tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
 				if (tx_text) {
-					this->textRenderCache.insert_or_assign(uid, new GFXTextRenderCache(tx_text));
+					this->textRenderCache.insert({ uid, new GFXTextRenderCache(tx_text) });
 				}
 
 				SDL_FreeSurface(sf_text);

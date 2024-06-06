@@ -105,6 +105,7 @@ https://github.com/franqulator/cuefinger";
 #define METER_COLOR_BG		RGB(30, 30, 30)
 #define METER_COLOR_GREEN	RGB(62, 175, 72)
 #define METER_COLOR_YELLOW	RGB(200, 162, 42)
+#define METER_COLOR_RED		RGB(250, 62, 42)
 
 #define UA_SERVER_RESFRESH_TIME	20000 //in ms
 #define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
@@ -211,6 +212,8 @@ public:
 	double meter_level2;
 	Channel *channel;
 	bool subscribed;
+	bool clip;
+	bool clip2;
 
 	Send();
 	void Clear();
@@ -243,6 +246,8 @@ public:
 	float label_rotation;
 	int fader_group;
 	bool subscribed;
+	bool clip;
+	bool clip2;
 
 	Touchpoint touch_point;
 
