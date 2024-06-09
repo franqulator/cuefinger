@@ -79,9 +79,6 @@ https://github.com/franqulator/cuefinger";
 
 #define UA_MAX_SERVER_LIST_SETTING	7 
 
-#define BTN_CHECKBOX		1
-#define BTN_RADIOBUTTON	2
-
 #define ID_BTN_CONNECT			50 // +connection index
 #define ID_BTN_INFO				2
 #define ID_BTN_PAGELEFT			3
@@ -90,9 +87,6 @@ https://github.com/franqulator/cuefinger";
 #define ID_BTN_SENDS			100 // + send-index
 #define ID_BTN_SELECT_CHANNELS	6
 #define ID_BTN_CHANNELWIDTH		7
-
-#define ID_MENU_FULLSCREEN	4020
-#define ID_MENU_LOG	4021
 
 #define BTN_COLOR_YELLOW	0
 #define BTN_COLOR_RED		1
@@ -110,9 +104,6 @@ https://github.com/franqulator/cuefinger";
 #define UA_SERVER_RESFRESH_TIME	20000 //in ms
 #define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
 
-#define UA_INPUT	0
-#define UA_AUX		1
-
 #define TOUCH_ACTION_NONE	0
 #define TOUCH_ACTION_LEVEL	1
 #define TOUCH_ACTION_PAN	2
@@ -125,9 +116,14 @@ https://github.com/franqulator/cuefinger";
 #define UA_ALL_ENABLED_AND_ACTIVE	0
 #define UA_VISIBLE					1
 
+#define INPUT	0
+#define AUX		1
+
 #define SWITCH	-1
 #define ON		1
 #define OFF		0
+
+
 
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
@@ -173,8 +169,8 @@ public:
 	
 	Button(int _id=0, std::string _text="", int _x=0, int _y=0, int _w=0, int _h=0,
 					bool _checked=false, bool _enabled=true, bool _visible=true);
-	bool IsClicked(SDL_Point *pt);
-	void DrawButton(int color);
+	bool isClicked(SDL_Point *pt);
+	void draw(int color);
 };
 
 class Touchpoint {
@@ -190,21 +186,20 @@ public:
 	Touchpoint();
 };
 
-class ChannelIndex {
+class UADevice {
 public:
-	int deviceIndex;
-	int inputIndex;
-	ChannelIndex(int _deviceIndex, int _inputIndex);
-	bool IsValid();
+	string id;
+	bool online;
+	UADevice(string us_deviceId);
+	~UADevice();
 };
 
-class UADevice;
 class Channel;
 
 class Send {
 public:
-	string ua_id;
-	// string name;
+	string id;
+	string name;
 	double gain;
 	double pan;
 	bool bypass;
@@ -215,16 +210,19 @@ public:
 	bool clip;
 	bool clip2;
 
-	Send();
-	void Clear();
-	void ChangePan(double pan_change, bool absolute = false);//relative
-	void ChangeGain(double gain_change, bool absolute = false);//relative
-	void PressBypass(int state=SWITCH);
+	Send(Channel *channel, string id);
+	~Send();
+	void init();
+	void updateSubscription(bool subscribe);
+	void changePan(double pan_change, bool absolute = false);//relative
+	void changeGain(double gain_change, bool absolute = false);//relative
+	void pressBypass(int state=SWITCH);
 };
 
 class Channel {
 public:
-	string ua_id;
+	string id;
+	int type;
 	string name;
 	double level; // 0 - 4; 1 = unity, 2 = +6 dB, 4 = + 12dB
 	double pan;
@@ -233,8 +231,7 @@ public:
 	double meter_level;
 	double meter_level2;
 	UADevice *device;
-	Send *sends;
-	int sendCount;
+	vector<Send*> sends;
 	bool stereo;
 	string stereoname;
 	double pan2;
@@ -251,66 +248,47 @@ public:
 
 	Touchpoint touch_point;
 
-	Channel();
+	Channel(UADevice* device, string id, int type);
 	~Channel();
-	void Clear();
-	void AllocSends(int _sendCount);
-	void LoadSends(int sendIndex, string us_sendId);
-	void SubscribeSend(bool subscribe, int n);
-	bool IsTouchOnFader(Vector2D *pos);
-	bool IsTouchOnPan(Vector2D *pos);
-	bool IsTouchOnPan2(Vector2D *pos);
-	bool IsTouchOnMute(Vector2D *pos);
-	bool IsTouchOnSolo(Vector2D *pos);
-	bool IsTouchOnGroup1(Vector2D *pos);
-	bool IsTouchOnGroup2(Vector2D *pos);
-	void ChangeLevel(double level_change, bool absolute = false); //relative value
-	void ChangePan(double pan_change, bool absolute = false);//relative value
-	void ChangePan2(double pan_change, bool absolute = false);//relative value
-	void PressMute(int state=SWITCH);
-	void PressSolo(int state=SWITCH);
-	bool IsOverriddenShow(bool ignoreStereoname = false);
-	bool IsOverriddenHide(bool ignoreStereoname = false);
+	void init();
+	void updateSubscription(bool subscribe);
+	bool isTouchOnFader(Vector2D *pos);
+	bool isTouchOnPan(Vector2D *pos);
+	bool isTouchOnPan2(Vector2D *pos);
+	bool isTouchOnMute(Vector2D *pos);
+	bool isTouchOnSolo(Vector2D *pos);
+	bool isTouchOnGroup1(Vector2D *pos);
+	bool isTouchOnGroup2(Vector2D *pos);
+	void changeLevel(double level_change, bool absolute = false); //relative value
+	void changePan(double pan_change, bool absolute = false);//relative value
+	void changePan2(double pan_change, bool absolute = false);//relative value
+	void pressMute(int state=SWITCH);
+	void pressSolo(int state=SWITCH);
+	bool isOverriddenShow(bool ignoreStereoname = false);
+	bool isOverriddenHide(bool ignoreStereoname = false);
+	bool isVisible(bool only_selected);
 };
 
-class UADevice {
-public:
-	string ua_id;
-	bool online;
-	int inputsCount;
-	Channel *inputs;
-	int auxsCount;
-	Channel *auxs;
-
-	UADevice(string us_deviceId);
-	~UADevice();
-	void AllocChannels(int type, int _channelCount); // UA_INPUT or UA_AUX
-	bool LoadChannels(int type, int channelIndex, string us_inputId);
-	void SubscribeChannel(bool subscribe, int type, int n);
-	bool IsChannelVisible(int type, int index, bool only_selected);
-	int GetActiveChannelsCount(int type, int flag);
-	void ClearChannels();
-};
-
-void UA_TCPClientSend(const char* msg);
-bool Connect(int);
-void Disconnect();
-void Draw();
-bool LoadAllGfx();
-void ReleaseAllGfx();
-bool LoadServerSettings(string server_name, Button *btnSend);
-bool LoadServerSettings(string server_name, UADevice *dev);
-bool SaveServerSettings(string server_name);
-void CreateSendButtons(int sz);
-void UpdateConnectButtons();
-int GetAllChannelsCount(bool countWithHidden = true);
-void UpdateSubscriptions();
-void InitSettingsDialog();
-void ReleaseSettingsDialog();
-void CleanUp();
-void BrowseToChannel(string ua_dev, int channel);
-void GetMiddleVisibleChannel(string* ua_dev, int* channel);
-void CleanUpUADevices();
+void tcpClientSend(const char* msg);
+bool connect(int);
+void disconnect();
+void draw();
+bool loadAllGfx();
+void releaseAllGfx();
+bool loadServerSettings(string server_name, Button *btnSend);
+bool loadServerSettings(string server_name, UADevice *dev);
+bool saveServerSettings(string server_name);
+void createSendButtons(int sz);
+void updateConnectButtons();
+int getAllChannelsCount(bool countWithHidden = true);
+void updateSubscriptions();
+void initSettingsDialog();
+void releaseSettingsDialog();
+void cleanUp();
+void browseToSelectedChannel(int index);
+int getMiddleSelectedChannel();
+void cleanUpUADevices();
+void updateAllMuteBtnText();
 
 
 inline double toDbFS(double linVal) {

@@ -4,6 +4,8 @@
 - Save and restore scroll state for each server
 - Fader optimized and new meterscale
 - Clip LED
+- Mute All
+- AUX Returns
 - Layout optimized
 - Performance optimized
 - Fixed reload when session loaded in Console
