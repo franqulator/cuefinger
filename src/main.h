@@ -199,7 +199,6 @@ class Channel;
 class Send {
 public:
 	string id;
-	string name;
 	double gain;
 	double pan;
 	bool bypass;
@@ -231,7 +230,8 @@ public:
 	double meter_level;
 	double meter_level2;
 	UADevice *device;
-	vector<Send*> sends;
+	unordered_map<string, Send*> sendsByName;
+	unordered_map<string, Send*> sendsById;
 	bool stereo;
 	string stereoname;
 	double pan2;
@@ -267,6 +267,8 @@ public:
 	bool isOverriddenShow(bool ignoreStereoname = false);
 	bool isOverriddenHide(bool ignoreStereoname = false);
 	bool isVisible(bool only_selected);
+	Send* getSendByName(string name);
+	Send* getSendByUAId(string id);
 };
 
 void tcpClientSend(const char* msg);
@@ -278,7 +280,7 @@ void releaseAllGfx();
 bool loadServerSettings(string server_name, Button *btnSend);
 bool loadServerSettings(string server_name, UADevice *dev);
 bool saveServerSettings(string server_name);
-void createSendButtons(int sz);
+Button *addSendButton(string name);
 void updateConnectButtons();
 int getAllChannelsCount(bool countWithHidden = true);
 void updateSubscriptions();
