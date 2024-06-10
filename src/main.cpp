@@ -1653,24 +1653,27 @@ void tcpClientProc(int msg, string data)
 
 								if (g_channelsById.find(dev->id + type_str + id) == g_channelsById.end()) {
 									Channel* channel = new Channel(dev, id, path_parameter[2] == "inputs" ? INPUT : AUX);
-									g_channelsById.insert_or_assign(dev->id + type_str + id, channel);
+									g_channelsById.insert({ dev->id + type_str + id, channel });
 									int order = g_channelsInOrder.size();
 									if (channel->type == AUX) {
 										order += 1024; // ans ende sortieren
 									}
-									g_channelsInOrder.insert_or_assign(order, channel);
+									g_channelsInOrder.insert({ order, channel });
 
 									const dom::object obj = element["data"]["children"];
 									//load device info
-									int n = 0;
+									int n = channel->type == AUX ? 0 : 2;
 									for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
 										if (channel->type==AUX && n >= g_btnSends.size() - 2) {
 											break;
 										}
+										else {
+											n = n % g_btnSends.size();
+										}
 										string sendId = to_string(n++);
 										Send* send = new Send(channel, sendId);
-										channel->sendsByName.insert_or_assign(it->first, send);
-										channel->sendsById.insert_or_assign(sendId, send);
+										channel->sendsByName.insert({ it->first, send });
+										channel->sendsById.insert({ sendId, send });
 									}
 								}
 							}
