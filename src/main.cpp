@@ -1092,7 +1092,7 @@ void updateSubscriptions() {
 
 	bool btn_select = (g_btnSelectChannels->checked || g_btnReorderChannels->checked);
 
-	for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
+	for (map<int, Channel*>::iterator it = g_channelsInOrder.begin(); it != g_channelsInOrder.end(); ++it) {
 		bool subscribe = false;
 		if (it->second->isVisible(!btn_select)) {
 			if (count >= g_page * channels_per_page && count < (g_page + 1) * channels_per_page) {
