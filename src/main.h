@@ -112,6 +112,8 @@ https://github.com/franqulator/cuefinger";
 #define TOUCH_ACTION_MUTE	5
 #define TOUCH_ACTION_SELECT	6
 #define TOUCH_ACTION_GROUP	7
+#define TOUCH_ACTION_POST_FADER		8
+#define TOUCH_ACTION_REORDER	9
 
 #define UA_ALL_ENABLED_AND_ACTIVE	0
 #define UA_VISIBLE					1
@@ -139,6 +141,8 @@ public:
 	bool extended_logging;
 	unsigned int reconnect_time;
 	bool show_offline_devices;
+	string label_aux1;
+	string label_aux2;
 
 	Settings() {
 		x = 0;
@@ -170,7 +174,7 @@ public:
 	Button(int _id=0, std::string _text="", int _x=0, int _y=0, int _w=0, int _h=0,
 					bool _checked=false, bool _enabled=true, bool _visible=true);
 	bool isClicked(SDL_Point *pt);
-	void draw(int color);
+	void draw(int color, string overrideName="");
 };
 
 class Touchpoint {
@@ -219,32 +223,35 @@ public:
 };
 
 class Channel {
+private:
+	string name;
+	string stereoname;
 public:
 	string id;
 	int type;
-	string name;
+	string properties;
 	double level; // 0 - 4; 1 = unity, 2 = +6 dB, 4 = + 12dB
 	double pan;
 	bool solo;
 	bool mute;
+	bool post_fader;
 	double meter_level;
 	double meter_level2;
 	UADevice *device;
 	unordered_map<string, Send*> sendsByName;
 	unordered_map<string, Send*> sendsById;
 	bool stereo;
-	string stereoname;
 	double pan2;
 	bool hidden;
 	bool enabledByUser;
 	bool active;
-	bool selected_to_show;
 	char label_gfx;
 	float label_rotation;
 	int fader_group;
 	bool subscribed;
 	bool clip;
 	bool clip2;
+	bool selected_to_show;
 
 	Touchpoint touch_point;
 
@@ -257,18 +264,26 @@ public:
 	bool isTouchOnPan2(Vector2D *pos);
 	bool isTouchOnMute(Vector2D *pos);
 	bool isTouchOnSolo(Vector2D *pos);
+	bool isTouchOnPostFader(Vector2D* pos);
 	bool isTouchOnGroup1(Vector2D *pos);
 	bool isTouchOnGroup2(Vector2D *pos);
 	void changeLevel(double level_change, bool absolute = false); //relative value
 	void changePan(double pan_change, bool absolute = false);//relative value
 	void changePan2(double pan_change, bool absolute = false);//relative value
-	void pressMute(int state=SWITCH);
-	void pressSolo(int state=SWITCH);
-	bool isOverriddenShow(bool ignoreStereoname = false);
-	bool isOverriddenHide(bool ignoreStereoname = false);
+	void pressMute(int state = SWITCH);
+	void pressSolo(int state = SWITCH);
+	void pressPostFader(int state = SWITCH);
+	bool isOverriddenShow();
+	bool isOverriddenHide();
 	bool isVisible(bool only_selected);
 	Send* getSendByName(string name);
 	Send* getSendByUAId(string id);
+	void updateProperties();
+	string getName();
+	void setName(string name);
+	void setStereoname(string stereoname);
+	void setStereo(bool stereo);
+	bool getColor(unsigned int *color);
 };
 
 void tcpClientSend(const char* msg);
@@ -291,7 +306,7 @@ void browseToSelectedChannel(int index);
 int getMiddleSelectedChannel();
 void cleanUpUADevices();
 void updateAllMuteBtnText();
-
+void setRedrawWindow(bool redraw);
 
 inline double toDbFS(double linVal) {
 	if (linVal == 0.0)
