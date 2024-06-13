@@ -3328,7 +3328,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 				g_touchpointChannels.insert(channel);
 			}
 		}
-		else if (channel->isTouchOnPan(&relative_pos_pt))
+		else if (channel->isTouchOnPan(&relative_pos_pt) && channel->type == INPUT)
 		{
 			if (touchinput)
 			{
@@ -3351,7 +3351,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 
 			channel->updateSubscription(false, PAN);
 		}
-		else if (channel->isTouchOnPan2(&relative_pos_pt))
+		else if (channel->isTouchOnPan2(&relative_pos_pt) && channel->type == INPUT)
 		{
 			if (touchinput)
 			{
@@ -3437,7 +3437,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 			}
 			g_touchpointChannels.insert(channel);
 		}
-		else if (channel->isTouchOnSolo(&relative_pos_pt))
+		else if (channel->isTouchOnSolo(&relative_pos_pt) && channel->type == INPUT)
 		{
 			if(touchinput)
 			{
@@ -3472,7 +3472,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 			}
 			g_touchpointChannels.insert(channel);
 		}
-		else if (channel->isTouchOnPostFader(&relative_pos_pt))
+		else if (channel->isTouchOnPostFader(&relative_pos_pt) && channel->type == AUX)
 		{
 			if (touchinput)
 			{
@@ -3507,7 +3507,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 			}
 			g_touchpointChannels.insert(channel);
 		}
-		else if (channel->isTouchOnGroup1(&relative_pos_pt))
+		else if (channel->isTouchOnGroup1(&relative_pos_pt) && channel->type != MASTER)
 		{
 			if (touchinput)
 			{
@@ -3525,7 +3525,7 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 			g_touchpointChannels.insert(channel);
 			setRedrawWindow(true);
 		}
-		else if (channel->isTouchOnGroup2(&relative_pos_pt))
+		else if (channel->isTouchOnGroup2(&relative_pos_pt) && channel->type != MASTER)
 		{
 			if (touchinput)
 			{
@@ -3715,7 +3715,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		else if (channel->touch_point.action == TOUCH_ACTION_SOLO)
 		{
 			Channel* hover_channel = getChannelByPosition(pos_pt);
-			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse)
+			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse && hover_channel->type == INPUT)
 			{
 				Vector2D relative_pos_pt = pos_pt;
 				relative_pos_pt.subtractX(g_channel_offset_x);
@@ -3758,7 +3758,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		else if (channel->touch_point.action == TOUCH_ACTION_POST_FADER)
 		{
 			Channel* hover_channel = getChannelByPosition(pos_pt);
-			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse)
+			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse && hover_channel->type == AUX)
 			{
 				Vector2D relative_pos_pt = pos_pt;
 				relative_pos_pt.subtractX(g_channel_offset_x);
@@ -3802,7 +3802,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		{
 			Channel* hover_channel = getChannelByPosition(pos_pt);
 
-			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse)
+			if (hover_channel && hover_channel->touch_point.id == 0 && !hover_channel->touch_point.is_mouse && hover_channel->type != MASTER)
 			{
 				Vector2D relative_pos_pt = pos_pt;
 				relative_pos_pt.subtractX(g_channel_offset_x);
