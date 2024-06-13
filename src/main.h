@@ -120,10 +120,32 @@ https://github.com/franqulator/cuefinger";
 
 #define INPUT	0
 #define AUX		1
+#define MASTER	2
 
 #define SWITCH	-1
 #define ON		1
 #define OFF		0
+
+#define NONE		0x00
+#define PRESSED		0x01
+#define RELEASED	0x02
+#define CHECKED		0x10
+
+#define BUTTON		0
+#define CHECK		1
+#define RADIO		2
+
+#define ALL				0b000111111111
+#define LEVEL			0b000000000001
+#define PAN				0b000000000010
+#define METER			0b000000000100
+#define SOLO			0b000000001000
+#define MUTE			0b000000010000
+#define SEND_POST		0b000000100000
+#define NAME			0b000001000000
+#define STATE			0b000010000000
+#define STEREO			0b000100000000
+#define ALL_MIXES		0b001000000000
 
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
@@ -159,15 +181,6 @@ public:
 	bool save();
     string toJSON();
 };
-
-#define NONE		0x00
-#define PRESSED		0x01
-#define RELEASED	0x02
-#define CHECKED		0x10
-
-#define BUTTON		0
-#define CHECK		1
-#define RADIO		2
 
 class Button {
 private:
@@ -231,23 +244,22 @@ class Channel;
 class Send {
 public:
 	string id;
-	double gain;
+	double level;
 	double pan;
-	bool bypass;
+	bool mute;
 	double meter_level;
 	double meter_level2;
 	Channel *channel;
-	bool subscribed;
+	int subscriptions;
 	bool clip;
 	bool clip2;
 
 	Send(Channel *channel, string id);
 	~Send();
-	void init();
-	void updateSubscription(bool subscribe);
+	void updateSubscription(bool subscribe, int flags);
 	void changePan(double pan_change, bool absolute = false);//relative
-	void changeGain(double gain_change, bool absolute = false);//relative
-	void pressBypass(int state=SWITCH);
+	void changeLevel(double gain_change, bool absolute = false);//relative
+	void pressMute(int state=SWITCH);
 };
 
 class Channel {
@@ -276,7 +288,7 @@ public:
 	int label_gfx;
 	float label_rotation;
 	int fader_group;
-	bool subscribed;
+	int subscriptions;
 	bool clip;
 	bool clip2;
 	bool selected_to_show;
@@ -285,8 +297,7 @@ public:
 
 	Channel(UADevice* device, string id, int type);
 	~Channel();
-	void init();
-	void updateSubscription(bool subscribe);
+	void updateSubscription(bool subscribe, int flags);
 	bool isTouchOnFader(Vector2D *pos);
 	bool isTouchOnPan(Vector2D *pos);
 	bool isTouchOnPan2(Vector2D *pos);
@@ -312,6 +323,7 @@ public:
 	void setStereoname(string stereoname);
 	void setStereo(bool stereo);
 	bool getColor(unsigned int *color);
+	void draw(float x, float y, float width, float height);
 };
 
 void tcpClientSend(const char* msg);
@@ -347,12 +359,12 @@ inline double fromDbFS(double dbVal) {
 	return pow(10.0, dbVal / 20.0);
 }
 
-inline double toMeterScale(double dbVal) {
-	return pow(dbVal, 0.2) / pow(4.0, 0.2);
+inline double toMeterScale(double linVal) {
+	return pow(linVal, 0.2) / pow(4.0, 0.2);
 }
 
-inline double fromMeterScale(double linVal) {
-	return pow(linVal * pow(4.0, 0.2), 1.0 / 0.2);
+inline double fromMeterScale(double taperedVal) {
+	return pow(taperedVal * pow(4.0, 0.2), 1.0 / 0.2);
 }
 
 #endif

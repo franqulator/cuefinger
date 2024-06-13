@@ -5,16 +5,20 @@
 - Mute All
 - AUX Returns
 - Override name for AUX 1/AUX 2
+- master für MIX (ctrl-room)
 - Changed show/hide override via channel name to ?s or ?h (e.g. Vocals ?s)
 - Colorcoding via channel name (use ?r for red, e.g. Vocals ?r; rgbypo)
+- Fixed levels in fadergroup
 - Setting to show/hide offline devices
 - Setting to switch MIX meter to pre/post
 - Save and restore scroll state for each server
 - Buttonhandling optimized
+- Moved toggle fullscreen to settings
 - Layout optimized
 - Performance optimized
 - Fixed reload when session loaded in Console
 - Bugfixes
+
 
 --- v1.2.0 ---
 - GUI for settings
