@@ -93,7 +93,7 @@ https://github.com/franqulator/cuefinger";
 #define BTN_COLOR_GREEN		2
 #define BTN_COLOR_BLUE		3
 
-#define DB_UNITY			1.0
+#define UNITY				1.0
 #define METER_THRESHOLD		-76.0
 #define METER_COLOR_BORDER	RGB(90, 90, 120)
 #define METER_COLOR_BG		RGB(30, 30, 30)
@@ -124,8 +124,6 @@ https://github.com/franqulator/cuefinger";
 #define SWITCH	-1
 #define ON		1
 #define OFF		0
-
-
 
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
@@ -162,18 +160,47 @@ public:
     string toJSON();
 };
 
+#define NONE		0x00
+#define PRESSED		0x01
+#define RELEASED	0x02
+#define CHECKED		0x10
+
+#define BUTTON		0
+#define CHECK		1
+#define RADIO		2
+
 class Button {
-public:
+private:
 	int id;
 	std::string text;
-	SDL_Rect rc;
-	bool checked;
+	float x, y, w, h;
+	int type;
+	int state;
 	bool enabled;
 	bool visible;
-	
-	Button(int _id=0, std::string _text="", int _x=0, int _y=0, int _w=0, int _h=0,
-					bool _checked=false, bool _enabled=true, bool _visible=true);
-	bool isClicked(SDL_Point *pt);
+	void (*onStateChanged)(Button *btn);
+public:
+	Button(int type=BUTTON, int id = 0, std::string text = "", float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+		bool checked = false, bool enabled = true, bool visible = true, void (*onStateChanged)(Button *btn) = NULL);
+	bool onPress(SDL_Point *pt);
+	bool onRelease();
+	void setCheck(bool check);
+	bool isChecked();
+	int getState();
+	void setVisible(bool visible);
+	bool isVisible();
+	void setEnable(bool enabled);
+	bool isEnabled();
+	void setText(string text);
+	string getText();
+	void setBounds(float x, float y, float w, float h);
+	void setSize(float w, float h);
+	float getX();
+	float getY();
+	float getWidth();
+	float getHeight();
+	int getId();
+	bool isHighlighted();
 	void draw(int color, string overrideName="");
 };
 
@@ -194,6 +221,7 @@ class UADevice {
 public:
 	string id;
 	bool online;
+	int channelsTotal;
 	UADevice(string us_deviceId);
 	~UADevice();
 };
@@ -245,7 +273,7 @@ public:
 	bool hidden;
 	bool enabledByUser;
 	bool active;
-	char label_gfx;
+	int label_gfx;
 	float label_rotation;
 	int fader_group;
 	bool subscribed;
@@ -293,7 +321,7 @@ void draw();
 bool loadAllGfx();
 void releaseAllGfx();
 bool loadServerSettings(string server_name, Button *btnSend);
-bool loadServerSettings(string server_name, UADevice *dev);
+bool loadServerSettings(string server_name);
 bool saveServerSettings(string server_name);
 Button *addSendButton(string name);
 void updateConnectButtons();
@@ -307,6 +335,7 @@ int getMiddleSelectedChannel();
 void cleanUpUADevices();
 void updateAllMuteBtnText();
 void setRedrawWindow(bool redraw);
+void updateChannelWidthButton();
 
 inline double toDbFS(double linVal) {
 	if (linVal == 0.0)

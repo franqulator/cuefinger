@@ -52,8 +52,6 @@ using namespace std;
 bool GetClientIPs(void(*MessageCallback)(string ip));
 string GetComputerNameByIP(string ip);
 
-static int receiveThread(void *param);
-
 class TCPClient
 {
 private:

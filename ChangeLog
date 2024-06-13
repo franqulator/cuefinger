@@ -1,5 +1,5 @@
 --- v1.3.0 ---
-- Reorder channels
+- Reorder channels, save and restore order, reset order by holding reorder-button
 - Fader optimized and new meterscale
 - Clip LED
 - Mute All
@@ -10,6 +10,7 @@
 - Setting to show/hide offline devices
 - Setting to switch MIX meter to pre/post
 - Save and restore scroll state for each server
+- Buttonhandling optimized
 - Layout optimized
 - Performance optimized
 - Fixed reload when session loaded in Console
