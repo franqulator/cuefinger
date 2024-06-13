@@ -5489,7 +5489,7 @@ int main(int argc, char* argv[]) {
                                                             }
                                                             setRedrawWindow(true);
                                                         }
-														else if (channel->isTouchOnFader(&relative_cursor_pt)) //level
+														else if (channel->isTouchOnFader(&relative_cursor_pt) && channel->type != MASTER) //level
                                                         {
                                                             if (g_btnMix->isHighlighted()) {
                                                                 channel->changeLevel(UNITY, true);
@@ -5609,7 +5609,7 @@ int main(int argc, char* argv[]) {
 								relative_pos_pt.subtractY(g_channel_offset_y);
 								if (channel->isTouchOnFader(&relative_pos_pt) || channel->isTouchOnPan(&relative_pos_pt) 
 									|| channel->isTouchOnPan2(&relative_pos_pt)) {
-									float move = (float)e.wheel.preciseY * 20.0f;
+									float move = (float)e.wheel.y * 20.0f;
 									if (e.wheel.direction & SDL_MOUSEWHEEL_FLIPPED) {
 										move = -move;
 									}
