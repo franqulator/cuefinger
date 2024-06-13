@@ -748,9 +748,13 @@ void Send::changePan(double pan_change, bool absolute)
 
 void Send::changeLevel(double level_change, bool absolute)
 {
-	double _level = fromMeterScale(toMeterScale(this->level) + level_change);
-	if (absolute)
+	double _level = 0.0;
+	if (absolute) {
 		_level = level_change;
+	}
+	else {
+		_level = fromMeterScale(toMeterScale(this->level) + level_change);
+	}
 
 	_level = min(_level, 4.0);
 	_level = max(_level, fromDbFS(-144.0));
@@ -1034,10 +1038,14 @@ void Channel::changePan2(double pan_change, bool absolute)
 
 void Channel::changeLevel(double level_change, bool absolute)
 {
-	double _level = fromMeterScale(toMeterScale(this->level) + level_change);
+	double _level = 0;
 
-	if (absolute)
+	if (absolute) {
 		_level = level_change;
+	}
+	else {
+		_level = fromMeterScale(toMeterScale(this->level) + level_change);
+	}
 
 	
 	if (this->type == MASTER) {
@@ -3260,7 +3268,7 @@ string getCheckedConnectionButton() {
 
 void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 {
-	Vector2D pos_pt = { -1,-1 };
+	Vector2D pos_pt(0, 0);
 
 	if (touchinput)
 	{
@@ -3272,6 +3280,9 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 	else if (mouse_pt)
 	{
 		pos_pt = *mouse_pt;
+	}
+	else {
+		return;
 	}
 
 	Channel *channel = getChannelByPosition(pos_pt);
@@ -3593,7 +3604,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 
 	if (channel && ( (mouse_pt && channel->touch_point.is_mouse) || (touchinput  && channel->touch_point.id) ))
 	{
-		Vector2D pos_pt = { -1,-1 };
+		Vector2D pos_pt(0, 0);
 
 		if (touchinput)
 		{
@@ -3604,6 +3615,9 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		}
 		else if (mouse_pt) {
 			pos_pt = *mouse_pt;
+		}
+		else {
+			return;
 		}
 
 		channel->touch_point.pt_end_x = pos_pt.getX();
@@ -3825,7 +3839,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		}
 		else if (channel->touch_point.action == TOUCH_ACTION_PAN)
 		{
-			double pan_move = (double)(channel->touch_point.pt_end_x - channel->touch_point.pt_start_x) / g_channel_width;
+			double pan_move = (double)((channel->touch_point.pt_end_x - channel->touch_point.pt_start_x) / g_channel_width);
 
 			if (abs(pan_move) > UA_SENDVALUE_RESOLUTION)
 			{
@@ -3854,7 +3868,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		}
 		else if (channel->touch_point.action == TOUCH_ACTION_PAN2)
 		{
-			double pan_move = (double)(channel->touch_point.pt_end_x - channel->touch_point.pt_start_x) / g_channel_width;
+			double pan_move = (double)((channel->touch_point.pt_end_x - channel->touch_point.pt_start_x) / g_channel_width);
 
 			if (abs(pan_move) > UA_SENDVALUE_RESOLUTION)
 			{
@@ -3870,7 +3884,7 @@ void onTouchDrag(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 		}
 		else if (channel->touch_point.action == TOUCH_ACTION_LEVEL)
 		{
-			double fader_move = -(double)(channel->touch_point.pt_end_y - channel->touch_point.pt_start_y) / g_channel_slider_height;
+			double fader_move = -(double)((channel->touch_point.pt_end_y - channel->touch_point.pt_start_y) / g_channel_slider_height);
 
 			if (abs(fader_move) > UA_SENDVALUE_RESOLUTION)
 			{
