@@ -3,7 +3,7 @@
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
 
-In a recording studio this gives the studio musician the possibility to access the cue mix via a linux or windows tablet.
+In a recording studio this gives the studio musician the possibility to access the cue mix via a linux, android or windows tablet.
 Multiple connections from different devices at the same time are possible. E.g using an UA Apollo interface with 4 cue busses together with 4 tablet-pcs makes it possible for 4 musicians to each control their individual cue mix.
 
 I use cuefinger in my studio since a few years now. Until now I couldn't find the time to publish it for others to use, but better late than never.
@@ -44,10 +44,19 @@ https://github.com/raduvarga/UA-Midi-Control
 
 ---
 
-## Android Preview
+## Donations
+
+If you like and use Cuefinger you can donate by buying one of my songs on <a href="https://franqulator.de">franqulator.de</a> (via <a href="https://franqulator.bandcamp.com">franqulator.bandcamp.com</a>).
+
+
+---
+
+## Android
 ### Sideload APK
 You can download the apk-file here:
 <a href ="https://github.com/franqulator/cuefinger/tree/main/build/android">https://github.com/franqulator/cuefinger/tree/main/build/android</a>
+
+Soon on Google Play store.
 
 ---
 
