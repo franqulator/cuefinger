@@ -97,10 +97,10 @@ You might need to install the SDL2 developer libraries:
 
 ---
 ## Screenshots
-Here are some screenshots of it's scalable GUI and the select channels feature:
-![Screenshot 2024-03-07 133925](https://github.com/franqulator/cuefinger/assets/97669947/96e54cd6-a9e3-4b98-8e4e-5e732f7be527)
-![Screenshot 2024-03-07 134025](https://github.com/franqulator/cuefinger/assets/97669947/d6636c4e-30c6-44a2-842a-a49c6fc928d2)
-![Screenshot 2024-03-07 134614](https://github.com/franqulator/cuefinger/assets/97669947/5cc8ad68-d18d-40b2-9638-c45215067027)
-![Screenshot 2024-03-07 134546](https://github.com/franqulator/cuefinger/assets/97669947/6ef12605-6ce7-4bb0-88f8-fc9e52d3e9be)
-![Screenshot 2024-03-07 134119](https://github.com/franqulator/cuefinger/assets/97669947/34c141f0-b8a3-4a0d-849c-fea6bef0631b)
-
+Here are some screenshots of it's responsive GUI and the select channels feature:
+![Screenshot 2024-06-14 182150](https://github.com/franqulator/cuefinger/assets/97669947/7a134bdd-e64b-4a34-be21-a5623b57c3d8)
+![Screenshot 2024-06-14 182353](https://github.com/franqulator/cuefinger/assets/97669947/44096b95-a7db-49f5-9842-79d1a767d560)
+![Screenshot 2024-06-14 182422](https://github.com/franqulator/cuefinger/assets/97669947/bd7e8f7d-6de4-45bc-b676-a4bcd37e5f90)
+![Screenshot 2024-06-14 182529](https://github.com/franqulator/cuefinger/assets/97669947/bb107a5b-4f8d-4206-a351-1f25514516ff)
+![Screenshot 2024-06-14 182719](https://github.com/franqulator/cuefinger/assets/97669947/9dbd973a-4ebb-44cc-aa13-be88ca3b502e)
+![Screenshot 2024-06-14 182727](https://github.com/franqulator/cuefinger/assets/97669947/e1a6a694-e5a8-4ce5-b9ed-b4535765eee3)
