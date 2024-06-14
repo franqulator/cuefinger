@@ -38,7 +38,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.0";
+const string APP_VERSION = "1.3.1";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -71,7 +71,7 @@ https://github.com/franqulator/cuefinger";
 #define WM_UPDATE_CONNECTBUTTONS	WM_APP+8
 #define WM_CONNECTION_LOST			WM_APP+11
 
-#define UA_SENDVALUE_RESOLUTION	0.005 // auflösung um performance zu verbessern und netzwerklast zu reduzieren => entspricht einer Rasterung auf 200 Stufen (1 / 0.005)
+#define UA_SENDVALUE_RESOLUTION	0.002 // auflösung um performance zu verbessern und netzwerklast zu reduzieren => entspricht einer Rasterung auf 500 Stufen (1 / 0.002)
 #define UA_METER_PRECISION	800.0
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
@@ -239,65 +239,65 @@ public:
 	~UADevice();
 };
 
-class Channel;
-
-class Send {
+class Module {
 public:
 	string id;
-	double level;
+	double level; // 0 - 4; 1 = unity, 2 = +6 dB, 4 = + 12dB
 	double pan;
+	double pan2;
 	bool mute;
 	double meter_level;
 	double meter_level2;
-	Channel *channel;
 	int subscriptions;
 	bool clip;
 	bool clip2;
-
-	Send(Channel *channel, string id);
-	~Send();
-	void updateSubscription(bool subscribe, int flags);
-	void changePan(double pan_change, bool absolute = false);//relative
-	void changeLevel(double gain_change, bool absolute = false);//relative
-	void pressMute(int state=SWITCH);
+	Module(string id);
+	virtual void changeLevel(double level_change, bool absolute = false) {};
+	virtual void changePan(double pan_change, bool absolute = false) {};
+	virtual void changePan2(double pan_change, bool absolute = false) {};
+	virtual void pressMute(int state = SWITCH) {};
 };
 
-class Channel {
+class Channel;
+
+class Send : public Module {
+public:
+	Channel *channel;
+
+	Send(Channel* channel, string id);
+	~Send();
+	void updateSubscription(bool subscribe, int flags);
+	void changeLevel(double level_change, bool absolute = false) override; 
+	void changePan(double pan_change, bool absolute = false) override;
+	void pressMute(int state = SWITCH) override;
+};
+
+class Channel : public Module {
 private:
 	string name;
 	string stereoname;
 public:
-	string id;
 	int type;
+	UADevice* device;
 	string properties;
-	double level; // 0 - 4; 1 = unity, 2 = +6 dB, 4 = + 12dB
-	double pan;
 	bool solo;
-	bool mute;
 	bool post_fader;
-	double meter_level;
-	double meter_level2;
-	UADevice *device;
 	unordered_map<string, Send*> sendsByName;
 	unordered_map<string, Send*> sendsById;
 	bool stereo;
-	double pan2;
 	bool hidden;
 	bool enabledByUser;
 	bool active;
 	int label_gfx;
 	float label_rotation;
 	int fader_group;
-	int subscriptions;
-	bool clip;
-	bool clip2;
 	bool selected_to_show;
 
 	Touchpoint touch_point;
 
 	Channel(UADevice* device, string id, int type);
 	~Channel();
-	void updateSubscription(bool subscribe, int flags);
+	void updateSubscription(bool subscribe, int flags); // also handles subscrption for sends
 	bool isTouchOnFader(Vector2D *pos);
 	bool isTouchOnPan(Vector2D *pos);
 	bool isTouchOnPan2(Vector2D *pos);
@@ -306,10 +306,6 @@ public:
 	bool isTouchOnPostFader(Vector2D* pos);
 	bool isTouchOnGroup1(Vector2D *pos);
 	bool isTouchOnGroup2(Vector2D *pos);
-	void changeLevel(double level_change, bool absolute = false); //relative value
-	void changePan(double pan_change, bool absolute = false);//relative value
-	void changePan2(double pan_change, bool absolute = false);//relative value
-	void pressMute(int state = SWITCH);
 	void pressSolo(int state = SWITCH);
 	void pressPostFader(int state = SWITCH);
 	bool isOverriddenShow();
@@ -324,6 +320,11 @@ public:
 	void setStereo(bool stereo);
 	bool getColor(unsigned int *color);
 	void draw(float x, float y, float width, float height);
+	Module* getModule(string mixBus);
+	void changeLevel(double level_change, bool absolute = false) override;
+	void changePan(double pan_change, bool absolute = false) override;
+	void changePan2(double pan_change, bool absolute = false) override;
+	void pressMute(int state = SWITCH) override;
 };
 
 void tcpClientSend(const char* msg);
@@ -350,7 +351,7 @@ void setRedrawWindow(bool redraw);
 void updateChannelWidthButton();
 
 inline double toDbFS(double linVal) {
-	if (linVal == 0.0)
+	if (linVal <= 0.0)
 		return -144.0;
 	return 20.0 * log10(linVal);
 }

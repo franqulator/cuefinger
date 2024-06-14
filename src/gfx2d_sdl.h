@@ -313,7 +313,7 @@ public:
 
 class GFXEngine {
 private:
-	SDL_Window* window=NULL;
+	SDL_Window* window;
 //	SDL_Surface *window_surface=NULL;
 	SDL_Renderer *renderer;
 	int renderer_width, renderer_height;

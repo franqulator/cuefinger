@@ -1,3 +1,9 @@
+--- v1.3.1 ---
+- Improved fader movement
+- Bugifx: fader jump in fader group
+- Bugfix: possible incorrect levels of fader group
+- Bugfix: possible crash at startup
+
 --- v1.3.0 ---
 - Reorder channels, save and restore order, reset order by holding reorder-button
 - Fader optimized and new meterscale
