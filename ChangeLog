@@ -3,6 +3,7 @@
 - Bugifx: fader jump in fader group
 - Bugfix: possible incorrect levels of fader group
 - Bugfix: possible crash at startup
+- Bugfix: missing font in release-package
 
 --- v1.3.0 ---
 - Reorder channels, save and restore order, reset order by holding reorder-button
