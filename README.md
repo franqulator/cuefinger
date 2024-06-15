@@ -98,9 +98,8 @@ You might need to install the SDL2 developer libraries:
 ---
 ## Screenshots
 Here are some screenshots of it's responsive GUI and the select channels feature:
-![Screenshot 2024-06-14 182150](https://github.com/franqulator/cuefinger/assets/97669947/7a134bdd-e64b-4a34-be21-a5623b57c3d8)
-![Screenshot 2024-06-14 182353](https://github.com/franqulator/cuefinger/assets/97669947/44096b95-a7db-49f5-9842-79d1a767d560)
-![Screenshot 2024-06-14 182422](https://github.com/franqulator/cuefinger/assets/97669947/bd7e8f7d-6de4-45bc-b676-a4bcd37e5f90)
-![Screenshot 2024-06-14 182529](https://github.com/franqulator/cuefinger/assets/97669947/bb107a5b-4f8d-4206-a351-1f25514516ff)
-![Screenshot 2024-06-14 182719](https://github.com/franqulator/cuefinger/assets/97669947/9dbd973a-4ebb-44cc-aa13-be88ca3b502e)
-![Screenshot 2024-06-14 182727](https://github.com/franqulator/cuefinger/assets/97669947/e1a6a694-e5a8-4ce5-b9ed-b4535765eee3)
+
+![Screenshot 2024-06-15 175747](https://github.com/franqulator/cuefinger/assets/97669947/d91d73d1-799e-4311-9f93-802fed8a300e)
+![Screenshot 2024-06-15 180231](https://github.com/franqulator/cuefinger/assets/97669947/82518e39-df4c-4a3f-b73b-8fcc521c75dd)
+![Screenshot 2024-06-15 180716](https://github.com/franqulator/cuefinger/assets/97669947/7e8246ac-7951-40e0-a0b1-da4a6cd4fe0e)
+![Screenshot 2024-06-15 180910](https://github.com/franqulator/cuefinger/assets/97669947/84f638e7-8a02-4fea-bce9-6ba9a81f38c1)
