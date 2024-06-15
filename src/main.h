@@ -38,7 +38,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.1";
+const string APP_VERSION = "1.3.2";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -114,9 +114,6 @@ https://github.com/franqulator/cuefinger";
 #define TOUCH_ACTION_GROUP	7
 #define TOUCH_ACTION_POST_FADER		8
 #define TOUCH_ACTION_REORDER	9
-
-#define UA_ALL_ENABLED_AND_ACTIVE	0
-#define UA_VISIBLE					1
 
 #define INPUT	0
 #define AUX		1
@@ -338,7 +335,6 @@ bool loadServerSettings(string server_name);
 bool saveServerSettings(string server_name);
 Button *addSendButton(string name);
 void updateConnectButtons();
-int getAllChannelsCount(bool countWithHidden = true);
 void updateSubscriptions();
 void initSettingsDialog();
 void releaseSettingsDialog();
@@ -349,6 +345,8 @@ void cleanUpUADevices();
 void updateAllMuteBtnText();
 void setRedrawWindow(bool redraw);
 void updateChannelWidthButton();
+void muteChannels(bool, bool);
+int getActiveChannelsCount(bool onlyVisible);
 
 inline double toDbFS(double linVal) {
 	if (linVal <= 0.0)

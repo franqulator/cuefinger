@@ -37,8 +37,12 @@ SDL_TimerID g_timer_network_timeout = 0;
 SDL_TimerID g_timer_network_send_timeout_msg = 0;
 SDL_TimerID g_timerFlipPage = 0;
 SDL_TimerID g_timerResetOrder = 0;
+SDL_TimerID g_timerUnmuteAll = 0;
+SDL_TimerID g_timerSelectAllChannels = 0;
 int g_dragPageFlip = 0;
 int g_resetOrderCountdown = 0;
+int g_unmuteAllCountdown = 0;
+int g_selectAllChannelsCountdown = 0;
 
 Settings g_settings;
 map<string, string> serverSettingsJSON;
@@ -139,7 +143,7 @@ unordered_map<string, Channel*> g_channelsById;
 map<int, Channel*> g_channelsInOrder;
 set<Channel*> g_touchpointChannels;
 set<string> g_channelsMutedBeforeAllMute;
-
+string g_masterChannelId;
 
 string json_workaround_secure_unicode_characters(string input)
 {
@@ -226,7 +230,7 @@ int calculateChannelsPerPage() {
 }
 
 int maxPages() {
-	return (getAllChannelsCount(false) - 1) / g_channels_per_page;
+	return (getActiveChannelsCount(true) - 1) / g_channels_per_page;
 }
 
 void updateMaxPages() {
@@ -301,7 +305,7 @@ void updateLayout() {
 	g_channel_offset_x = (win_width - (float)g_channels_per_page * g_channel_width) / 2.0f;
 	g_channel_offset_y = (win_height - (float)g_channel_height) / 2.0f;
 
-	g_channel_btn_size = g_channel_width * 0.4f;
+	g_channel_btn_size = min(g_btn_height * 0.8f, g_channel_width * 0.4f);
 	if (g_channel_btn_size > g_channel_height / 10.0f)
 		g_channel_btn_size = g_channel_height / 10.0f;
 
@@ -1072,7 +1076,7 @@ void Channel::pressMute(int state)
 		value = "false";
 
 	if (this->type == MASTER) {
-		string msg = "set /devices/" + this->device->id + "/outputs/4/Mute/value/ " + value;
+		string msg = "set /devices/" + this->device->id + "/outputs/" + this->id + "/Mute/value/ " + value;
 		tcpClientSend(msg.c_str());
 	}
 	else {
@@ -1178,27 +1182,31 @@ bool Channel::getColor(unsigned int *color) {
 		else {
 			if (properties.length() > 0) {
 				if (properties.find("r") != string::npos || properties.find("R") != string::npos) {
-					*color = RGB(150, 10, 10);
+					*color = RGB(140, 5, 5);
 					return true;
 				}
 				else if (properties.find("g") != string::npos || properties.find("G") != string::npos) {
-					*color = RGB(00, 140, 20);
+					*color = RGB(0, 140, 20);
+					return true;
+				}
+				else if (properties.find("bl") != string::npos || properties.find("BL") != string::npos) {
+					*color = RGB(1, 1, 1);
 					return true;
 				}
 				else if (properties.find("b") != string::npos || properties.find("B") != string::npos) {
-					*color = RGB(00, 70, 200);
+					*color = RGB(0, 50, 180);
 					return true;
 				}
 				else if (properties.find("y") != string::npos || properties.find("Y") != string::npos) {
-					*color = RGB(180, 180, 10);
+					*color = RGB(170, 170, 10);
 					return true;
 				}
 				else if (properties.find("p") != string::npos || properties.find("P") != string::npos) {
-					*color = RGB(100, 30, 180);
+					*color = RGB(80, 10, 170);
 					return true;
 				}
 				else if (properties.find("o") != string::npos || properties.find("O") != string::npos) {
-					*color = RGB(200, 100, 30);
+					*color = RGB(190, 90, 20);
 					return true;
 				}
 			}
@@ -1362,7 +1370,7 @@ UADevice::UADevice(string us_deviceId) {
 UADevice::~UADevice() {
 }
 
-int getActiveChannelsCount(int flag)
+int getActiveChannelsCount(bool onlyVisible)
 {
 	if (g_channelsInOrder.empty()) {
 		return 0;
@@ -1374,15 +1382,16 @@ int getActiveChannelsCount(int flag)
 	bool btn_select = g_btnSelectChannels->isHighlighted();
 
 	for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-		if (!it->second->enabledByUser || !it->second->active)
+		if (!it->second->enabledByUser || !it->second->active || it->second->hidden)
 			continue;
 		if (it->second->isVisible(!btn_select))
 			visibleChannelsCount++;
 		activeChannelsCount++;
 	}
 
-	if(flag==UA_VISIBLE)
+	if (onlyVisible) {
 		return visibleChannelsCount;
+	}
 
 	return activeChannelsCount;
 }
@@ -1396,6 +1405,7 @@ void clearChannels() {
 	g_channelsById.clear();
 	g_channelsInOrder.clear();
 	g_touchpointChannels.clear();
+	g_masterChannelId = "";
 }
 
 void updateSubscriptions() {
@@ -1424,16 +1434,6 @@ void updateSubscriptions() {
 			(*it)->updateSubscription(true, LEVEL | METER | PAN | SOLO);
 		}
 	}
-}
-
-int getAllChannelsCount(bool countWithHidden)
-{
-	if (countWithHidden)
-		return getActiveChannelsCount(UA_ALL_ENABLED_AND_ACTIVE);
-	else
-		return getActiveChannelsCount(UA_VISIBLE);
-
-	return 0;
 }
 
 UADevice *getDeviceByUAId(string ua_device_id)
@@ -1534,7 +1534,7 @@ Channel* getChannelByPosition(Vector2D pt) // client-position; e.g. touch / mous
 		{
 			channelIndex += g_page * g_channels_per_page;
 			Channel* channel = NULL;
-			int visibleChannelsCount = getActiveChannelsCount(UA_VISIBLE);
+			int visibleChannelsCount = getActiveChannelsCount(true);
 			if (channelIndex < visibleChannelsCount)
 			{
 				int n = 0;
@@ -1708,6 +1708,46 @@ bool getRedrawWindow()
 	return g_redraw;
 }
 
+Uint32 timerCallbackSelectAllChannels(Uint32 interval, void* param) {
+	if (g_selectAllChannelsCountdown == 5) { // select all
+		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
+			it->second->selected_to_show = true;
+		}
+	}
+	else if (g_selectAllChannelsCountdown == 1) { // select none
+		g_selectAllChannelsCountdown = 0;
+		SDL_RemoveTimer(g_timerSelectAllChannels);
+		g_timerSelectAllChannels = 0;
+
+		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
+			it->second->selected_to_show = false;
+		}
+
+		setRedrawWindow(true);
+		return 0;
+	}
+	g_selectAllChannelsCountdown--;
+	setRedrawWindow(true);
+	return interval;
+}
+
+Uint32 timerCallbackUnmuteAll(Uint32 interval, void* param) {
+	if (g_unmuteAllCountdown == 1) {
+		g_unmuteAllCountdown = 0;
+		SDL_RemoveTimer(g_timerUnmuteAll);
+		g_timerUnmuteAll = 0;
+
+		muteChannels(false, true);
+		
+		setRedrawWindow(true);
+
+		return 0;
+	}
+	g_unmuteAllCountdown--;
+	setRedrawWindow(true);
+	return interval;
+}
+
 Uint32 timerCallbackResetOrder(Uint32 interval, void* param) {
 	if (g_resetOrderCountdown == 1) {
 		g_resetOrderCountdown = 0;
@@ -1732,7 +1772,7 @@ Uint32 timerCallbackResetOrder(Uint32 interval, void* param) {
 				n++;
 			}
 		}
-		Channel* channel = getChannelByUAIds(g_ua_devices.front()->id, "4", MASTER);
+		Channel* channel = getChannelByUAIds(g_ua_devices.front()->id, g_masterChannelId, MASTER);
 		if (channel) {
 			g_channelsInOrder.insert({ n, channel });
 		}
@@ -1829,11 +1869,10 @@ Uint32 timerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_time
 
 void setNetworkTimeout() {
 #ifndef SIMULATION
-	
 	if (g_timer_network_send_timeout_msg != 0) {
 		SDL_RemoveTimer(g_timer_network_send_timeout_msg);
 	}
-	g_timer_network_send_timeout_msg = SDL_AddTimer(5000, timerCallbackNetworkSendTimeoutMsg, NULL);
+	g_timer_network_send_timeout_msg = SDL_AddTimer(4000, timerCallbackNetworkSendTimeoutMsg, NULL);
 
 	if (g_timer_network_timeout != 0) {
 		SDL_RemoveTimer(g_timer_network_timeout);
@@ -1956,7 +1995,7 @@ void tcpClientProc(int msg, string data)
 			} while (lpos != string::npos && i < 12);
 
 			//daten anhand path_parameter verarbeiten
-			if (path_parameter[0] == "Session") // devices laden
+			if (path_parameter[0] == "Session" || path_parameter[0] == "IOMapPreset") // devices laden
 			{	
 				cleanUpUADevices();
 				tcpClientSend("get /devices");
@@ -1991,12 +2030,11 @@ void tcpClientProc(int msg, string data)
 						msg = "get /devices/" + dev->id + "/auxs";
 						tcpClientSend(msg.c_str());
 					}
-
-					//add master-fader
-					Channel* channel = new Channel(g_ua_devices.front(), "4", MASTER);
-					channel->setName("Master");
-					g_channelsById.insert({ channel->device->id + ".master." + channel->id, channel });
-					g_channelsInOrder.insert({ 2048, channel });
+					
+					for (int n = 0; n < 32; n++) { // ping controlroom master
+						string msg = "get /devices/0/outputs/" + to_string(n) + "/CRMonitorLevel/value";
+						tcpClientSend(msg.c_str());
+					}
 				}
 				else if (path_parameter[2] == "DeviceOnline")
 				{
@@ -2039,61 +2077,59 @@ void tcpClientProc(int msg, string data)
 				else if (path_parameter[2] == "outputs")
 				{
 					Channel* channel = getChannelByUAIds(path_parameter[1], path_parameter[3], MASTER);
-					if (channel) {
+					if (!channel && g_masterChannelId.length() == 0) { // create output master if getting data from ping
+						const char* c;
+						if (element["error"].get_c_str().get(c) != SUCCESS) {
+							Channel* channel = new Channel(g_ua_devices.front(), path_parameter[3], MASTER);
+							channel->setName("Master");
+							g_channelsById.insert({ channel->device->id + ".master." + channel->id, channel });
+							g_channelsInOrder.insert({ 2048 + stoi(channel->id), channel });
+							g_masterChannelId = channel->id;
+						}
+					}
+					else if (channel) {
 						if (path_parameter[4] == "meters")
 						{
 							if (path_parameter[5] == "0" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")
 							{
 								double db = element["data"];
-
-								if (path_parameter[3] == "4") {//main mix
-									double prev_meter_level = channel->meter_level;
-									channel->meter_level = fromDbFS(db);
-									if (db >= METER_THRESHOLD &&
-										((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level) * UA_METER_PRECISION))) {
-										setRedrawWindow(true);
-									}
+								double prev_meter_level = channel->meter_level;
+								channel->meter_level = fromDbFS(db);
+								if (db >= METER_THRESHOLD &&
+									((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level) * UA_METER_PRECISION))) {
+									setRedrawWindow(true);
 								}
 							}
 							if (path_parameter[5] == "0" && path_parameter[6] == "MeterClip" && path_parameter[7] == "value")
 							{
-								if (path_parameter[3] == "4") {//main mix
-									channel->clip = element["data"];
-									setRedrawWindow(true);
-								}
+								channel->clip = element["data"];
+								setRedrawWindow(true);
 							}
 							if (path_parameter[5] == "1" && path_parameter[6] == "MeterLevel" && path_parameter[7] == "value")
 							{
 								double db = element["data"];
-								if (path_parameter[3] == "4") {//main mix
-									double prev_meter_level2 = channel->meter_level2;
-									channel->meter_level2 = fromDbFS(db);
-									if (db >= METER_THRESHOLD &&
-										((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
-										setRedrawWindow(true);
-									}
-								}
-							}
+								double prev_meter_level2 = channel->meter_level2;
+								channel->meter_level2 = fromDbFS(db);
+								if (db >= METER_THRESHOLD &&
+									((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
+									setRedrawWindow(true);
+								}							}
 							if (path_parameter[5] == "1" && path_parameter[6] == "MeterClip" && path_parameter[7] == "value")
 							{
-								if (path_parameter[3] == "4") {//main mix
-									channel->clip2 = element["data"];
-									setRedrawWindow(true);
-								}
+								channel->clip2 = element["data"];
+								setRedrawWindow(true);
 							}
 						}
 						else if (path_parameter[4] == "CRMonitorLevel" && channel->touch_point.action != TOUCH_ACTION_LEVEL)
 						{
 							if (path_parameter[5] == "value")
 							{
-								if (path_parameter[3] == "4") {//main mix
-									double dBlevel = (double)element["data"];
-									if (dBlevel > -96.0) {
-										channel->level = fromDbFS(dBlevel);
-									}
-									else {
-										channel->level = fromDbFS(-144.0);
-									}
+								double dBlevel = (double)element["data"];
+								if (dBlevel > -96.0) {
+									channel->level = fromDbFS(dBlevel);
+								}
+								else {
+									channel->level = fromDbFS(-144.0);
 								}
 								setRedrawWindow(true);
 							}
@@ -2102,9 +2138,7 @@ void tcpClientProc(int msg, string data)
 						{
 							if (path_parameter[5] == "value")
 							{
-								if (path_parameter[3] == "4") {//main mix
-									channel->mute = element["data"];
-								}
+								channel->mute = element["data"];
 								setRedrawWindow(true);
 							}
 						}
@@ -2466,17 +2500,32 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 
 	unsigned int color = 0;
 	if (this->getColor(&color)) {
-		gfx->SetFilter_ColorShift(g_gsFader, 0.3f, color);
-		gfx->SetFilter_Contrast(g_gsFader, 1.6f);
-
-		gfx->SetFilter_ColorShift(g_gsLabel[this->label_gfx], 0.4f, color);
-		gfx->SetFilter_Contrast(g_gsLabel[this->label_gfx], 1.6f);
+		if (color == RGB(1, 1, 1)) {
+			gfx->SetFilter_ColorShift(g_gsLabel[this->label_gfx], 0.7f, BLACK);
+			gfx->SetFilter_ColorShift(g_gsFader, 0.5f, BLACK);
+			gfx->SetFilter_Saturation(g_gsLabel[this->label_gfx], -1.0f);
+			gfx->SetFilter_Saturation(g_gsFader, -1.0f);
+		}
+		else {
+			gfx->SetFilter_ColorShift(g_gsLabel[this->label_gfx], 0.4f, color);
+			gfx->SetFilter_ColorShift(g_gsFader, 0.3f, color);
+			gfx->SetFilter_Saturation(g_gsLabel[this->label_gfx], 0.0f);
+			gfx->SetFilter_Saturation(g_gsFader, 0.0f);
+		}
+		gfx->SetFilter_Gamma(g_gsLabel[this->label_gfx], 0.8f);
+		gfx->SetFilter_Gamma(g_gsFader, 0.8f);
+		gfx->SetFilter_Contrast(g_gsFader, 1.3f);
+		gfx->SetFilter_Contrast(g_gsLabel[this->label_gfx], 1.3f);
 	}
 	else {
 		gfx->SetFilter_ColorShift(g_gsFader, 0.0f, 0);
 		gfx->SetFilter_Contrast(g_gsFader, 1.0f);
+		gfx->SetFilter_Gamma(g_gsFader, 1.0f);
+		gfx->SetFilter_Saturation(g_gsFader, 0.0f);
 		gfx->SetFilter_ColorShift(g_gsLabel[this->label_gfx], 0.0f, 0);
 		gfx->SetFilter_Contrast(g_gsLabel[this->label_gfx], 1.0f);
+		gfx->SetFilter_Gamma(g_gsLabel[this->label_gfx], 1.0f);
+		gfx->SetFilter_Saturation(g_gsLabel[this->label_gfx], 0.0f);
 	}
 
 	//SELECT CHANNELS
@@ -2779,28 +2828,57 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 		}
 	} while (sz.getX() > _width);
 
+	if (color == RGB(1, 1, 1)) {
+		gfx->SetColor(g_fntLabel, WHITE);
+	}
+	else {
+		gfx->SetColor(g_fntLabel, BLACK);
+	}
+
 	gfx->Write(g_fntLabel, _x, _y + (g_fader_label_height - sz.getY()) / 2, name, GFX_CENTER, &max_size);
 }
 
 int getMiddleSelectedChannel() {
 
 	int index = 0;
+	int counter = 0;
 
 	for (map<int, Channel*>::iterator it = g_channelsInOrder.begin(); it != g_channelsInOrder.end(); ++it) {
-		if (!it->second->isVisible(true))
+		if (!it->second->isVisible(!g_btnSelectChannels->isHighlighted())) {
 			continue;
+		}
 
-		if (index >= g_page * g_channels_per_page + g_channels_per_page / 2) {
+		if (counter >= g_page * g_channels_per_page + g_channels_per_page / 2) {
 			break;
 		}
-		index++;
+		counter++;
+		if (it->second->isVisible(true)) {
+			index++;
+		}
 	}
 	return index;
 }
 
 void browseToSelectedChannel(int index) {
 
-	if (g_channels_per_page) {
+	if (g_btnSelectChannels->isHighlighted()) {
+		int i = index;
+		for (map<int, Channel*>::iterator it = g_channelsInOrder.begin(); it != g_channelsInOrder.end(); ++it) {
+			if (i < 0) {
+				break;
+			}
+			if (it->second->isVisible(true)) {
+				i--;
+			}
+			else if (it->second->isVisible(false)) {
+				index++;
+			}
+		}
+	}
+	if (index == getActiveChannelsCount(false)) {
+		g_page = 0;
+	}
+	else if (g_channels_per_page) {
 		g_page = index / g_channels_per_page;
 	}
 }
@@ -2937,7 +3015,7 @@ void draw() {
 			reorderInsertX = max(reorderInsertX, g_channel_offset_x);
 			reorderInsertX = min(reorderInsertX, g_channel_offset_x + g_channel_width * (float)g_channels_per_page);
 			if (g_page == maxPages()) {
-				int channelsOnLastPage = getAllChannelsCount(false) % g_channels_per_page;
+				int channelsOnLastPage = getActiveChannelsCount(true) % g_channels_per_page;
 				if (channelsOnLastPage) {
 					reorderInsertX = min(reorderInsertX, g_channel_offset_x + g_channel_width * (float)channelsOnLastPage);
 				}
@@ -3053,10 +3131,26 @@ void draw() {
 		gfx->SetColor(g_fntInfo, BLACK);
 	}
 
-	if (g_resetOrderCountdown) {
-		string resetOrderMsg = "Hold for " + to_string(g_resetOrderCountdown) + "s to reset channel order";
+	if (g_resetOrderCountdown || g_unmuteAllCountdown || g_selectAllChannelsCountdown) {
+		string msg = "Hold for ";
+		
+		if (g_resetOrderCountdown) {
+			msg += to_string(g_resetOrderCountdown) + "s to reset channel order";
+		}
+		else if(g_unmuteAllCountdown) {
+			msg += to_string(g_unmuteAllCountdown) + "s to unmute all channels";
+			if (g_settings.lock_to_mix.length()) {
+				msg += " of " + g_settings.lock_to_mix;
+			}
+		}
+		else if (g_selectAllChannelsCountdown) {
+			if (g_selectAllChannelsCountdown > 4) {
+				msg += to_string(g_selectAllChannelsCountdown - 4) + "s to select all channels\n or ";
+			}
+			msg += to_string(g_selectAllChannelsCountdown) + "s to unselect all channels";
+		}
 
-		sz = gfx->GetTextBlockSize(g_fntInfo, resetOrderMsg);
+		sz = gfx->GetTextBlockSize(g_fntInfo, msg);
 		gfx->SetColor(g_fntInfo, WHITE);
 		gfx->SetShadow(g_fntInfo, BLACK, 1.0);
 
@@ -3065,7 +3159,7 @@ void draw() {
 		gfx->DrawShape(GFX_RECTANGLE, BLACK, (win_width - sz.getX() - 16.0f) / 2.0f, (win_height - sz.getY() - 16.0f) / 2.0f,
 			sz.getX() + 16.0f, sz.getY() + 16.0f, 0, 0.7f);
 
-		gfx->Write(g_fntInfo, win_width / 2, (win_height - sz.getY()) / 2, resetOrderMsg, GFX_CENTER);
+		gfx->Write(g_fntInfo, win_width / 2, (win_height - sz.getY()) / 2, msg, GFX_CENTER);
 		gfx->SetShadow(g_fntInfo, BLACK, 0);
 		gfx->SetColor(g_fntInfo, BLACK);
 	}
@@ -3140,6 +3234,7 @@ bool connect(int connection_index)
 		toLog("UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
 
 		tcpClientSend("subscribe /Session");
+		tcpClientSend("subscribe /IOMapPreset");
 		tcpClientSend("subscribe /PostFaderMetering");
 		tcpClientSend("get /devices");
 
@@ -3862,10 +3957,9 @@ void onStateChanged_btnSettings(Button *btn) {
 	}
 }
 
-void onStateChanged_btnMuteAll(Button *btn) {
-	if (btn->getState() == PRESSED) {
+void muteChannels(bool mute, bool all) { // for unmute: all or previously muted
+	if (mute) {
 		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-
 			if (it->second->mute) {
 				g_channelsMutedBeforeAllMute.insert("MIX." + it->first);
 			}
@@ -3887,18 +3981,17 @@ void onStateChanged_btnMuteAll(Button *btn) {
 			}
 		}
 	}
-	else if (btn->getState() == RELEASED) {
+	else {
 		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-
 			if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == "MIX") {
-				if (g_channelsMutedBeforeAllMute.find("MIX." + it->first) == g_channelsMutedBeforeAllMute.end()) {
+				if (all || g_channelsMutedBeforeAllMute.find("MIX." + it->first) == g_channelsMutedBeforeAllMute.end()) {
 					it->second->pressMute(OFF);
 				}
 			}
 
 			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
 				if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == itB->first) {
-					if (g_channelsMutedBeforeAllMute.find(itB->first + "." + it->first) == g_channelsMutedBeforeAllMute.end()) {
+					if (all || g_channelsMutedBeforeAllMute.find(itB->first + "." + it->first) == g_channelsMutedBeforeAllMute.end()) {
 						Send* send = it->second->getSendByName(itB->first);
 						if (send) {
 							send->pressMute(OFF);
@@ -3911,22 +4004,66 @@ void onStateChanged_btnMuteAll(Button *btn) {
 	}
 }
 
-void onStateChanged_btnSelectChannels(Button *btn) {
-	if (btn->getState() == PRESSED) {
-		g_browseToChannel = getMiddleSelectedChannel();
-		g_btnReorderChannels->setCheck(false);
-		updateSubscriptions();
+void onStateChanged_btnMuteAll(Button *btn) {
+	if (btn->getState() & PRESSED) {
+		if (!(btn->getState() & CHECKED)) {
+			muteChannels(true, true);
+		}
+		else {
+			g_unmuteAllCountdown = 4;
+			if (!g_timerUnmuteAll) {
+				g_timerUnmuteAll = SDL_AddTimer(1000, timerCallbackUnmuteAll, NULL);
+			}
+		}
 	}
 	else if (btn->getState() == RELEASED) {
-		g_browseToChannel = getMiddleSelectedChannel();
-		updateSubscriptions();
+		if (g_timerUnmuteAll) {
+			SDL_RemoveTimer(g_timerUnmuteAll);
+			g_timerUnmuteAll = 0;
+			g_unmuteAllCountdown = 0;
+			muteChannels(false, false);
+		}
+	}
+}
+
+void onStateChanged_btnSelectChannels(Button *btn) {
+	if (btn->getState() & PRESSED) {
+		if (!(btn->getState() & CHECKED)) {
+			browseToSelectedChannel(g_browseToChannel);
+			g_browseToChannel = getMiddleSelectedChannel();
+			g_btnReorderChannels->setCheck(false);
+			updateMaxPages();
+			updateSubscriptions();
+		}
+		g_selectAllChannelsCountdown = 8;
+		if (!g_timerSelectAllChannels) {
+			g_timerSelectAllChannels = SDL_AddTimer(1000, timerCallbackSelectAllChannels, NULL);
+		}
+	}
+	else if (btn->getState() & RELEASED) {
+
+		if (!(btn->getState() & CHECKED)) {
+			if (g_selectAllChannelsCountdown < 5) { // dont switch when allselect/unselect happened
+				btn->setCheck(true);
+			}
+			else {
+				browseToSelectedChannel(g_browseToChannel);
+				updateMaxPages();
+				g_browseToChannel = getMiddleSelectedChannel();
+				updateSubscriptions();
+			}
+		}
+
+		SDL_RemoveTimer(g_timerSelectAllChannels);
+		g_timerSelectAllChannels = 0;
+		g_selectAllChannelsCountdown = 0;
 	}
 }
 
 void onStateChanged_btnReorderChannels(Button *btn) {
 	if (btn->getState() & PRESSED) {
 		g_btnSelectChannels->setCheck(false);
-		g_resetOrderCountdown = 5;
+		g_resetOrderCountdown = 4;
 		if (!g_timerResetOrder) {
 			g_timerResetOrder = SDL_AddTimer(1000, timerCallbackResetOrder, NULL);
 		}
@@ -4379,7 +4516,7 @@ void updateConnectButtons()
 	setRedrawWindow(true);
 
 	//wenn keine verbindung, verbinde automatisch mit dem ersten server
-	if (g_btnConnect.size() == 1 && connected_btn_text.length() == 0)
+	if (g_btnConnect.size() && !g_ua_server_connected.length())
 	{
 		SDL_Event event;
 		memset(&event, 0, sizeof(SDL_Event));

@@ -1,3 +1,13 @@
+--- v1.3.2 ---
+- Hold Mute All button to unmute all channels (instead of just previously muted by All Mute)
+- Hold Select Channels to select/unselect all channels
+- Reload when IO-Setup or devices added/removed
+- Bugfix: CR-Master didn't work with some Apollos
+- Bugfix: Scrolling the the middle channel when toggle select channel
+- Bugfix: Didn't connect automatically when serverlist defined and > 1
+- Layout optimized
+
+
 --- v1.3.1 ---
 - Improved fader movement
 - Bugifx: fader jump in fader group

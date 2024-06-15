@@ -68,12 +68,13 @@ void GFXEngine::_RenderFilter(GFXSurface *gs, unsigned char *p_update_bgra, Rect
 
 	int offset = (start_y * gs->w + start_x);
 	unsigned char *p_byte_bgra = (unsigned char*)&gs->bgra[offset];
+	unsigned int idx = 0;
 
 	for (unsigned int y = 0; y < end_y - start_y; y++)
 	{
 		for (unsigned int x = 0; x < end_x - start_x; x++)
 		{
-			unsigned int idx = (y * gs->w + x) * 4;
+			idx = (y * gs->w + x) * 4;
 			
 			p_byte_bgra = (unsigned char*)&gs->bgra[offset];
 
