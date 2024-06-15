@@ -2094,7 +2094,7 @@ void tcpClientProc(int msg, string data)
 							{
 								double db = element["data"];
 								double prev_meter_level = channel->meter_level;
-								channel->meter_level = fromDbFS(db);
+								channel->meter_level = min(1.0, fromDbFS(db));
 								if (db >= METER_THRESHOLD &&
 									((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level) * UA_METER_PRECISION))) {
 									setRedrawWindow(true);
@@ -2109,7 +2109,7 @@ void tcpClientProc(int msg, string data)
 							{
 								double db = element["data"];
 								double prev_meter_level2 = channel->meter_level2;
-								channel->meter_level2 = fromDbFS(db);
+								channel->meter_level2 = min(1.0, fromDbFS(db));
 								if (db >= METER_THRESHOLD &&
 									((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
 									setRedrawWindow(true);
@@ -2214,7 +2214,7 @@ void tcpClientProc(int msg, string data)
 											{
 												double db = element["data"];
 												double prev_meter_level = send->meter_level;
-												send->meter_level = fromDbFS(db);
+												send->meter_level = min(1.0, fromDbFS(db));
 												if (db >= METER_THRESHOLD &&
 													((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(send->meter_level) * UA_METER_PRECISION))) {
 													setRedrawWindow(true);
@@ -2231,7 +2231,7 @@ void tcpClientProc(int msg, string data)
 											{
 												double db = element["data"];
 												double prev_meter_level2 = send->meter_level2;
-												send->meter_level2 = fromDbFS(db);
+												send->meter_level2 = min(1.0, fromDbFS(db));
 												if (db >= METER_THRESHOLD &&
 													((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(send->meter_level2) * UA_METER_PRECISION))) {
 													setRedrawWindow(true);
@@ -2277,7 +2277,7 @@ void tcpClientProc(int msg, string data)
 								{
 									double db = element["data"];
 									double prev_meter_level = channel->meter_level;
-									channel->meter_level = fromDbFS(db);
+									channel->meter_level = min(1.0, fromDbFS(db));
 									if (db >= METER_THRESHOLD &&
 										((int)(toMeterScale(prev_meter_level) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level) * UA_METER_PRECISION))) {
 										setRedrawWindow(true);
@@ -2292,7 +2292,7 @@ void tcpClientProc(int msg, string data)
 								{
 									double db = element["data"];
 									double prev_meter_level2 = channel->meter_level2;
-									channel->meter_level2 = fromDbFS(db);
+									channel->meter_level2 = min(1.0, fromDbFS(db));
 									if (db >= METER_THRESHOLD &&
 										((int)(toMeterScale(prev_meter_level2) * UA_METER_PRECISION)) != ((int)(toMeterScale(channel->meter_level2) * UA_METER_PRECISION))) {
 										setRedrawWindow(true);
@@ -2709,21 +2709,33 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 
 		//Clip LED
 		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f - 1.0f,
-			y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 1.0f - 7.0f,
-			7.0f, 7.0f);
+			y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 10.0f,
+			7.0f, 9.0f);
 
-		gfx->DrawShape(GFX_RECTANGLE, mod->clip ? METER_COLOR_RED : METER_COLOR_BG, x + g_channel_width * 0.75f,
-			y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 6.0f,
-			5.0f, 5.0f);
+		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BG, x + g_channel_width * 0.75f,
+			y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 8.0f,
+			5.0f, 7.0f);
+
+		if (mod->clip) {
+			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_RED, x + g_channel_width * 0.75f + 1,
+				y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 7.0f,
+				3.0f, 5.0f);
+		}
 
 		if (this->stereo) {
 			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f + 5.0f,
-				y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 1.0f - 7.0f,
-				7.0f, 7.0f);
+				y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 10.0f,
+				7.0f, 9.0f);
 
-			gfx->DrawShape(GFX_RECTANGLE, mod->clip2 ? METER_COLOR_RED : METER_COLOR_BG, x + g_channel_width * 0.75f + 6.0f,
-				y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 6.0f,
-				5.0f, 5.0f);
+			gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BG, x + g_channel_width * 0.75f + 6.0f,
+				y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 8.0f,
+				5.0f, 7.0f);
+
+			if (mod->clip2) {
+				gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_RED, x + g_channel_width * 0.75f + 7.0f,
+					y + o - (float)toMeterScale(UNITY) * g_faderrail_height + g_faderrail_height - 7.0f,
+					3.0f, 5.0f);
+			}
 		}
 
 		//LEVELMETER

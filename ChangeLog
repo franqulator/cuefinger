@@ -5,6 +5,7 @@
 - Bugfix: CR-Master didn't work with some Apollos
 - Bugfix: Scrolling the the middle channel when toggle select channel
 - Bugfix: Didn't connect automatically when serverlist defined and > 1
+- Bugfix: On post fader meter, levels could paint outside of meter bar
 - Layout optimized
 
 
