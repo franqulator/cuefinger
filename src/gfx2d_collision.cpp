@@ -358,7 +358,7 @@ bool GFXEngine::Collision(float pt_x, float pt_y, float r_x, float r_y, Rect *rc
 	Vector2D pt(pt_x, pt_y);
 	_convertFromScreen(&pt, r_x, r_y, rc, 0, rotation, rotationOffset);
 
-	if (pt.getX() >= rc->left && pt.getX() < rc->right && pt.getY() >= rc->top && pt.getY() < rc->bottom) {
+	if (pt.getX() >= (float)rc->left && pt.getX() < (float)rc->right && pt.getY() >= (float)rc->top && pt.getY() < (float)rc->bottom) {
 		return true;
 	}
 
@@ -391,7 +391,7 @@ bool GFXEngine::Collision(float pt_x, float pt_y, GFXSurface* gs, float gs_x, fl
 			stretch.set((float)gs_rc->getWidth() * scale, (float)gs_rc->getHeight() * scale);
 		}
 		else {
-			stretch.set(gs->w * scale, gs->h * scale);
+			stretch.set((float)gs->w * scale, (float)gs->h * scale);
 		}
 		pStretch = &stretch;
 	}
@@ -445,10 +445,10 @@ bool GFXEngine::Collision(float x1, float y1, Rect *rc1, float rotation1, Vector
 	//	debugDrawLine(pos2, Vector2D(2,2), RGB(0, 0, 255), 3, Vector2D(x1, y1));
 
 	Vector2D r2Comp[4];
-	r2Comp[0] = Vector2D(rc2->left, rc2->top);
-	r2Comp[1] = Vector2D(rc2->right, rc2->top);
-	r2Comp[2] = Vector2D(rc2->right, rc2->bottom);
-	r2Comp[3] = Vector2D(rc2->left, rc2->bottom);
+	r2Comp[0] = Vector2D((float)rc2->left, (float)rc2->top);
+	r2Comp[1] = Vector2D((float)rc2->right, (float)rc2->top);
+	r2Comp[2] = Vector2D((float)rc2->right, (float)rc2->bottom);
+	r2Comp[3] = Vector2D((float)rc2->left, (float)rc2->bottom);
 	_convertToScreen(&r2Comp[0], x2, y2, rc2, 0, rotation2, rotationOffset2);
 	_convertToScreen(&r2Comp[1], x2, y2, rc2, 0, rotation2, rotationOffset2);
 	_convertToScreen(&r2Comp[2], x2, y2, rc2, 0, rotation2, rotationOffset2);
@@ -460,10 +460,10 @@ bool GFXEngine::Collision(float x1, float y1, Rect *rc1, float rotation1, Vector
 
 	//schneidet
 	Vector2D r1Comp[4];
-	r1Comp[0] = Vector2D(rc1->left, rc1->top);
-	r1Comp[1] = Vector2D(rc1->right, rc1->top);
-	r1Comp[2] = Vector2D(rc1->right, rc1->bottom);
-	r1Comp[3] = Vector2D(rc1->left, rc1->bottom);
+	r1Comp[0] = Vector2D((float)rc1->left, (float)rc1->top);
+	r1Comp[1] = Vector2D((float)rc1->right, (float)rc1->top);
+	r1Comp[2] = Vector2D((float)rc1->right, (float)rc1->bottom);
+	r1Comp[3] = Vector2D((float)rc1->left, (float)rc1->bottom);
 
 	// Debug Anzeige
 /*	for (int a = 0; a < 4; a++) {
@@ -516,7 +516,7 @@ bool GFXEngine::Collision(float x1, float y1, Rect *rc1, float rotation1, Vector
 		//		debugDrawLine(r2Comp[b], *v.subtract(&r2Comp[b]), RGB(255, 0, 0), 3, Vector2D(x1, y1));
 	}
 	if (colPt) {
-		*colPt = Vector2D(x1 + rc1->getWidth() / 2, y1 + rc1->getHeight() / 2);
+		*colPt = Vector2D(x1 + (float)rc1->getWidth() / 2.0f, y1 + (float)rc1->getHeight() / 2.0f);
 	}
 
 	return col;
@@ -594,7 +594,7 @@ bool GFXEngine::Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int fl
 	}
 	float radius1 = frame1.length();
 
-	Vector2D frame2(rc2 ? rc2->getWidth() : 0, rc2 ? rc2->getHeight() : 0);
+	Vector2D frame2(rc2 ? (float)rc2->getWidth() : 0.0f, rc2 ? (float)rc2->getHeight() : 0.0f);
 	if (stretch2) {
 		frame2.setX(max(frame2.getX(), stretch2->getX()));
 		frame2.setY(max(frame2.getY(), stretch2->getY()));
@@ -621,7 +621,7 @@ bool GFXEngine::Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int fl
 			}
 			
 			// sortieren: falls gs1 NULL/kein CollisionData oder mehr kollisionspunkte hat als g2, tauschen
-			if (!gs1 || !gs1->collision_array || gs2 && gs2->borderPixel && gs1->borderPixel->size() > gs2->borderPixel->size()) {
+			if (!gs1 || !gs1->collision_array || (gs2 && gs2->borderPixel && gs1->borderPixel->size() > gs2->borderPixel->size())) {
 				GFXSurface *gs = gs1;
 				float x = x1;
 				float y = y1;
@@ -698,7 +698,7 @@ bool GFXEngine::Collision(GFXSurface* gs1, float x1, float y1, Rect* rc1, int fl
 					}
 					else { // pt in rect check
 						if (stretch2) {
-							Rect rc(0, 0, stretch2->getX(), stretch2->getY());
+							Rect rc(0, 0, (int)round(stretch2->getX()), (int)round(stretch2->getY()));
 							if (Collision(v1.getX(), v1.getY(), 0.0f, 0.0f, &rc)) {
 								if (!pt_col)
 									return true;
@@ -861,7 +861,7 @@ Vector2D GFXEngine::GetTangentAt(float pt_x, float pt_y, float direction,
 			Vector2D v_direction90 = v_direction;
 			v_direction90.rotate(M_PI_2F);
 			Vector2D v1(v_pt.getX() + v_direction90.getX(), v_pt.getY() + v_direction90.getY());
-			Vector2D v2(it->second->x, it->second->y);
+			Vector2D v2((float)it->second->x, (float)it->second->y);
 			if (Vector2D::leftRightTest(&v_pt, &v1, &v2) < 0) {
 				continue;
 			}
@@ -874,20 +874,20 @@ Vector2D GFXEngine::GetTangentAt(float pt_x, float pt_y, float direction,
 					*/
 
 			v1.set(tangent_pt_left.getX() - v_direction.getX(), tangent_pt_left.getY() - v_direction.getY());
-			v2.set(it->second->x, it->second->y);
+			v2.set((float)it->second->x, (float)it->second->y);
 			if (Vector2D::leftRightTest(&tangent_pt_left, &v1, &v2) > 0) { // wenn links von der geraden
 
-				tangent_pt_left = Vector2D(it->second->x, it->second->y);
+				tangent_pt_left = Vector2D((float)it->second->x, (float)it->second->y);
 			}
 			else if (Vector2D::leftRightTest(&tangent_pt_right, &v1, &v2) <= 0) { // wenn rechts von der geraden
 
-				tangent_pt_right = Vector2D(it->second->x, it->second->y);
+				tangent_pt_right = Vector2D((float)it->second->x, (float)it->second->y);
 			}
 		}
 		col_tan_area += COLLISION_TANGENT_AREA;
 	}
 
-	if ((flags & GFX_HFLIP && !(flags & GFX_VFLIP) || !(flags & GFX_HFLIP) && flags & GFX_VFLIP)) {
+	if ((flags & GFX_HFLIP && !(flags & GFX_VFLIP)) || (!(flags & GFX_HFLIP) && flags & GFX_VFLIP)) {
 		v_tangent = tangent_pt_left;
 		v_tangent.subtract(&tangent_pt_right);
 	}

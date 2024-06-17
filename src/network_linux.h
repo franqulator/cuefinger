@@ -59,12 +59,12 @@ private:
 	SDL_Thread *receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
-	TCPClient(string host, string port, void (*MessageCallback)(int,string)); // throws exception
+	TCPClient(string host, string port, void (*MessageCallback)(int,const string&)); // throws exception
 	~TCPClient();
-	void Send(string data);
+	void Send(const string &data);
 private:
 	static int receiveThread(void* param);
-	void (*MessageCallback)(int msg, string data);
+	void (*MessageCallback)(int msg, const string &data);
 };
 
 #endif

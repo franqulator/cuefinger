@@ -123,7 +123,7 @@ int TCPClient::receiveThread(void *param)
 	return 0;
 }
 
-TCPClient::TCPClient(string host, string port, void (*MessageCallback)(int,string))
+TCPClient::TCPClient(string host, string port, void (*MessageCallback)(int,const string&))
 {
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
@@ -190,12 +190,12 @@ TCPClient::~TCPClient() {
 	}
 }
 
-void TCPClient::Send(string data) {
+void TCPClient::Send(const string &data) {
 	if(this->socketConnect) {
 		size_t p=0;
 		while(p < data.length() + 1)
 		{
-			ssize_t len = TCP_BUFFER_SIZE;
+			size_t len = TCP_BUFFER_SIZE;
 			if(len > data.length() + 1  - p)
 			{
 				len = data.length() + 1 - p;

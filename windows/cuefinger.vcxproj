@@ -72,22 +72,22 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>..\build\win_$(PlatformTarget)</OutDir>
+    <OutDir>..\build\win_$(PlatformTarget)\</OutDir>
     <IntDir>$(ProjectDir)$(PlatformTarget)\$(Configuration)\</IntDir>
     <TargetName>Cuefinger_$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>..\build\win_$(PlatformTarget)</OutDir>
+    <OutDir>..\build\win_$(PlatformTarget)\</OutDir>
     <IntDir>$(ProjectDir)$(PlatformTarget)\$(Configuration)\</IntDir>
     <TargetName>Cuefinger</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>..\build\win_$(PlatformTarget)</OutDir>
+    <OutDir>..\build\win_$(PlatformTarget)\</OutDir>
     <TargetName>Cuefinger</TargetName>
     <IntDir>$(ProjectDir)$(PlatformTarget)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>..\build\win_$(PlatformTarget)</OutDir>
+    <OutDir>..\build\win_$(PlatformTarget)\</OutDir>
     <TargetName>Cuefinger_$(Configuration)</TargetName>
     <IntDir>$(ProjectDir)$(PlatformTarget)\$(Configuration)\</IntDir>
   </PropertyGroup>

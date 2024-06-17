@@ -35,10 +35,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "gfx2d_sdl.h"
 #include "simdjson.h"
 #include <map>
+#include <queue>
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.2";
+const string APP_VERSION = "1.3.3";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -146,6 +147,13 @@ https://github.com/franqulator/cuefinger";
 
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
+#define RED		RGB(140, 5, 5)
+#define GREEN	RGB(0, 140, 20)
+#define BLUE	RGB(0, 50, 180)
+#define YELLOW	RGB(170, 170, 10)
+#define ORANGE	RGB(190, 90, 20)
+#define PURPLE	RGB(80, 10, 170)
+
 class Settings {
 public:
 	int x, y, w, h;
@@ -173,6 +181,8 @@ public:
 		extended_logging = false;
 		reconnect_time = 10000;
 		show_offline_devices = false;
+		label_aux1 = "AUX";
+		label_aux2 = "AUX";
 	}
 	bool load(string *json = NULL);
 	bool save();
@@ -190,7 +200,7 @@ private:
 	bool visible;
 	void (*onStateChanged)(Button *btn);
 public:
-	Button(int type=BUTTON, int id = 0, std::string text = "", float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+	Button(int type=BUTTON, int id = 0, string text = "", float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
 		bool checked = false, bool enabled = true, bool visible = true, void (*onStateChanged)(Button *btn) = NULL);
 	bool onPress(SDL_Point *pt);
 	bool onRelease();
@@ -249,6 +259,7 @@ public:
 	bool clip;
 	bool clip2;
 	Module(string id);
+	virtual ~Module();
 	virtual void changeLevel(double level_change, bool absolute = false) {};
 	virtual void changePan(double pan_change, bool absolute = false) {};
 	virtual void changePan2(double pan_change, bool absolute = false) {};
@@ -263,6 +274,7 @@ public:
 
 	Send(Channel* channel, string id);
 	~Send();
+	void init();
 	void updateSubscription(bool subscribe, int flags);
 	void changeLevel(double level_change, bool absolute = false) override; 
 	void changePan(double pan_change, bool absolute = false) override;
@@ -294,6 +306,7 @@ public:
 
 	Channel(UADevice* device, string id, int type);
 	~Channel();
+	void init();
 	void updateSubscription(bool subscribe, int flags); // also handles subscrption for sends
 	bool isTouchOnFader(Vector2D *pos);
 	bool isTouchOnPan(Vector2D *pos);
@@ -312,19 +325,19 @@ public:
 	Send* getSendByUAId(string id);
 	void updateProperties();
 	string getName();
-	void setName(string name);
-	void setStereoname(string stereoname);
+	void setName(const string &name);
+	void setStereoname(const string &stereoname);
 	void setStereo(bool stereo);
-	bool getColor(unsigned int *color);
+	void getColoredGfx(GFXSurface** gsLabel, GFXSurface** gsFader);
 	void draw(float x, float y, float width, float height);
-	Module* getModule(string mixBus);
+	Module* getModule(const string &mixBus);
 	void changeLevel(double level_change, bool absolute = false) override;
 	void changePan(double pan_change, bool absolute = false) override;
 	void changePan2(double pan_change, bool absolute = false) override;
 	void pressMute(int state = SWITCH) override;
 };
 
-void tcpClientSend(const char* msg);
+void tcpClientSend(const string &msg);
 bool connect(int);
 void disconnect();
 void draw();
@@ -347,6 +360,8 @@ void setRedrawWindow(bool redraw);
 void updateChannelWidthButton();
 void muteChannels(bool, bool);
 int getActiveChannelsCount(bool onlyVisible);
+void setLoadingState(bool loading);
+bool isLoading();
 
 inline double toDbFS(double linVal) {
 	if (linVal <= 0.0)

@@ -49,10 +49,10 @@ private:
 	HANDLE receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
-	TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,string));
+	TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,const string&));
 	~TCPClient();
-	void Send(string data);
+	void Send(const string &data);
 private:
 	static DWORD WINAPI receiveThread(void *param);
-	void(*MessageCallback)(int msg, string data);
+	void(*MessageCallback)(int msg, const string &data);
 };

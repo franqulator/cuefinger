@@ -32,8 +32,8 @@ string getDataPath(string subpath) { // folder to read
 	str += subpath; 
 
 #ifdef __linux__ 
-	for(int n=0;n< str.length(); n++) {
-		if(str[n] == '\\') {
+	for (size_t n = 0; n < str.length(); n++) {
+		if (str[n] == '\\') {
 			str[n] = '/';
 		}
 	}
@@ -52,7 +52,7 @@ string getPrefPath(string subpath) { // folder to read and write
 	str += subpath;
 
 #ifdef __linux__ 
-	for (int n = 0; n < str.length(); n++) {
+	for (size_t n = 0; n < str.length(); n++) {
 		if (str[n] == '\\') {
 			str[n] = '/';
 		}
@@ -72,7 +72,7 @@ string getAppPath(string subpath) {
 	str += subpath; 
 	
 #ifdef __linux__ 
-	for(int n=0;n<str.length(); n++) {
+	for(size_t n = 0; n < str.length(); n++) {
 		if(str[n] == '\\') {
 			str[n] = '/';
 		}
@@ -82,7 +82,7 @@ string getAppPath(string subpath) {
 	return str;
 }
 
-void clearLog(string info) {
+void initLog(const string &info) {
 #ifndef __ANDROID__				   
 	time_t tme = time(NULL);
 	tm t;
@@ -114,10 +114,8 @@ void clearLog(string info) {
 	}
 #endif	  
 }
-void toLog(string str) {
-#ifdef __ANDROID__
-    __android_log_write(ANDROID_LOG_DEFAULT, "Cuefinger", str.c_str());
-#else				  															   
+void toLog(const string &str) {
+#ifndef __ANDROID__			  															   
 	string path;
 	path = getPrefPath("cuefinger.log");
 
@@ -146,7 +144,7 @@ string iso_8859_1_to_utf8(string &str) {
     return strOut;
 }
 
-string trim(string s) {
+string trim(string &s) {
 	// trim left
 	while (s.length() > 0 && (s[0]==' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')) {
 		s.erase(0, 1);
@@ -191,36 +189,32 @@ bool LibraryFile::parseIni() {
 		unsigned int read = 0;
 		int p = 0;
 		while (true) {
-			read = sgets(this->buffer, p, this->size, line, 4096);
+			read = sgets(this->buffer, p, (unsigned int)this->size, line, 4096);
 			p += read;
 			if (read < 1)
 				break;
 
 			char* comment = NULL;
-			strtok_s(line, "#", &comment); // kommentar abschneiden
+			comment = strtok_s(line, "#", &comment); // kommentar abschneiden
 
 			string sLine(reinterpret_cast<char*>(line));
-			sLine = trim(sLine);
+			trim(sLine);
 
 			if (sLine.length() > 2 && sLine[0] == '[' && sLine[sLine.length() - 1] == ']') {
 				curSection = sLine.substr(1, sLine.length() - 2);
-				curSection = iso_8859_1_to_utf8(curSection);
+				iso_8859_1_to_utf8(curSection);
 				this->iniSections.insert(curSection);
 			}
 			else if(sLine.length() > 0 && sLine[0] != '#') {
 				size_t split = sLine.find_first_of('=');
 				if (split != string::npos) {
 					string key = sLine.substr(0, split);
-					key = trim(key);
+					trim(key);
 					key = curSection + "->" + iso_8859_1_to_utf8(key);
 
-					if(key.find("text") != string::npos) {
-						int x = 0;
-					}
-
 					string value = sLine.substr(split + 1);
-					value = trim(value);
-					value = iso_8859_1_to_utf8(value);
+					trim(value);
+					iso_8859_1_to_utf8(value);
 
 					this->iniPairs.insert(pair<string, string>(key, value));
 				}
@@ -257,7 +251,7 @@ int LibraryFile::getIniInt(string _section, string _key, int _default) {
 	string _value_str;
 	_value_str = this->getIniString(_section, _key, to_string(_default));
 
-	return strtol(_value_str.c_str(), NULL, 10);
+	return stoi(_value_str, NULL, 10);
 }
 
 LibraryFile::LibraryFile(string filepath) {
@@ -307,7 +301,9 @@ Library::Library(string libPath) {
 	}
 
 	int sz = 0;
-	fread(&sz, sizeof(int), 1, f);
+	if (fread(&sz, sizeof(int), 1, f) != 1) {
+		throw invalid_argument("Fehler beim Lesen der Library.");
+	}
 
 	long dataPos = 0;
 
@@ -315,10 +311,23 @@ Library::Library(string libPath) {
 		int str_len = 0;
 		unsigned int size;
 		unsigned char filename[256];
-		fread(&str_len, sizeof(int), 1, f);
-		fread(&filename, sizeof(char), str_len, f);
-		filename[str_len] = '\0';
-		fread(&size, sizeof(unsigned int), 1, f);
+		if(fread(&str_len, sizeof(int), 1, f) != 1) {
+			throw invalid_argument("Fehler beim Lesen der Library.");
+		}
+		if (str_len < 256) {
+			if (fread(&filename, sizeof(unsigned char), str_len, f) != (size_t)str_len) {
+				throw invalid_argument("Fehler beim Lesen der Library.");
+			}
+			filename[str_len] = '\0';
+		}
+		else {
+			throw invalid_argument("Fehler beim Lesen der Library.");
+		}
+		
+		if(fread(&size, sizeof(unsigned int), 1, f) != 1) {
+			throw invalid_argument("Fehler beim Lesen der Library.");
+		}
+
 		string sFilename(reinterpret_cast<char*>(filename));
 
 		// zu den daten springen
@@ -326,14 +335,18 @@ Library::Library(string libPath) {
 
 		if(!dataPos) { // ersten Datenblock suchen
 			for(int n = i + 1; n < sz; n++) {
-				fread(&str_len, sizeof(int), 1, f);
+				if(fread(&str_len, sizeof(int), 1, f) != 1) {
+					throw invalid_argument("Fehler beim Lesen der Library.");
+				}
 				fseek(f, str_len + sizeof(unsigned int), SEEK_CUR);
 			}
 		}
 		else
 			fseek(f, dataPos, SEEK_SET);
 		unsigned char *buffer = new unsigned char[size];
-		fread(buffer, sizeof(unsigned char), size, f);
+		if(fread(buffer, sizeof(unsigned char), size, f) != size) {
+			throw invalid_argument("Fehler beim Lesen der Library.");
+		}
 		dataPos = ftell(f);
 
 		LibraryFile *libFile = new LibraryFile(size, buffer);

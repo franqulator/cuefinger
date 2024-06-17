@@ -41,8 +41,8 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 {
 	char header[3];
 	//header
-	header[0] = getc(fh);
-	header[1] = getc(fh);
+	header[0] = (char)getc(fh);
+	header[1] = (char)getc(fh);
 	header[2] = '\0';
 	if (strcmp(header, "BM") != 0)
 	{
@@ -65,17 +65,17 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	//headersize
 	fseek(fh, 4, SEEK_CUR);
 	//width
-	unsigned int width;
+	int width;
 	width = getc(fh);
-	width |= (unsigned int)getc(fh) << 8;
-	width |= (unsigned int)getc(fh) << 16;
-	width |= (unsigned int)getc(fh) << 24;
+	width |= (int)getc(fh) << 8;
+	width |= (int)getc(fh) << 16;
+	width |= (int)getc(fh) << 24;
 	//height
-	unsigned int height;
+	int height;
 	height = getc(fh);
-	height |= (unsigned int)getc(fh) << 8;
-	height |= (unsigned int)getc(fh) << 16;
-	height |= (unsigned int)getc(fh) << 24;
+	height |= (int)getc(fh) << 8;
+	height |= (int)getc(fh) << 16;
+	height |= (int)getc(fh) << 24;
 
 	if (width != gs->w || height != gs->h)
 	{
@@ -89,7 +89,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 
 	//colordepht
 	int colorDepht = getc(fh);
-	colorDepht |= (unsigned int)getc(fh) << 8;
+	colorDepht |= (int)getc(fh) << 8;
 
 	//compression
 	unsigned int compression;
@@ -122,13 +122,13 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	fseek(fh, 4, SEEK_CUR);
 
 	int terminator = 0;
-	if ((filesize - offset) > width*height*colorDepht / 8)
-		terminator = ((filesize - offset) - (width*height*colorDepht / 8)) / height;
+	if ((filesize - offset) > (unsigned int)(width*height*colorDepht / 8))
+		terminator = ((int)(filesize - offset) - (width*height*colorDepht / 8)) / height;
 
 	unsigned char *clr = new unsigned char[palette];
 	for (unsigned int n = 0; n < palette; n++)
 	{
-		clr[n] = (getc(fh) + getc(fh) + getc(fh)) / 3;
+		clr[n] = (unsigned char)(getc(fh) + getc(fh) + getc(fh)) / 3;
 		fseek(fh, 1, SEEK_CUR);
 	}
 	fseek(fh, offset, SEEK_SET);
@@ -139,7 +139,7 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	{
 		for (int y = height - 1; y >= 0; y--)
 		{
-			for (unsigned int x = 0; x < width; x++)
+			for (int x = 0; x < width; x++)
 			{
 				p8[(y*width + x) * 4 + 3] = clr[getc(fh)];
 				if (feof(fh))
@@ -153,11 +153,11 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	{
 		for (int y = height - 1; y >= 0; y--)
 		{
-			for (unsigned int x = 0; x < width; x++)
+			for (int x = 0; x < width; x++)
 			{
-				unsigned short v = getc(fh);
-				v |= (unsigned short)getc(fh) << 8;
-				p8[(y*width + x) * 4 + 3] = (GETR_555(v) + GETG_555(v) + GETB_555(v)) / 3;
+				int v = getc(fh);
+				v |= getc(fh) << 8;
+				p8[(y*width + x) * 4 + 3] = (unsigned char)((GETR_555(v) + GETG_555(v) + GETB_555(v)) / 3);
 				if (feof(fh))
 					return true;
 			}
@@ -169,9 +169,9 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 	{
 		for (int y = height - 1; y >= 0; y--)
 		{
-			for (unsigned int x = 0; x < width; x++)
+			for (int x = 0; x < width; x++)
 			{
-				p8[(y*width + x) * 4 + 3] = (getc(fh) + getc(fh) + getc(fh)) / 3;
+				p8[(y*width + x) * 4 + 3] = (unsigned char)((getc(fh) + getc(fh) + getc(fh)) / 3);
 				if (feof(fh))
 					return true;
 			}
@@ -189,9 +189,9 @@ bool GFXEngine::_ReadAlphaChannelBmp(GFXSurface *gs, FILE *fh)
 GFXSurface *GFXEngine::_ReadTga(FILE *fh)
 {
 	//header
-	unsigned char imageID = getc(fh); //image ID
-	unsigned char colorMap = getc(fh); //color map type
-	unsigned char imageType = getc(fh); //uncompressed truecolor = 2
+	unsigned char imageID = (unsigned char)getc(fh); //image ID
+	unsigned char colorMap = (unsigned char)getc(fh); //color map type
+	unsigned char imageType = (unsigned char)getc(fh); //uncompressed truecolor = 2
 
 	if (colorMap)
 	{
@@ -209,10 +209,10 @@ GFXSurface *GFXEngine::_ReadTga(FILE *fh)
 	//overjump x/y origin
 	fseek(fh, 4, SEEK_CUR);
 
-	unsigned short width = getc(fh);
-	width |= (unsigned short)getc(fh) << 8;
-	unsigned short height = getc(fh);
-	height |= (unsigned short)getc(fh) << 8;
+	int width = getc(fh);
+	width |= getc(fh) << 8;
+	int height = getc(fh);
+	height |= getc(fh) << 8;
 
 	GFXSurface *gsurf = CreateSurface(width, height);
 	if (!gsurf)
@@ -236,7 +236,10 @@ GFXSurface *GFXEngine::_ReadTga(FILE *fh)
 	{
 		for (int y = 0; y < height; y++)
 		{
-			fread(&gsurf->bgra[(height - 1 - y)*width], 4, width, fh);
+			if (fread(&gsurf->bgra[(height - 1 - y) * width], 4, width, fh) != (size_t)width) {
+				this->DeleteSurface(gsurf);
+				return NULL;
+			}
 		}
 		break;
 	}
@@ -251,9 +254,9 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 {
 	char header[3];
 	//header
-	header[0] = getc(fh);
-	header[1] = getc(fh);
-	header[2] = '\0';
+	header[0] = (unsigned char)getc(fh);
+	header[1] = (unsigned char)getc(fh);
+	header[2] = 0;
 	if (strcmp(header, "BM") != 0)
 	{
 		return NULL;
@@ -282,13 +285,13 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 		return NULL;
 	}
 	//width
-	unsigned int width;
+	int width;
 	width = getc(fh);
 	width |= (unsigned int)getc(fh) << 8;
 	width |= (unsigned int)getc(fh) << 16;
 	width |= (unsigned int)getc(fh) << 24;
 	//height
-	unsigned int height;
+	int height;
 	height = getc(fh);
 	height |= (unsigned int)getc(fh) << 8;
 	height |= (unsigned int)getc(fh) << 16;
@@ -362,7 +365,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 	{
 		for (int y = height - 1; y >= 0; y--)
 		{
-			for (unsigned int x = 0; x < width; x++)
+			for (int x = 0; x < width; x++)
 			{
 				int index = getc(fh);
 				p8[(y*width + x) * 4] = GetBValue(clr[index]);
@@ -382,13 +385,13 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 		{
 			for (int y = height - 1; y >= 0; y--)
 			{
-				for (unsigned int x = 0; x < width; x++)
+				for (int x = 0; x < width; x++)
 				{
-					unsigned short v = getc(fh);
-					v |= (unsigned short)getc(fh) << 8;
-					p8[(y*width + x) * 4] = GETB_565(v);
-					p8[(y*width + x) * 4 + 1] = GETG_565(v);
-					p8[(y*width + x) * 4 + 2] = GETR_565(v);
+					int v = getc(fh);
+					v |= getc(fh) << 8;
+					p8[(y*width + x) * 4] = (unsigned char)GETB_565(v);
+					p8[(y*width + x) * 4 + 1] = (unsigned char)GETG_565(v);
+					p8[(y*width + x) * 4 + 2] = (unsigned char)GETR_565(v);
 					p8[(y*width + x) * 4 + 3] = 0xFF;
 					if (feof(fh))
 						return gsurf;
@@ -400,13 +403,13 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 		{
 			for (int y = height - 1; y >= 0; y--)
 			{
-				for (unsigned int x = 0; x < width; x++)
+				for (int x = 0; x < width; x++)
 				{
-					unsigned short v = getc(fh);
-					v |= (unsigned short)getc(fh) << 8;
-					p8[(y*width + x) * 4] = GETB_555(v);
-					p8[(y*width + x) * 4 + 1] = GETG_555(v);
-					p8[(y*width + x) * 4 + 2] = GETR_555(v);
+					int v = getc(fh);
+					v |= getc(fh) << 8;
+					p8[(y*width + x) * 4] = (unsigned char)GETB_555(v);
+					p8[(y*width + x) * 4 + 1] = (unsigned char)GETG_555(v);
+					p8[(y*width + x) * 4 + 2] = (unsigned char)GETR_555(v);
 					p8[(y*width + x) * 4 + 3] = 0xFF;
 					if (feof(fh))
 						return gsurf;
@@ -422,9 +425,9 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 		{
 			for (int x = 0; x < width; x++)
 			{
-				p8[(y*width + x) * 4] = getc(fh);
-				p8[(y*width + x) * 4 + 1] = getc(fh);
-				p8[(y*width + x) * 4 + 2] = getc(fh);
+				p8[(y*width + x) * 4] = (unsigned char)getc(fh);
+				p8[(y*width + x) * 4 + 1] = (unsigned char)getc(fh);
+				p8[(y*width + x) * 4 + 2] = (unsigned char)getc(fh);
 				p8[(y*width + x) * 4 + 3] = 0xFF;
 				if (feof(fh))
 					return gsurf;
@@ -441,7 +444,7 @@ GFXSurface *GFXEngine::_ReadBmp(FILE *fh)
 	return gsurf;
 }
 
-GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, long _size)
+GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 {
 	if (!_data || _size < 18) //header-size + rectcount
 		return NULL;
@@ -615,7 +618,7 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, long _size)
 
 		//Bitmap
 		//array optimized
-		for (unsigned int i = 0; i < gsurf->h * gsurf->w; i++)
+		for (int i = 0; i < gsurf->h * gsurf->w; i++)
 		{
 			if (!used[i])
 			{
@@ -659,9 +662,8 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, long _size)
 		unsigned int szRcs = *((unsigned int*)ptr);
 		ptr += 4;
 
-		unsigned char *p8 = (unsigned char*)gsurf->bgra;
 		unsigned int color;
-		for (int n = 0; n < szRcs; n++)
+		for (unsigned int n = 0; n < szRcs; n++)
 		{
 			color = clr[*ptr];
 			ptr++;
@@ -706,10 +708,13 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, long _size)
 	delete[] used;
 	used = NULL;
 
-	EnableAlphaChannel(gsurf, gsurf->use_alpha);
-	if (!_CopyColorInfo(gsurf))
-	{
-		return NULL;
+	if (gsurf) {
+		EnableAlphaChannel(gsurf, gsurf->use_alpha);
+		if (!_CopyColorInfo(gsurf))
+		{
+			DeleteSurface(gsurf);
+			return NULL;
+		}
 	}
 
 	return gsurf;
@@ -792,7 +797,7 @@ GFXSurface* GFXEngine::LoadGfx(string name)
 		return NULL;
 
 	fseek(fh, 0, SEEK_END);
-	long buffer_sz = ftell(fh);
+	size_t buffer_sz = ftell(fh);
 	unsigned char *data = (unsigned char*)malloc(buffer_sz);
 	if (!data)
 	{
@@ -841,7 +846,7 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 		unsigned char* p8 = (unsigned char*)gs->bgra;
 
 		//check if can be saved as palette
-		for (unsigned int n = 0; n < gs->w * gs->h; n++)
+		for (int n = 0; n < gs->w * gs->h; n++)
 		{
 			if (gs->use_alpha)
 				src_clr = gs->bgra[n];
@@ -902,12 +907,12 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 
 		rcs = new SmallRect[gs->w * gs->h / min_rect_size];
 
-		unsigned int cur_x, cur_y;
+		int cur_x, cur_y;
 		bool xend, yend;
 
-		for (unsigned int y = 0; y < gs->h - 1; y++)
+		for (int y = 0; y < gs->h - 1; y++)
 		{
-			for (unsigned int x = 0; x < gs->w - 1; x++)
+			for (int x = 0; x < gs->w - 1; x++)
 			{
 				if (used[y * gs->w + x])
 					continue;
@@ -925,7 +930,7 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 				{
 					if (!xend)
 					{
-						for (unsigned int y2 = y; y2 < cur_y; y2++)
+						for (int y2 = y; y2 < cur_y; y2++)
 						{
 							idx = (y2 * gs->w + cur_x);
 
@@ -953,7 +958,7 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 					}
 					if (!yend)
 					{
-						for (unsigned int x2 = x; x2 < cur_x; x2++)
+						for (int x2 = x; x2 < cur_x; x2++)
 						{
 							idx = (cur_y * gs->w + x2);
 
@@ -999,12 +1004,12 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 
 					//	if (counter >= min_rect_size)
 					//	{
-					rcs[szRcs].Left = x;
-					rcs[szRcs].Top = y;
-					rcs[szRcs].Right = cur_x;
-					rcs[szRcs].Bottom = cur_y;
+					rcs[szRcs].Left = (short)x;
+					rcs[szRcs].Top = (short)y;
+					rcs[szRcs].Right = (short)cur_x;
+					rcs[szRcs].Bottom = (short)cur_y;
 					szRcs++;
-					for (unsigned int y2 = y; y2 < cur_y; y2++)
+					for (int y2 = y; y2 < cur_y; y2++)
 					{
 						memset(&used[y2 * gs->w + x], true, sizeof(bool) * (cur_x - x));
 					}
@@ -1029,14 +1034,14 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 			}
 			//encodestep 2
 			int parts = 0;
-			for (unsigned int i = 0; i < gs->w * gs->h; i++)
+			for (int i = 0; i < gs->w * gs->h; i++)
 			{
 				if (!used[i])
 					parts++;
 			}
 			int* ids = new int[parts];
 			parts = 0;
-			for (unsigned int i = 0; i < gs->w * gs->h; i++)
+			for (int i = 0; i < gs->w * gs->h; i++)
 			{
 				if (!used[i])
 				{
@@ -1120,7 +1125,7 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 			//bitmap (dont use rle compression
 	//		unsigned char count = 0;
 	//		bool raw = false;
-			for (unsigned int n = 0; n < gs->w * gs->h; n++)
+			for (int n = 0; n < gs->w * gs->h; n++)
 			{
 				if (!used[n])
 				{
@@ -1209,7 +1214,7 @@ bool GFXEngine::SaveGfx(GFXSurface *gs, string name)
 				fwrite(&rcs[n], sizeof(SmallRect), 1, fh);
 			}
 			//bitmap
-			for (unsigned int n = 0; n < gs->w * gs->h; n++)
+			for (int n = 0; n < gs->w * gs->h; n++)
 			{
 				if (!used[n])
 				{
@@ -1258,9 +1263,9 @@ bool GFXEngine::SaveBmp(GFXSurface *gs, string name)
 		int pClr = 0;
 		int colorDepht = 16;
 		unsigned char* p8 = (unsigned char*)gs->bgra;
-		for (unsigned int y = 0; y < gs->h; y++)
+		for (int y = 0; y < gs->h; y++)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
+			for (int x = 0; x < gs->w; x++)
 			{
 				//mit bitmaske prüfen ob mit 16bit (565) farbverlust entsteht
 				if ((p8[(y * gs->w + x) * 4 + 2] & 0x07) || (p8[(y * gs->w + x) * 4 + 1] & 0x03) || (p8[(y * gs->w + x) * 4] & 0x07))
@@ -1417,7 +1422,7 @@ bool GFXEngine::SaveBmp(GFXSurface *gs, string name)
 		{
 			for (int y = gs->h - 1; y >= 0; y--)
 			{
-				for (unsigned int x = 0; x < gs->w; x++)
+				for (int x = 0; x < gs->w; x++)
 				{
 					for (int i = 0; i < pClr; i++)
 					{
@@ -1440,7 +1445,7 @@ bool GFXEngine::SaveBmp(GFXSurface *gs, string name)
 		{
 			for (int y = gs->h - 1; y >= 0; y--)
 			{
-				for (unsigned int x = 0; x < gs->w; x++)
+				for (int x = 0; x < gs->w; x++)
 				{
 					unsigned short clr = RGB_565(
 						p8[(y * gs->w + x) * 4 + 2],
@@ -1459,7 +1464,7 @@ bool GFXEngine::SaveBmp(GFXSurface *gs, string name)
 		{
 			for (int y = gs->h - 1; y >= 0; y--)
 			{
-				for (unsigned int x = 0; x < gs->w; x++)
+				for (int x = 0; x < gs->w; x++)
 				{
 					fputc(p8[(y * gs->w + x) * 4], fh);
 					fputc(p8[(y * gs->w + x) * 4 + 1], fh);
@@ -1579,7 +1584,7 @@ bool GFXEngine::SaveAlphaChannelBmp(GFXSurface *gs, string name)
 		unsigned char* p8 = (unsigned char*)gs->bgra;
 		for (int y = gs->h - 1; y >= 0; y--)
 		{
-			for (unsigned int x = 0; x < gs->w; x++)
+			for (int x = 0; x < gs->w; x++)
 				fputc(p8[(y * gs->w + x) * 4 + 3], fh);
 			//terminator
 			for (int n = 0; n < terminator; n++)

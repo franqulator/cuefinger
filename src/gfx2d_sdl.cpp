@@ -52,7 +52,7 @@ void GFXEngine::debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, floa
 			0, 1, 0, NULL, GFX_LAYER_FRONT);*/
 }
 
-void GFXEngine::_AddJob(GFXFont* font, float x, float y, string text, short alignment, Vector2D* max_size,
+void GFXEngine::_AddJob(GFXFont* font, float x, float y, const string &text, int alignment, Vector2D* max_size,
 	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
 	if (!font || layer >= MAX_LAYERS)
@@ -231,6 +231,7 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 	this->renderer_height = 0;
 	this->updateBgraSize = 0;
 	this->p_update_bgra = NULL;
+	memset(zorder, 0, MAX_LAYERS * sizeof(int));
 
 	if (!SDL_WasInit(SDL_INIT_VIDEO))
 		SDL_Init(SDL_INIT_VIDEO);
@@ -383,7 +384,7 @@ bool GFXEngine::Update() {
 	return true;
 }
 
-string GFXEngine::_write_get_next_line(GFXFont* fnt, string txt, size_t* txt_ptr, float width, bool autobreak) {
+string GFXEngine::_write_get_next_line(GFXFont* fnt, const string &txt, size_t* txt_ptr, float width, bool autobreak) {
 	int estimate_width;
 	int estimate_height;
 
@@ -402,15 +403,15 @@ string GFXEngine::_write_get_next_line(GFXFont* fnt, string txt, size_t* txt_ptr
 	if (autobreak) // automatischer zeilenumbruch
 	{
 		TTF_SizeUTF8(fnt->ttf, txt_line.c_str(), &estimate_width, &estimate_height);
-		if (width > 0 && estimate_width > width)
+		if (width > 0 && (float)estimate_width > width)
 		{
-			for (int txt_len = 1; txt_len < txt.length() - *txt_ptr; txt_len++)
+			for (size_t txt_len = 1; txt_len < txt.length() - *txt_ptr; txt_len++)
 			{
 				txt_line = txt.substr(*txt_ptr, txt_len);
 
 				TTF_SizeUTF8(fnt->ttf, txt_line.c_str(), &estimate_width, &estimate_height);
 
-				if (estimate_width > width)
+				if ((float)estimate_width > width)
 				{
 					fi = txt_line.find_last_of(" -\t");
 					if (fi != string::npos)
@@ -462,20 +463,15 @@ int GFXEngine::_CreateSpriteBatch(GFXSurface* gs, int layer)
 			mainJob = subJob;
 		}
 
-		GFXSpriteBatch* batch = new GFXSpriteBatch();
-		batch->x = subJob->x;
-		batch->y = subJob->y;
-		batch->rc = subJob->rc;
-		batch->opacity = subJob->opacity;
-		batch->rotation = subJob->rotation;
-		batch->rotationOffset = subJob->rotationOffset;
-		batch->stretch = subJob->stretch;
+		GFXSpriteBatch* batch = new GFXSpriteBatch(subJob);
 
-		if (!mainJob->spritebatch) {
-			mainJob->spritebatch = new deque<GFXSpriteBatch*>();
+		if (mainJob) {
+			if (!mainJob->spritebatch) {
+				mainJob->spritebatch = new deque<GFXSpriteBatch*>();
+			}
+
+			mainJob->spritebatch->push_back(batch);
 		}
-
-		mainJob->spritebatch->push_back(batch);
 
 		if (subJob != mainJob) {
 			//ggf. in z-order nach vorne holen (vertauschen)
@@ -677,8 +673,8 @@ GFXSurface* GFXEngine::CreateSurface(unsigned int w, unsigned int h)
 	gs->w = w;
 	gs->h = h;
 
-	gs->x_surfaces = ceil((double)w / MAX_TEXTURE_WIDTH);
-	gs->y_surfaces = ceil((double)h / MAX_TEXTURE_HEIGHT);
+	gs->x_surfaces = (int)ceil((float)w / (float)MAX_TEXTURE_WIDTH);
+	gs->y_surfaces = (int)ceil((float)h / (float)MAX_TEXTURE_HEIGHT);
 
 	if (!gs->x_surfaces || !gs->y_surfaces)
 	{
@@ -820,12 +816,12 @@ bool GFXEngine::_CopyColorInfo(GFXSurface* gs, bool premultiplyAlpha, bool apply
 		//sdl untertützt kein premultiplied alpha -> zu straight alpha konvertieren
 		else */if (gs->use_alpha && gs->alpha_premultiplied)
 		{
-			for (unsigned int y = 0; y < gs->h; y++)
+			for (int y = 0; y < gs->h; y++)
 			{
-				for (unsigned int x = 0; x < gs->w; x++)
+				for (int x = 0; x < gs->w; x++)
 				{
 					int idx = (y * gs->w + x) * 4;
-					float mul = 255.0 / (float)p_byte_bgra[idx + 3];
+					float mul = 255.0f / (float)p_byte_bgra[idx + 3];
 
 					p_byte_bgra[idx] = (unsigned char)roundf((float)p_byte_bgra[idx] * mul);
 					p_byte_bgra[idx + 1] = (unsigned char)roundf((float)p_byte_bgra[idx + 1] * mul);
@@ -867,7 +863,9 @@ bool GFXEngine::_CopyColorInfo(GFXSurface* gs, bool premultiplyAlpha, bool apply
 				int result = SDL_UpdateTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL,
 					&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT) * gs->w + sx * MAX_TEXTURE_WIDTH)],
 					/*&p_byte_bgra[4 * ((sy * MAX_TEXTURE_HEIGHT + rcT.top) * gs->w + sx * MAX_TEXTURE_WIDTH + rcT.left)],*/ gs->w * 4);
-
+				if (result != 0) {
+					return false;
+				}
 				/*	void *pixels;
 					int pitch = 0;
 					int result = SDL_LockTexture(gs->bitmap[sx + sy * gs->x_surfaces], &rcSDL, (void**)&pixels, &pitch);
@@ -1016,8 +1014,8 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 
 	if (gs_dest)
 	{
-		tiled_pos_x -= bm_x * MAX_TEXTURE_WIDTH;
-		tiled_pos_y -= bm_y * MAX_TEXTURE_HEIGHT;
+		tiled_pos_x -= (float)bm_x * MAX_TEXTURE_WIDTH;
+		tiled_pos_y -= (float)bm_y * MAX_TEXTURE_HEIGHT;
 
 		if (bm_x >= gs_dest->x_surfaces || bm_x < 0
 			|| bm_y >= gs_dest->y_surfaces || bm_y < 0)
@@ -1055,10 +1053,10 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 
 		SDL_Rect rc;
 		SDL_FRect destRC;
-		int lastwidth = 0, lastheight = 0;
+		float lastwidth = 0.0f, lastheight = 0.0f;
 		for (int y = 0; y < gs_src->y_surfaces; y++)
 		{
-			lastwidth = 0;
+			lastwidth = 0.0f;
 			rc.y = l_rc.top - y * MAX_TEXTURE_HEIGHT;
 			rc.h = -rc.y + l_rc.bottom - y * MAX_TEXTURE_HEIGHT;
 
@@ -1075,7 +1073,7 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 				continue;
 
 			destRC.y = tiled_pos_y + lastheight;
-			destRC.h = rc.h * y_ratio;
+			destRC.h = (float)rc.h * y_ratio;
 
 			for (int x = 0; x < gs_src->x_surfaces; x++)
 			{
@@ -1107,7 +1105,7 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 				SDL_SetTextureAlphaMod(gs_src->bitmap[x + y * gs_src->x_surfaces], (Uint8)(opacity * 255.0f));
 
 				destRC.x = tiled_pos_x + lastwidth;
-				destRC.w = rc.w * x_ratio;
+				destRC.w = (float)rc.w * x_ratio;
 
 				SDL_FPoint center;
 				center.x = (float)l_rc.getWidth() / 2.0f;
@@ -1162,32 +1160,28 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 			}
 
 			//grafik auf links folgende teiltexturen zeichnen weiterzeichnen
-			if (xoffset >= 0 && !yoffset &&
-				center_pos_x - radius + xoffset < 0)
+			if (xoffset >= 0 && !yoffset && (int)round(center_pos_x - radius) + xoffset < 0)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
 					opacity, rotation, rotationOffset, stretch, flags, NULL,
 					xoffset + MAX_TEXTURE_WIDTH, yoffset);
 			}
 			//grafik auf rechts folgende teiltexturen zeichnen weiterzeichnen
-			if (xoffset <= 0 && !yoffset &&
-				center_pos_x + radius + xoffset > MAX_TEXTURE_WIDTH)
+			if (xoffset <= 0 && !yoffset && (int)round(center_pos_x + radius) + xoffset > MAX_TEXTURE_WIDTH)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
 					opacity, rotation, rotationOffset, stretch, flags, NULL,
 					xoffset - MAX_TEXTURE_WIDTH, yoffset);
 			}
 			//grafik auf nach oben folgende weiterzeichnen
-			if (yoffset >= 0 &&
-				center_pos_y - radius + yoffset < 0)
+			if (yoffset >= 0 && (int)round(center_pos_y - radius) + yoffset < 0)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
 					opacity, rotation, rotationOffset, stretch, flags, NULL,
 					xoffset, yoffset + MAX_TEXTURE_HEIGHT);
 			}
 			//grafik auf nach unten folgende weiterzeichnen
-			if (yoffset <= 0 &&
-				center_pos_y + radius + yoffset > MAX_TEXTURE_HEIGHT)
+			if (yoffset <= 0 && (int)round(center_pos_y + radius) + yoffset > MAX_TEXTURE_HEIGHT)
 			{
 				_Draw(gs_dest, gs_src, 0, 0, pos_x, pos_y, &l_rc,
 					opacity, rotation, rotationOffset, stretch, flags, NULL,
@@ -1205,8 +1199,8 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 			if (flags || rotation != 0.0f) {
 				float w = (float)l_rc.getWidth() * x_ratio;
 				float h = (float)l_rc.getHeight() * y_ratio;
-				int iw = ceil(w);
-				int ih = ceil(h);
+				int iw = (int)ceil(w);
+				int ih = (int)ceil(h);
 				SDL_Texture* tx = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, iw, ih);
 				if (!tx) {
 					return false;
@@ -1272,8 +1266,8 @@ bool GFXEngine::_Draw(GFXSurface* gs_dest, GFXSurface* gs_src, int shape, unsign
 				SDL_FRect rc;
 				rc.x = pos_x;
 				rc.y = pos_y;
-				rc.w = l_rc.getWidth();
-				rc.h = l_rc.getHeight();
+				rc.w = (float)l_rc.getWidth();
+				rc.h = (float)l_rc.getHeight();
 
 				SDL_RenderFillRectF(renderer, &rc);
 			}
@@ -1297,7 +1291,7 @@ bool GFXEngine::Draw(GFXSurface* gs, float x, float y, Rect* rc,
 		return false;
 	}
 
-	Vector2D stretch(gs->w * scale, gs->h * scale);
+	Vector2D stretch((float)gs->w * scale, (float)gs->h * scale);
 	if (rc) {
 		stretch.set((float)rc->getWidth() * scale, (float)rc->getHeight() * scale);
 	}
@@ -1320,8 +1314,8 @@ bool GFXEngine::DrawShapeOnSurface(GFXSurface* gs_dest, int shape, unsigned int 
 	Rect rc_src;
 	rc_src.left = 0;
 	rc_src.top = 0;
-	rc_src.right = w;
-	rc_src.bottom = h;
+	rc_src.right = (int)round(w);
+	rc_src.bottom = (int)round(h);
 	return _Draw(gs_dest, NULL, shape, color, x, y, &rc_src, opacity, rotation, rotationOffset, NULL, flags);
 }
 
@@ -1422,7 +1416,7 @@ GFXFont* GFXEngine::CreateFontFromFile(string ttf_path, int _height, bool bold, 
 	float xscale, yscale;
 	SDL_RenderGetScale(renderer, &xscale, &yscale);
 
-	fnt->ttf = TTF_OpenFont(ttf_path.c_str(), _height * yscale);
+	fnt->ttf = TTF_OpenFont(ttf_path.c_str(), _height * (int)round(yscale));
 	if (!fnt->ttf)
 	{
 		SAFE_DELETE(fnt);
@@ -1467,7 +1461,7 @@ bool GFXEngine::DeleteFont(GFXFont* font)
 }
 
 //gs für zukünftige nutzung falls man auf surface render möchte
-void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, float _x, float _y, string _text, int _alignment,
+void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, float _x, float _y, const string &_text, int _alignment,
 	Vector2D* _max_size, float _opacity, float _rotation, Vector2D* _rotationOffset, Vector2D* _stretch, int _flags)
 {
 	if (!_font)
@@ -1485,7 +1479,6 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 					GetBValue(_color),
 					255 };
 
-	bool done = false;
 	size_t txt_ptr = 0;
 	int line_nr = 0;
 	string txt_line;
@@ -1496,7 +1489,7 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 	{
 		string txt_line = _write_get_next_line(_font, _text, &txt_ptr, max_width * xscale, (_alignment & GFX_AUTOBREAK));
 
-		string uid = to_string((long)_font) + to_string(_color) + txt_line + to_string(_alignment);
+		string uid = to_string((long long)_font) + to_string(_color) + txt_line + to_string(_alignment);
 		if (_max_size) {
 			uid += to_string(_max_size->getX());
 			uid += to_string(_max_size->getY());
@@ -1600,7 +1593,7 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 	} while (txt_ptr < _text.length());
 }
 
-void GFXEngine::Write(GFXFont* font, float x, float y, string text, int alignment, Vector2D* max_size,
+void GFXEngine::Write(GFXFont* font, float x, float y, const string &text, int alignment, Vector2D* max_size,
 	int flags, float opacity, float rotation, Vector2D* rotationOffset, Vector2D* stretch, int layer)
 {
 	_AddJob(font, x, y, text, alignment, max_size, flags, opacity, rotation, rotationOffset, stretch, layer);

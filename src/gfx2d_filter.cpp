@@ -115,9 +115,9 @@ void GFXEngine::_RenderFilter(GFXSurface *gs, unsigned char *p_update_bgra, Rect
 				}
 				if (gs->filter.shift_intensity != 0.0f)
 				{
-					p_update_bgra[(y * pitch + x) * 4] = (si * (scb - p_byte_bgra[idx]) >> 8) + p_byte_bgra[idx];
-					p_update_bgra[(y * pitch + x) * 4 + 1] = (si * (scg - p_byte_bgra[idx + 1]) >> 8) + p_byte_bgra[idx + 1];
-					p_update_bgra[(y * pitch + x) * 4 + 2] = (si * (scr - p_byte_bgra[idx + 2]) >> 8) + p_byte_bgra[idx + 2];
+					p_update_bgra[(y * pitch + x) * 4] = (unsigned char)(si * (scb - p_byte_bgra[idx]) >> 8) + p_byte_bgra[idx];
+					p_update_bgra[(y * pitch + x) * 4 + 1] = (unsigned char)(si * (scg - p_byte_bgra[idx + 1]) >> 8) + p_byte_bgra[idx + 1];
+					p_update_bgra[(y * pitch + x) * 4 + 2] = (unsigned char)(si * (scr - p_byte_bgra[idx + 2]) >> 8) + p_byte_bgra[idx + 2];
 
 					p_byte_bgra = p_update_bgra;
 					idx = (y * pitch + x) * 4;
@@ -125,31 +125,31 @@ void GFXEngine::_RenderFilter(GFXSurface *gs, unsigned char *p_update_bgra, Rect
 				}
 				if (gs->filter.contrast != 1.0f)
 				{
-					ct_res = (float)(p_byte_bgra[idx] - 127) * gs->filter.contrast + 127;
+					ct_res = (float)(p_byte_bgra[idx] - 127) * gs->filter.contrast + 127.0f;
 					if (ct_res > 255)
 						p_update_bgra[(y * pitch + x) * 4] = 255;
 					else if (ct_res < 0)
 						p_update_bgra[(y * pitch + x) * 4] = 0;
 					else
-						p_update_bgra[(y * pitch + x) * 4] = ct_res;
+						p_update_bgra[(y * pitch + x) * 4] = (unsigned char)ct_res;
 
-					ct_res = (float)(p_byte_bgra[idx + 1] - 127) * gs->filter.contrast + 127;
+					ct_res = (float)(p_byte_bgra[idx + 1] - 127) * gs->filter.contrast + 127.0f;
 					if (ct_res > 255)
 						p_update_bgra[(y * pitch + x) * 4 + 1] = 255;
 					else if (ct_res < 0)
 						p_update_bgra[(y * pitch + x) * 4 + 1] = 0;
 					else
-						p_update_bgra[(y * pitch + x) * 4 + 1] = ct_res;
+						p_update_bgra[(y * pitch + x) * 4 + 1] = (unsigned char)ct_res;
 
-					ct_res = (float)(p_byte_bgra[idx + 2] - 127) * gs->filter.contrast + 127;
+					ct_res = (float)(p_byte_bgra[idx + 2] - 127) * gs->filter.contrast + 127.0f;
 					if (ct_res > 255)
 						p_update_bgra[(y * pitch + x) * 4 + 2] = 255;
 					else if (ct_res < 0)
 						p_update_bgra[(y * pitch + x) * 4 + 2] = 0;
 					else
-						p_update_bgra[(y * pitch + x) * 4 + 2] = ct_res;
+						p_update_bgra[(y * pitch + x) * 4 + 2] = (unsigned char)ct_res;
 
-				/*	ct_res = (float)(p_byte_bgra[idx + 3] - 127) * gs->filter.contrast + 127;
+				/*	ct_res = (float)(p_byte_bgra[idx + 3] - 127) * gs->filter.contrast + 127.0f;
 					if (ct_res > 255)
 						p_update_bgra[(y * pitch + x) * 4 + 3] = 255;
 					else if (ct_res < 0)
@@ -212,28 +212,28 @@ void GFXEngine::_RenderFilter(GFXSurface *gs, unsigned char *p_update_bgra, Rect
 
 				if (gs->filter.saturation != 0.0f)
 				{
-					gw = (p_byte_bgra[idx] + p_byte_bgra[idx + 1] + p_byte_bgra[idx + 2]) / 3.0f;
+					gw = ((float)p_byte_bgra[idx] + (float)p_byte_bgra[idx + 1] + (float)p_byte_bgra[idx + 2]) / 3.0f;
 
-					sat_res = p_byte_bgra[idx] + ((p_byte_bgra[idx] - gw) * gs->filter.saturation);
+					sat_res = (short)p_byte_bgra[idx] + (short)((float)(p_byte_bgra[idx] - gw) * gs->filter.saturation);
 					if (sat_res > 255)
 						sat_res = 255;
 					else if (sat_res < 0)
 						sat_res = 0;
-					p_update_bgra[(y * pitch + x) * 4] = sat_res;
+					p_update_bgra[(y * pitch + x) * 4] = (unsigned char)sat_res;
 
-					sat_res = p_byte_bgra[idx + 1] + ((p_byte_bgra[idx + 1] - gw) * gs->filter.saturation);
+					sat_res = (short)p_byte_bgra[idx + 1] + (short)((float)(p_byte_bgra[idx + 1] - gw) * gs->filter.saturation);
 					if (sat_res > 255)
 						sat_res = 255;
 					else if (sat_res < 0)
 						sat_res = 0;
-					p_update_bgra[(y * pitch + x) * 4 + 1] = sat_res;
+					p_update_bgra[(y * pitch + x) * 4 + 1] = (unsigned char)sat_res;
 
-					sat_res = p_byte_bgra[idx + 2] + ((p_byte_bgra[idx + 2] - gw) * gs->filter.saturation);
+					sat_res = (short)p_byte_bgra[idx + 2] + (short)((float)(p_byte_bgra[idx + 2] - gw) * gs->filter.saturation);
 					if (sat_res > 255)
 						sat_res = 255;
 					else if (sat_res < 0)
 						sat_res = 0;
-					p_update_bgra[(y * pitch + x) * 4 + 2] = sat_res;
+					p_update_bgra[(y * pitch + x) * 4 + 2] = (unsigned char)sat_res;
 
 					p_byte_bgra = p_update_bgra;
 					reset = false;

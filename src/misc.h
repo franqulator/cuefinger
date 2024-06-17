@@ -91,8 +91,8 @@ string getPrefPath(string subpath);
 void initAppPath(string _appfolder);
 string getAppPath(string subpath);
 
-void clearLog(string info);
-void toLog(string str);
+void initLog(const string &info);
+void toLog(const string &str);
 
 class LibraryFile {
 public:
@@ -119,6 +119,6 @@ public:
 };
 
 bool ptInRect(::Rect *rc, ::Point pt);
-string trim(string s);
+string trim(string &s);
 
 #endif

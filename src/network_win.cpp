@@ -87,7 +87,7 @@ bool GetClientIPs(void(*MessageCallback)(string ip)) {
 	return result;
 }
 
-TCPClient::TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,string)) {
+TCPClient::TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,const string&)) {
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
 	this->receiveThreadIsRunning = false;
@@ -109,7 +109,7 @@ TCPClient::TCPClient(string host, string port, void (__cdecl *MessageCallback)(i
 		throw "Error on creating socket";
 	}
 
-	if (connect(this->socketConnect, result->ai_addr, result->ai_addrlen) == -1) {
+	if (connect(this->socketConnect, result->ai_addr, (int)result->ai_addrlen) == -1) {
 		closesocket(this->socketConnect);
 		this->socketConnect = 0;
 		throw "Error on connecting to " + host + ":" + port;
@@ -206,13 +206,13 @@ DWORD WINAPI TCPClient::receiveThread(void *param)
 	return 0;
 }
 
-void TCPClient::Send(string data) {
+void TCPClient::Send(const string &data) {
 	if(this->socketConnect) {
 		size_t p = 0;
 		while(p < data.length() + 1) {
-			size_t len = TCP_BUFFER_SIZE;
-			if(len > data.length() + 1 - p) {
-				len = data.length() + 1 - p;
+			int len = TCP_BUFFER_SIZE;
+			if(len > (int)(data.length() + 1 - p)) {
+				len = (int)(data.length() + 1 - p);
 			}
 			int lenSent = send(this->socketConnect, data.substr(p).c_str() ,len,0);
 			if(lenSent == SOCKET_ERROR) {
