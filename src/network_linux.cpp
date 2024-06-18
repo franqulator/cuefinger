@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "network_linux.h"
+#include "gfx2d_sdl.h"
 
 string GetComputerNameByIP(const string &ip) {
 
@@ -125,46 +126,94 @@ int TCPClient::receiveThread(void *param)
 
 TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&))
 {
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s enter tcpclient", host.c_str());
+
+    if(host.empty()) {
+        throw invalid_argument("Host string is empty");
+    }
+
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
 	this->receiveThreadIsRunning = false;
 	this->MessageCallback = MessageCallback;
 
-	struct addrinfo hints, *result;
+	struct addrinfo hints, *result = NULL;
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_INET; 
 	hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s getaddrinfo", host.c_str());
+
 	//resolve host name to ip if necessary
 	if(getaddrinfo(host.c_str(), port.c_str(), &hints, &result) != 0) {
-		throw "Error on resolving hostname on " + host + ":" + port;
+		throw invalid_argument("Error on resolving hostname on " + host + ":" + port);
 	}
-	
-	this->socketConnect = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s socket", host.c_str());
+	this->socketConnect = socket(result->ai_family, result->ai_socktype | SOCK_NONBLOCK, result->ai_protocol);
 	if(this->socketConnect == -1) {
-		throw "Error on creating socket";
+		freeaddrinfo(result);
+		throw invalid_argument("Error on creating socket");
 	}
-
-	if(connect(this->socketConnect,result->ai_addr,result->ai_addrlen) == -1) {
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s connect", host.c_str());
+	if(connect(this->socketConnect,result->ai_addr,result->ai_addrlen) > -1) {
 		close(this->socketConnect);
 		this->socketConnect = 0;
-		throw "Error on connecting to " + host + ":" + port;
-	}
-
-	if(result) {
 		freeaddrinfo(result);
+		throw invalid_argument("Error on connecting to " + host + ":" + port);
 	}
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s freeaddrinfo", host.c_str());
+	freeaddrinfo(result);
 
+    fd_set fdset;
+    struct timeval tv;
+    FD_ZERO(&fdset);
+    FD_SET(this->socketConnect, &fdset);
+    tv.tv_sec = 10; // 10 second timeout
+    tv.tv_usec = 0;
+
+    if (select(this->socketConnect + 1, NULL, &fdset, NULL, &tv) < 1) {
+		close(this->socketConnect);
+		this->socketConnect = 0;
+        throw invalid_argument("Error on select on " + host + ":" + port);
+    }
+
+    int opt_val;
+    socklen_t len = sizeof(opt_val);
+    getsockopt(this->socketConnect, SOL_SOCKET, SO_ERROR, &opt_val, &len);
+    if (opt_val != 0) {
+		close(this->socketConnect);
+		this->socketConnect = 0;
+        throw invalid_argument("Error on getsockopt on " + host + ":" + port);
+    }
+
+    // set to blocking
+    int arg;
+    if ((arg = fcntl(this->socketConnect, F_GETFL, NULL)) < 0) {
+		close(this->socketConnect);
+		this->socketConnect = 0;
+        throw invalid_argument("Error on fcntl");
+    }
+    arg &= (~O_NONBLOCK);
+    if (fcntl(this->socketConnect, F_SETFL, arg) < 0) {
+		close(this->socketConnect);
+		this->socketConnect = 0;
+        throw invalid_argument("Error on fcntl");
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s messagecallback", host.c_str());
 	if (this->MessageCallback) {
 		this->receiveThreadHandle = SDL_CreateThread(receiveThread, "ReceiveThread",(void*)this);
 		if (this->receiveThreadHandle) {
 			this->MessageCallback(MSG_CLIENT_CONNECTED, "");
 		}
 		else {
-			throw "Error on creating thread";
+			close(this->socketConnect);
+			this->socketConnect = 0;
+			throw invalid_argument("Error on creating thread");
 		}
 	}
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s done", host.c_str());
 }
 
 TCPClient::~TCPClient() {

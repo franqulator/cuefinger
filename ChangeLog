@@ -1,6 +1,7 @@
 --- v1.3.3 ---
 - Bugfixes
 - Stability and performance improvements
+- Layout improvements
 
 --- v1.3.2 ---
 - Hold Mute All button to unmute all channels (instead of just previously muted by All Mute)

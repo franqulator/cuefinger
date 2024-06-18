@@ -101,23 +101,51 @@ TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *Mess
 
 	//resolve host name to ip if necessary
 	if (getaddrinfo(host.c_str(), port.c_str(), &hints, &result) != 0) {
-		throw "Error on resolving hostname on " + host + ":" + port;
+		throw invalid_argument("Error on resolving hostname on " + host + ":" + port);
 	}
 
 	this->socketConnect = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (this->socketConnect == -1) {
-		throw "Error on creating socket";
+		freeaddrinfo(result);
+		throw invalid_argument("Error on creating socket");
 	}
 
-	if (connect(this->socketConnect, result->ai_addr, (int)result->ai_addrlen) == -1) {
+	u_long mode = 1;  // set non-blocking socket
+	ioctlsocket(this->socketConnect, FIONBIO, &mode);
+
+	if (connect(this->socketConnect, result->ai_addr, (int)result->ai_addrlen) > -1) {
 		closesocket(this->socketConnect);
 		this->socketConnect = 0;
-		throw "Error on connecting to " + host + ":" + port;
+		freeaddrinfo(result);
+		throw invalid_argument("Error on connecting to " + host + ":" + port);
 	}
 
-	if (result) {
-		freeaddrinfo(result);
+	freeaddrinfo(result);
+
+	fd_set fdset;
+	struct timeval tv;
+	FD_ZERO(&fdset);
+	FD_SET(this->socketConnect, &fdset);
+	tv.tv_sec = 10; //10 second timeout
+	tv.tv_usec = 0;
+
+	if (select(this->socketConnect + 1, NULL, &fdset, NULL, &tv) < 1) {
+		closesocket(this->socketConnect);
+		this->socketConnect = 0;
+		throw invalid_argument("Error on select on " + host + ":" + port);
 	}
+
+	char opt_val;
+	socklen_t len = sizeof(opt_val);
+	getsockopt(this->socketConnect, SOL_SOCKET, SO_ERROR, &opt_val, &len);
+	if (opt_val != 0) {
+		closesocket(this->socketConnect);
+		this->socketConnect = 0;
+		throw invalid_argument("Error on getsockopt on " + host + ":" + port);
+	}
+
+	mode = 0;  // set blocking socket
+	ioctlsocket(this->socketConnect, FIONBIO, &mode);
 
 	if (this->MessageCallback) {
 		this->receiveThreadHandle = CreateThread(NULL, 0, this->receiveThread, (void*)this, NULL, NULL);
@@ -125,7 +153,9 @@ TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *Mess
 			this->MessageCallback(MSG_CLIENT_CONNECTED, "");
 		}
 		else {
-			throw "Error on creating thread";
+			closesocket(this->socketConnect);
+			this->socketConnect = 0;
+			throw invalid_argument("Error on creating thread");
 		}
 	}
 }

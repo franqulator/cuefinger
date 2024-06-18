@@ -22,7 +22,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <fcntl.h>
 #include <exception>
+#include <stdexcept>
 #include <string>
 
 #pragma comment(lib,"Ws2_32.lib")

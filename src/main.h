@@ -72,10 +72,6 @@ https://github.com/franqulator/cuefinger";
 #define SIMULATION_CHANNEL_COUNT	16
 #define SIMULATION_SENDS_COUNT	6
 
-#define WM_CREATE_SENDBUTTONS		WM_APP+10
-#define WM_UPDATE_CONNECTBUTTONS	WM_APP+8
-#define WM_CONNECTION_LOST			WM_APP+11
-
 #define UA_SENDVALUE_RESOLUTION	0.002 // auflösung um performance zu verbessern und netzwerklast zu reduzieren => entspricht einer Rasterung auf 500 Stufen (1 / 0.002)
 #define UA_METER_PRECISION	800.0
 
@@ -106,7 +102,7 @@ https://github.com/franqulator/cuefinger";
 #define METER_COLOR_YELLOW	RGB(200, 162, 42)
 #define METER_COLOR_RED		RGB(250, 62, 42)
 
-#define UA_SERVER_RESFRESH_TIME	20000 //in ms
+#define UA_SERVER_RESFRESH_TIME	11000 //in ms
 #define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
 
 #define TOUCH_ACTION_NONE	0

@@ -20,9 +20,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "main.h"
+#include <mutex>
+
+mutex g_mutex_serverList;
+mutex g_mutex_uaDevices;
 
 int g_userEventBeginNum = 0;
-#define USER_EVENT_COUNT				14
+#define USER_EVENT_COUNT				15
 #define EVENT_CONNECT					1
 #define EVENT_DISCONNECT				2
 #define EVENT_DEVICES_INITIATE_RELOAD	3
@@ -37,6 +41,7 @@ int g_userEventBeginNum = 0;
 #define EVENT_AFTER_UPDATE_PROPERTIES	12
 #define EVENT_RESET_ORDER				13
 #define EVENT_DEVICE_ONLINE				14
+#define EVENT_UPDATE_CONNECT_BUTTONS	15
 
 GFXEngine *gfx = NULL;
 
@@ -59,7 +64,7 @@ map<string, string> serverSettingsJSON;
 
 string g_msg = "";
 
-vector<string> g_ua_server_list;
+vector<string> g_ua_serverList;
 string g_ua_server_connected = "";
 int g_ua_server_last_connection = -1;
 
@@ -285,19 +290,23 @@ int calculateChannelsPerPage() {
 	return calculateAverageChannelsPerPage();
 }
 
-int maxPages() {
-	return max(0, getActiveChannelsCount(true) / g_channels_per_page - 1);
+int maxPages(bool onlyVisible) {
+	int maxPages = (getActiveChannelsCount(onlyVisible)) / g_channels_per_page;
+	if ((getActiveChannelsCount(onlyVisible) % g_channels_per_page) == 0) {
+		maxPages--;
+	}
+	return max(0, maxPages);
 }
 
-void updateMaxPages() {
-	int max_pages = maxPages();
+void updateMaxPages(bool onlyVisible) {
+	int max_pages = maxPages(onlyVisible);
 	if (g_page >= max_pages) {
 		g_page = max_pages;
 		g_browseToChannel = getMiddleSelectedChannel();
 	}
 
 	g_btnPageLeft->setEnable(g_page != 0);
-	g_btnPageRight->setEnable(g_page != maxPages());
+	g_btnPageRight->setEnable(g_page != max_pages);
 }
 
 bool pageLeft() {
@@ -308,7 +317,7 @@ bool pageLeft() {
 		setRedrawWindow(true);
 
 		g_btnPageLeft->setEnable(g_page != 0);
-		g_btnPageRight->setEnable(g_page != maxPages());
+		g_btnPageRight->setEnable(g_page != maxPages(!g_btnSelectChannels->isHighlighted()));
 
 		return true;
 	}
@@ -316,14 +325,14 @@ bool pageLeft() {
 }
 
 bool pageRight() {
-	if (g_page < maxPages()) {
+	if (g_page < maxPages(!g_btnSelectChannels->isHighlighted())) {
 		g_page++;
 		pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 		g_browseToChannel = getMiddleSelectedChannel();
 		setRedrawWindow(true);
 
 		g_btnPageLeft->setEnable(g_page != 0);
-		g_btnPageRight->setEnable(g_page != maxPages());
+		g_btnPageRight->setEnable(g_page != maxPages(!g_btnSelectChannels->isHighlighted()));
 
 		return true;
 	}
@@ -574,7 +583,7 @@ void updateLayout() {
 	}
 
 	browseToSelectedChannel(g_browseToChannel);
-	updateMaxPages();
+	updateMaxPages(!g_btnSelectChannels->isHighlighted());
 
 	setRedrawWindow(true);
 }
@@ -1265,35 +1274,33 @@ void Channel::getColoredGfx(GFXSurface **gsLabel, GFXSurface** gsFader) {
 		*gsFader = g_gsFaderRed;
 	}
 	else {
-		if (properties.length() > 0) {
-			if (properties.find("r") != string::npos || properties.find("R") != string::npos) {
-				*gsLabel = g_gsLabelRed[this->label_gfx];
-				*gsFader = g_gsFaderRed;
-			}
-			else if (properties.find("g") != string::npos || properties.find("G") != string::npos) {
-				*gsLabel = g_gsLabelGreen[this->label_gfx];
-				*gsFader = g_gsFaderGreen;
-			}
-			else if (properties.find("bl") != string::npos || properties.find("BL") != string::npos) {
-				*gsLabel = g_gsLabelBlack[this->label_gfx];
-				*gsFader = g_gsFaderBlack;
-			}
-			else if (properties.find("b") != string::npos || properties.find("B") != string::npos) {
-				*gsLabel = g_gsLabelBlue[this->label_gfx];
-				*gsFader = g_gsFaderBlue;
-			}
-			else if (properties.find("y") != string::npos || properties.find("Y") != string::npos) {
-				*gsLabel = g_gsLabelYellow[this->label_gfx];
-				*gsFader = g_gsFaderYellow;
-			}
-			else if (properties.find("p") != string::npos || properties.find("P") != string::npos) {
-				*gsLabel = g_gsLabelPurple[this->label_gfx];
-				*gsFader = g_gsFaderPurple;
-			}
-			else if (properties.find("o") != string::npos || properties.find("O") != string::npos) {
-				*gsLabel = g_gsLabelOrange[this->label_gfx];
-				*gsFader = g_gsFaderOrange;
-			}
+		if (properties.find("r") != string::npos || properties.find("R") != string::npos) {
+			*gsLabel = g_gsLabelRed[this->label_gfx];
+			*gsFader = g_gsFaderRed;
+		}
+		else if (properties.find("g") != string::npos || properties.find("G") != string::npos) {
+			*gsLabel = g_gsLabelGreen[this->label_gfx];
+			*gsFader = g_gsFaderGreen;
+		}
+		else if (properties.find("bl") != string::npos || properties.find("BL") != string::npos) {
+			*gsLabel = g_gsLabelBlack[this->label_gfx];
+			*gsFader = g_gsFaderBlack;
+		}
+		else if (properties.find("b") != string::npos || properties.find("B") != string::npos) {
+			*gsLabel = g_gsLabelBlue[this->label_gfx];
+			*gsFader = g_gsFaderBlue;
+		}
+		else if (properties.find("y") != string::npos || properties.find("Y") != string::npos) {
+			*gsLabel = g_gsLabelYellow[this->label_gfx];
+			*gsFader = g_gsFaderYellow;
+		}
+		else if (properties.find("p") != string::npos || properties.find("P") != string::npos) {
+			*gsLabel = g_gsLabelPurple[this->label_gfx];
+			*gsFader = g_gsFaderPurple;
+		}
+		else if (properties.find("o") != string::npos || properties.find("O") != string::npos) {
+			*gsLabel = g_gsLabelOrange[this->label_gfx];
+			*gsFader = g_gsFaderOrange;
 		}
 		else {
 			*gsLabel = g_gsLabelWhite[this->label_gfx];
@@ -1312,135 +1319,101 @@ bool Channel::isOverriddenHide() {
 
 void Channel::updateSubscription(bool subscribe, int flags)
 {
-	if (g_btnMix->isHighlighted() || (flags & ALL_MIXES)) {
+	bool subscribeMix = subscribe && (g_btnMix->isHighlighted() || (flags & ALL_MIXES));
 
-		string type_str;
+	string type_str;
+	if (this->type == INPUT) {
+		type_str = "/inputs/";
+	}
+	else if (this->type == AUX) {
+		type_str = "/auxs/";
+	}
+	else if (this->type == MASTER) {
+		type_str = "/outputs/";
+	}
+
+	string root = "";
+	if (!subscribeMix) {
+		root += "un";
+	}
+	root += "subscribe /devices/" + this->device->id + type_str + this->id;
+
+	if ((flags & NAME) && ((bool)(this->subscriptions & NAME) != subscribeMix)) {
+		tcpClientSend(root + "/Name/");
+
 		if (this->type == INPUT) {
-			type_str = "/inputs/";
+			tcpClientSend(root + "/StereoName/");
+			this->subscriptions ^= NAME;
 		}
-		else if (this->type == AUX) {
-			type_str = "/auxs/";
+	}
+
+	if ((flags & STEREO) && ((bool)(this->subscriptions & STEREO) != subscribeMix)) {
+		if (this->type == INPUT) {
+			tcpClientSend(root + "/Stereo/");
+			this->subscriptions ^= STEREO;
 		}
-		else if (this->type == MASTER) {
-			type_str = "/outputs/";
+	}
+
+	if ((flags & MUTE) && ((bool)(this->subscriptions & MUTE) != subscribeMix)) {
+		tcpClientSend(root + "/Mute/");
+		this->subscriptions ^= MUTE;
+	}
+
+	if ((flags & STATE) && ((bool)(this->subscriptions & STATE) != subscribeMix)) {
+		if (this->type == INPUT) {
+			tcpClientSend(root + "/ChannelHidden/");
+			tcpClientSend(root + "/EnabledByUser/");
+			tcpClientSend(root + "/Active/");
+			this->subscriptions ^= STATE;
 		}
+	}
 
-		string root = "";
-		if (!subscribe) {
-			root += "un";
+	if ((flags & LEVEL) && ((bool)(this->subscriptions & LEVEL) != subscribeMix)) {
+		if (this->type == MASTER) {
+			tcpClientSend(root + "/CRMonitorLevel/");
 		}
-		root += "subscribe /devices/" + this->device->id + type_str + this->id;
-
-		if ((flags & NAME) && ((bool)(this->subscriptions & NAME) != subscribe)) {
-			string cmd = root + "/Name/";
-			tcpClientSend(cmd);
-
-			if (this->type == INPUT) {
-				cmd = root + "/StereoName/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= NAME;
-			}
+		else {
+			tcpClientSend(root + "/FaderLevel/");
 		}
+		this->subscriptions ^= LEVEL;
+	}
 
-		if ((flags & STEREO) && ((bool)(this->subscriptions & STEREO) != subscribe)) {
-			if (this->type == INPUT) {
-				string cmd = root + "/Stereo/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= STEREO;
-			}
+	if ((flags & SOLO) && ((bool)(this->subscriptions & SOLO) != subscribeMix)) {
+		if (this->type == INPUT) {
+			tcpClientSend(root + "/Solo/");
+			this->subscriptions ^= SOLO;
 		}
+	}
 
-		if ((flags & MUTE) && ((bool)(this->subscriptions & MUTE) != subscribe)) {
-			string cmd = root + "/Mute/";
-			tcpClientSend(cmd);
-
-			this->subscriptions ^= MUTE;
+	if ((flags & SEND_POST) && ((bool)(this->subscriptions & SEND_POST) != subscribeMix)) {
+		if (this->type == AUX) {
+			tcpClientSend(root + "/SendPostFader/");
+			this->subscriptions ^= SEND_POST;
 		}
+	}
 
-		if ((flags & STATE) && ((bool)(this->subscriptions & STATE) != subscribe)) {
-			if (this->type == INPUT) {
-				string cmd = root + "/ChannelHidden/";
-				tcpClientSend(cmd);
-
-				cmd = root + "/EnabledByUser/";
-				tcpClientSend(cmd);
-
-				cmd = root + "/Active/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= STATE;
-			}
+	if ((flags & PAN) && ((bool)(this->subscriptions & PAN) != subscribeMix)) {
+		if (this->type == INPUT) {
+			tcpClientSend(root + "/Pan/");
+			tcpClientSend(root + "/Pan2/");
+			this->subscriptions ^= PAN;
 		}
+	}
 
-		if ((flags & LEVEL) && ((bool)(this->subscriptions & LEVEL) != subscribe)) {
-			if (this->type == MASTER) {
-				string cmd = root + "/CRMonitorLevel/";
-				tcpClientSend(cmd);
-			}
-			else {
-				string cmd = root + "/FaderLevel/";
-				tcpClientSend(cmd);
-			}
-			this->subscriptions ^= LEVEL;
-		}
-
-		if ((flags & SOLO) && ((bool)(this->subscriptions & SOLO) != subscribe)) {
-			if (this->type == INPUT) {
-				string cmd = root + "/Solo/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= SOLO;
-			}
-		}
-
-		if ((flags & SEND_POST) && ((bool)(this->subscriptions & SEND_POST) != subscribe)) {
-			if (this->type == AUX) {
-				string cmd = root + "/SendPostFader/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= SEND_POST;
-			}
-		}
-
-		if ((flags & PAN) && ((bool)(this->subscriptions & PAN) != subscribe)) {
-			if (this->type == INPUT) {
-				string cmd = root + "/Pan/";
-				tcpClientSend(cmd);
-
-				cmd = root + "/Pan2/";
-				tcpClientSend(cmd);
-
-				this->subscriptions ^= PAN;
-			}
-		}
-
-		if ((flags & METER) && ((bool)(this->subscriptions & METER) != subscribe)) {
-			string cmd = root + "/meters/0/MeterLevel/";
-			tcpClientSend(cmd);
-
-			cmd = root + "/meters/0/MeterClip/";
-			tcpClientSend(cmd);
-
-			cmd = root + "/meters/1/MeterLevel/";
-			tcpClientSend(cmd);
-
-			cmd = root + "/meters/1/MeterClip/";
-			tcpClientSend(cmd);
-
-			this->subscriptions ^= METER;
-		}
+	if ((flags & METER) && ((bool)(this->subscriptions & METER) != subscribeMix)) {
+		tcpClientSend(root + "/meters/0/MeterLevel/");
+		tcpClientSend(root + "/meters/0/MeterClip/");
+		tcpClientSend(root + "/meters/1/MeterLevel/");
+		tcpClientSend(root + "/meters/1/MeterClip/");
+		this->subscriptions ^= METER;
 	}
 
 	if (this->type != MASTER) {
 		for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
-			if (itB->second->isHighlighted() || (flags & ALL_MIXES)) {
-				unordered_map<string, Send*>::iterator itS = this->sendsByName.find((*itB).first);
-				if (itS != this->sendsByName.end()) {
-					bool subscribeSend = subscribe && (*itB).second->isHighlighted();
-					itS->second->updateSubscription(subscribeSend, flags);
-				}
+			unordered_map<string, Send*>::iterator itS = this->sendsByName.find((*itB).first);
+			if (itS != this->sendsByName.end()) {
+				bool subscribeSend = subscribe && ((*itB).second->isHighlighted() || (flags & ALL_MIXES));
+				itS->second->updateSubscription(subscribeSend, flags);
 			}
 		}
 	}
@@ -1526,16 +1499,15 @@ void updateSubscriptions() {
 	}
 }
 
-UADevice *getDeviceByUAId(string ua_device_id)
-{
+UADevice *getDeviceByUAId(string ua_device_id) {
+	const std::lock_guard<std::mutex> lock(g_mutex_uaDevices);
+	
 	if (ua_device_id.length() == 0)
 		return NULL;
 
-	for (size_t n = 0; n < g_ua_devices.size(); n++)
-	{
-		if (g_ua_devices[n]->id == ua_device_id)
-		{
-			return g_ua_devices[n];
+	for (auto it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
+		if ((*it)->id == ua_device_id) {
+			return *it;
 		}
 	}
 	return NULL;
@@ -1648,6 +1620,36 @@ Channel* getChannelByPosition(Vector2D pt) // client-position; e.g. touch / mous
 	return NULL;
 }
 
+bool serverListAdd(const string& server) {
+	const std::lock_guard<std::mutex> lock(g_mutex_serverList);
+
+	bool exists = false;
+	for (auto it = g_ua_serverList.begin(); it != g_ua_serverList.end(); ++it) {
+		if (*it == server) {
+			exists = true;
+			break;
+		}
+	}
+	if (!exists) {
+		g_ua_serverList.push_back(server);
+		return true;
+	}
+	return false;
+}
+
+void serverListClear() {
+	const std::lock_guard<std::mutex> lock(g_mutex_serverList);
+	g_ua_serverList.clear();
+}
+
+string serverListGet(int i) {
+	const std::lock_guard<std::mutex> lock(g_mutex_serverList);
+	if (i < (int)g_ua_serverList.size()) {
+		return g_ua_serverList[i];
+	}
+	return "";
+}
+
 static int pingServer(void *param)
 {
 	if (!param)
@@ -1655,34 +1657,16 @@ static int pingServer(void *param)
 
 	string ip ((char*)param);
 
-	try
-	{
+	try {
 		TCPClient* tcpClient = new TCPClient(ip, UA_TCP_PORT, NULL);
-
 		string computername = GetComputerNameByIP(ip);
-
-		bool exists = false;
-		for (size_t n = 0; n < g_ua_server_list.size(); n++)
-		{
-			if (g_ua_server_list[n] == computername)
-			{
-				exists = true;
-				break;
-			}
-		}
-
-		if (!exists)
-		{
-			g_ua_server_list.push_back(computername);
-
-			updateConnectButtons();
-
-			writeLog(LOG_INFO, "UA-Server found on " + g_ua_server_list.back());
-		}
+		writeLog(LOG_INFO, "UA-Server found on " + computername);
+		serverListAdd(computername);
+		pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
 
 		SAFE_DELETE(tcpClient);
 	}
-	catch (string error) {
+	catch (const invalid_argument &) {
 		writeLog(LOG_INFO| LOG_EXTENDED, "No UA-Server found on " + ip);
 	}
 	free(param);
@@ -1691,14 +1675,20 @@ static int pingServer(void *param)
 }
 
 void getServerListCallback(string ip) {
+	if (ip.empty()) {
+		return;
+	}
+
 	if (ip.substr(0, 4) == "127.") {
 		//check localhost
-		char *scanIpBuffer = (char*)malloc(sizeof(char) * 16);
+		writeLog(LOG_INFO, "Create ip buffer " + ip);
+		char* scanIpBuffer = (char*)malloc(sizeof(char) * ip.length() + 1);
 		if (scanIpBuffer) {
 			ip.copy(scanIpBuffer, ip.length());
 			scanIpBuffer[ip.length()] = '\0';
 			string threadName = "PingUAServer on " + ip;
-			SDL_Thread *thread = SDL_CreateThread(pingServer, threadName.c_str(), (void*)scanIpBuffer);
+			writeLog(LOG_INFO, "Create thrad " + threadName);
+			SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), (void*)scanIpBuffer);
 			if (!thread) {
 				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
 			}
@@ -1712,25 +1702,30 @@ void getServerListCallback(string ip) {
 	}
 	else {
 		size_t cut = ip.find_last_of('.');
-		string ipFragment = ip.substr(0, cut + 1);
+		if (cut != string::npos) {
+			string ipFragment = ip.substr(0, cut + 1);
 
-		for (int n = 0; n < 256; n++) {
-			ip = ipFragment + to_string(n);
-			char* scanIpBuffer = (char*)malloc(sizeof(char) * 16);
-			if (scanIpBuffer) {
-				ip.copy(scanIpBuffer, ip.length());
-				scanIpBuffer[ip.length()] = '\0';
-				string threadName = "PingUAServer on " + ip;
-				SDL_Thread *thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
-				if (!thread) {
-					writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+			for (int n = 1; n < 255; n++) {
+				ip = ipFragment + to_string(n);
+				writeLog(LOG_INFO, "Create ip buffer " + ip);
+				char* scanIpBuffer = (char*)malloc(sizeof(char) * ip.length() + 1);
+				if (scanIpBuffer) {
+					ip.copy(scanIpBuffer, ip.length());
+					scanIpBuffer[ip.length()] = '\0';
+					string threadName = "PingUAServer on " + ip;
+					writeLog(LOG_INFO, "Create thrad " + threadName);
+					SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
+					if (!thread) {
+						writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+					}
+					else {
+						pingThreadsList.push_back(thread);
+					}
 				}
 				else {
-					pingThreadsList.push_back(thread);
+					writeLog(LOG_ERROR,
+						"Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
 				}
-			}
-			else {
-				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
 			}
 		}
 	}
@@ -1921,8 +1916,8 @@ bool getServerList()
 
 	setRedrawWindow(true);
 
-	g_ua_server_list.clear();
-	g_ua_server_list.push_back("Simulation");
+	serverListClear();
+	serverListAdd("Simulation");
 
 	updateConnectButtons();
 
@@ -1944,7 +1939,7 @@ bool getServerList()
 	terminateAllPingThreads();
 
 	g_ua_server_last_connection = -1;
-	g_ua_server_list.clear();
+	serverListClear();
 
 	updateConnectButtons();
 
@@ -2026,7 +2021,9 @@ void tcpClientProc(int msg, const string &data)
 
 			//daten anhand path_parameter verarbeiten
 			if (path_parameter[0] == "Session" || path_parameter[0] == "IOMapPreset") {
-				pushEvent(EVENT_DEVICES_INITIATE_RELOAD);
+				if (!isLoading()) {
+					pushEvent(EVENT_DEVICES_INITIATE_RELOAD);
+				}
 			}
 			else if (path_parameter[0] == "PostFaderMetering") {
 				pushEvent(EVENT_POST_FADER_METERING, (void*)(bool)element["data"]);
@@ -2057,7 +2054,6 @@ void tcpClientProc(int msg, const string &data)
 
 						const dom::object obj = element["data"]["children"];
 
-						string* pType = new string(path_parameter[2]);
 						vector<string>* pIds = new vector<string>();
 						for (dom::object::iterator it = obj.begin(); it != obj.end(); ++it) {
 							string id{ it.key() };
@@ -2323,9 +2319,9 @@ void tcpClientProc(int msg, const string &data)
 					writeLog(LOG_ERROR| LOG_EXTENDED, "UA-Error " + string(c));
 				}
 			}
-			catch (simdjson_error&) {}
+			catch (const simdjson_error&) {}
 		}
-		catch (simdjson_error &e) {
+		catch (const simdjson_error &e) {
 			writeLog(LOG_ERROR| LOG_EXTENDED, "JSON-Error: " + string(e.what()));
 		}
 		break;
@@ -2757,7 +2753,7 @@ void browseToSelectedChannel(int index) {
 			}
 		}
 	}
-	if (index == getActiveChannelsCount(false)) {
+	if (index == getActiveChannelsCount(false) + 1) {
 		g_page = 0;
 	}
 	else if (g_channels_per_page) {
@@ -2787,7 +2783,6 @@ void draw() {
 	gfx->Draw(g_gsBgRight, 0, 0, NULL, GFX_HFLIP, 1.0, 0, NULL, &stretch);
 
 	//draw buttons
-	g_btnSettings->draw(BTN_COLOR_YELLOW);
 	g_btnMuteAll->draw(BTN_COLOR_RED);
 	for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
 		if (it->second->getText() == "AUX 1") {
@@ -2895,7 +2890,7 @@ void draw() {
 			float reorderInsertX = ceil((x - g_channel_offset_x) / g_channel_width) * g_channel_width + g_channel_offset_x;
 			reorderInsertX = max(reorderInsertX, g_channel_offset_x);
 			reorderInsertX = min(reorderInsertX, g_channel_offset_x + g_channel_width * (float)g_channels_per_page);
-			if (g_page == maxPages()) {
+			if (g_page == maxPages(!g_btnSelectChannels->isHighlighted())) {
 				int channelsOnLastPage = getActiveChannelsCount(true) % g_channels_per_page;
 				if (channelsOnLastPage) {
 					reorderInsertX = min(reorderInsertX, g_channel_offset_x + g_channel_width * (float)channelsOnLastPage);
@@ -2924,6 +2919,8 @@ void draw() {
 	}
 
 	if (g_btnSettings->isHighlighted()) {
+
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.8f);
 
 		float box_width = g_btnInfo->getX() + g_btn_width + 20.0f - g_channel_offset_x;
 		float box_height = g_btnServerlistScan->getY() + g_btn_height / 2.0f + 20.0f;
@@ -2996,8 +2993,12 @@ void draw() {
 
 		gfx->SetColor(g_fntMain, BLACK);
 	}
+	g_btnSettings->draw(BTN_COLOR_YELLOW); // draw after settings screen
 
 	if (g_btnInfo->isHighlighted()) {
+
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.8f);
+
 		sz = gfx->GetTextBlockSize(g_fntInfo, INFO_TEXT);
 		gfx->SetColor(g_fntInfo, RGB(220,220,220));
 		gfx->SetShadow(g_fntInfo, BLACK, 1.0f);
@@ -3020,7 +3021,7 @@ void draw() {
 		}
 		else if(g_unmuteAllCountdown) {
 			msg += to_string(g_unmuteAllCountdown) + "s to unmute all channels";
-			if (g_settings.lock_to_mix.length()) {
+			if (!g_settings.lock_to_mix.empty()) {
 				msg += " of " + g_settings.lock_to_mix;
 			}
 		}
@@ -3055,7 +3056,7 @@ bool connect(int connection_index)
 		g_page = 0;
 	}
 
-	g_ua_server_connected = g_ua_server_list[connection_index];
+	g_ua_server_connected = serverListGet(connection_index);
 
 	g_ua_devices[0].id = "0";
 	g_ua_devices[0].AllocChannels(UA_INPUT, SIMULATION_CHANNEL_COUNT);
@@ -3108,19 +3109,19 @@ bool connect(int connection_index)
 		g_channelsMutedBeforeAllMute.clear();
 	}
 
-	if (g_ua_server_list[connection_index].length() == 0)
+	if (serverListGet(connection_index).empty())
 		return false;
 
 	//connect to UA
 	try
 	{
-		g_msg = "Connecting to " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT;
+		g_msg = "Connecting to " + serverListGet(connection_index) + ":" + UA_TCP_PORT;
 		writeLog(LOG_INFO, g_msg);
 		draw(); // force draw
 
-		g_tcpClient = new TCPClient(g_ua_server_list[connection_index], UA_TCP_PORT, &tcpClientProc);
-		g_ua_server_connected = g_ua_server_list[connection_index];
-		writeLog(LOG_INFO, "UA:  Connected on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT);
+		g_tcpClient = new TCPClient(serverListGet(connection_index), UA_TCP_PORT, &tcpClientProc);
+		g_ua_server_connected = serverListGet(connection_index);
+		writeLog(LOG_INFO, "UA:  Connected on " + serverListGet(connection_index) + ":" + UA_TCP_PORT);
 
 		setLoadingState(true);
 		tcpClientSend("subscribe /Session");
@@ -3132,6 +3133,7 @@ bool connect(int connection_index)
 		g_btnReorderChannels->setEnable(true);
 		g_btnChannelWidth->setEnable(true);
 		g_btnMix->setEnable(true);
+		g_selectedMixBus = "MIX";
 		g_btnMuteAll->setEnable(true);
 
 		for (size_t n = 0; n < g_btnConnect.size(); n++) {
@@ -3149,8 +3151,8 @@ bool connect(int connection_index)
 
 		setRedrawWindow(true);
 	}
-	catch (string error) {
-		g_msg = "Connection failed on " + g_ua_server_list[connection_index] + ":" + UA_TCP_PORT + ": " + string(error);
+	catch (const invalid_argument &error) {
+		g_msg = "Connection failed on " + serverListGet(connection_index) + ":" + UA_TCP_PORT + ": " + error.what();
 		writeLog(LOG_ERROR, "UA:  " + g_msg);
 		disconnect();
 		return false;
@@ -3908,10 +3910,11 @@ void onStateChanged_btnMuteAll(Button *btn) {
 void onStateChanged_btnSelectChannels(Button *btn) {
 	if (btn->getState() & PRESSED) {
 		if (!(btn->getState() & CHECKED)) {
+			g_btnReorderChannels->setCheck(false);
+			g_visibleChannelsCount = -1;
+			updateMaxPages(false);
 			browseToSelectedChannel(g_browseToChannel);
 			g_browseToChannel = getMiddleSelectedChannel();
-			g_btnReorderChannels->setCheck(false);
-			updateMaxPages();
 			pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 		}
 		g_selectAllChannelsCountdown = 8;
@@ -3927,7 +3930,8 @@ void onStateChanged_btnSelectChannels(Button *btn) {
 			}
 			else {
 				browseToSelectedChannel(g_browseToChannel);
-				updateMaxPages();
+				g_visibleChannelsCount = -1;
+				updateMaxPages(true);
 				g_browseToChannel = getMiddleSelectedChannel();
 				pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 			}
@@ -3968,7 +3972,7 @@ void onStateChanged_btnChannelWidth(Button* btn) {
 
 		updateLayout();
 		updateChannelWidthButton();
-		updateMaxPages();
+		updateMaxPages(!g_btnSelectChannels->isHighlighted());
 		browseToSelectedChannel(g_browseToChannel);
 		pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 	}
@@ -4003,7 +4007,7 @@ void onStateChanged_btnsSelectMix(Button* btn) {
 			g_selectedMixBus = "MIX";
 		}
 		g_visibleChannelsCount = -1;
-		updateMaxPages();
+		updateMaxPages(!g_btnSelectChannels->isHighlighted());
 		updateSubscriptions();
 	}
 }
@@ -4050,7 +4054,7 @@ void onStateChanged_btnShowOfflineDevices(Button* btn) {
 	if (btn->getState() == PRESSED || btn->getState() == RELEASED) {
 		g_settings.show_offline_devices = g_btnShowOfflineDevices->getState();
 		g_visibleChannelsCount = -1;
-		updateMaxPages();
+		updateMaxPages(!g_btnSelectChannels->isHighlighted());
 		updateSubscriptions();
 
 	}
@@ -4077,6 +4081,7 @@ void onStateChanged_btnsLockToMix(Button* btn) {
 
 		if (btn->isHighlighted()) {
 			g_settings.lock_to_mix = btn->getText();
+			g_selectedMixBus = btn->getText();
 
 			if (g_settings.lock_to_mix == "MIX") {
 				g_btnMix->setEnable(true);
@@ -4205,6 +4210,10 @@ void onStateChanged_btnsServerlist(Button* btn) {
 	}
 }
 
+void onStateChanged_btnInfo(Button* btn) {
+	g_btnSettings->setCheck(false);
+}
+
 void toggleFullscreen() {
 	int x, y;
 	SDL_GetGlobalMouseState(&x, &y);
@@ -4303,7 +4312,7 @@ void createStaticButtons()
 	g_btnServerlistScan = new Button(RADIO, 0, "Scan network", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, true, !g_settings.lock_settings,
 		true, &onStateChanged_btnsServerlist);
 
-	g_btnInfo = new Button(CHECK, 0, "Info", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, false, true);
+	g_btnInfo = new Button(CHECK, 0, "Info", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, false, true, true, &onStateChanged_btnInfo);
 	g_btnFullscreen = new Button(CHECK, 0, "Fullscreen", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, 
 		g_settings.fullscreen, true, true, &onStateChanged_btnFullscreen);
 }
@@ -4371,13 +4380,15 @@ void updateConnectButtons()
 	float SPACE_X = 2.0f;
 	float SPACE_Y = 2.0f;
 
-	for(int i = 0; i < (int)g_ua_server_list.size(); i++)
-	{
+	g_mutex_serverList.lock();
+
+	int i = 0;
+	for (auto it = g_ua_serverList.begin(); it != g_ua_serverList.end(); ++it) {
 		bool useit = !g_serverlist_defined;
 
 		if (g_serverlist_defined) {
 			for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
-				if (g_settings.serverlist[n].length() && g_ua_server_list[i] == g_settings.serverlist[n]) {
+				if (g_settings.serverlist[n].length() && (*it) == g_settings.serverlist[n]) {
 					useit = true;
 					break;
 				}
@@ -4385,17 +4396,19 @@ void updateConnectButtons()
 		}
 
 		if (useit) {
-			string btn_text = "Connect to\n" + g_ua_server_list[i];
+			string btn_text = "Connect to\n" + *it;
 			g_btnConnect.push_back(new Button(CHECK, ID_BTN_CONNECT + i, btn_text,
 				(float)w - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f,
 				g_channel_offset_y + (float)g_btnConnect.size() * (g_btn_height + SPACE_Y),
-				g_btn_width, g_btn_height, (btn_text == connected_btn_text), true, true, &onStateChanged_btnsConnect
-			));
+				g_btn_width, g_btn_height, (btn_text == connected_btn_text), true, true, &onStateChanged_btnsConnect));
 
 			if (g_btnConnect.size() >= UA_MAX_SERVER_LIST)
 				break;
 		}
+		i++;
 	}
+
+	g_mutex_serverList.unlock();
 
 	if (g_btnSettings->isHighlighted() && !g_serverlist_defined) {
 		releaseSettingsDialog();
@@ -4405,8 +4418,8 @@ void updateConnectButtons()
 	setRedrawWindow(true);
 
 	//wenn keine verbindung, verbinde automatisch mit dem ersten server
-	if (g_btnConnect.size() && !g_ua_server_connected.length()){
-		pushEvent(EVENT_CONNECT);
+	if (g_btnConnect.size() && g_ua_server_connected.empty()){
+		connect(g_btnConnect[0]->getId() - ID_BTN_CONNECT);
 	}
 }
 
@@ -4658,7 +4671,8 @@ void initSettingsDialog() {
 	
 	g_btnServerlistScan->setCheck(true);
 
-	for (vector<string>::iterator it = g_ua_server_list.begin(); it != g_ua_server_list.end(); ++it) {
+	g_mutex_serverList.lock();
+	for (vector<string>::iterator it = g_ua_serverList.begin(); it != g_ua_serverList.end(); ++it) {
 		bool listed = false;
 		for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
 			if (*it == g_settings.serverlist[n]) {
@@ -4673,10 +4687,13 @@ void initSettingsDialog() {
 		if (g_btnsServers.size() >= UA_MAX_SERVER_LIST_SETTING)
 			break;
 	}
+	g_mutex_serverList.unlock();
+
 	updateLayout();
 }
 
 void cleanUpUADevices() {
+	const std::lock_guard<std::mutex> lock(g_mutex_uaDevices);
 	clearChannels();
 	for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
 		SAFE_DELETE(*it);
@@ -4713,21 +4730,26 @@ bool loadServerSettings(const string &server_name, Button *btnSend)
 
 		string_view selected_send = element["ua_server"]["selected_mix"];
 
-		if (!g_settings.lock_to_mix.length() && btnSend->getText() == selected_send)
+		if (g_settings.lock_to_mix.empty())
 		{
-			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
-				if (itB->second->getId() == btnSend->getId())
-					continue;
-				itB->second->setCheck(false);
-				g_selectedMixBus = itB->first;
-			}
-			g_btnMix->setCheck(false);
+			if (btnSend->getText() == selected_send) {
+				for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
+					if (itB->second->getId() == btnSend->getId()) {
+						g_selectedMixBus = itB->first;
+						continue;
+					}
+					itB->second->setCheck(false);
+				}
+				g_btnMix->setCheck(false);
 
-			btnSend->setCheck(true);
+				btnSend->setCheck(true);
+			}
+		}
+		else {
+			g_selectedMixBus = g_settings.lock_to_mix;
 		}
 	}
-	catch (simdjson_error&)
-	{
+	catch (const simdjson_error&) {
 		result = false;
 	}
 	
@@ -4782,7 +4804,7 @@ bool loadServerSettings(const string &server_name) // läd channel-select & grou
 				channelsInOrder.insert({ order, it->second });
 
 			}
-			catch (simdjson_error&) {}
+			catch (const simdjson_error&) {}
 			try
 			{
 				it->second->selected_to_show = element["ua_server"][it->second->device->id + type_str + it->second->id + " selected"];
@@ -4792,13 +4814,13 @@ bool loadServerSettings(const string &server_name) // läd channel-select & grou
 				else if (it->second->isOverriddenHide())
 					it->second->selected_to_show = false;
 			}
-			catch (simdjson_error&) {}
+			catch (const simdjson_error&) {}
 			try
 			{
 				int64_t value = element["ua_server"][it->second->device->id + type_str + it->second->id + " group"];
 				it->second->fader_group = (int)value;
 			}
-			catch (simdjson_error&) {}
+			catch (const simdjson_error&) {}
 		}
 
 		//validate if all channels ordered
@@ -4808,7 +4830,7 @@ bool loadServerSettings(const string &server_name) // läd channel-select & grou
 
 		g_browseToChannel = (int)((int64_t)element["ua_server"]["first_visible_channel"]);
 	}
-	catch (simdjson_error&) {
+	catch (const simdjson_error&) {
 		return false;
 	}
 	return true;
@@ -4842,8 +4864,8 @@ bool saveServerSettings(const string &server_name)
 			}			
 
 			string type_str = it->second->type == INPUT ? ".input." : ".aux.";
-			json += "\"" + it->second->device->id + type_str + it->second->id + " order\": " + to_string(it->first) + "\n,";
-			json += "\"" + it->second->device->id + type_str + it->second->id + " group\": " + to_string(it->second->fader_group) + "\n,";
+			json += "\"" + it->second->device->id + type_str + it->second->id + " order\": " + to_string(it->first) + ", ";
+			json += "\"" + it->second->device->id + type_str + it->second->id + " group\": " + to_string(it->second->fader_group) + ", ";
 			json += "\"" + it->second->device->id + type_str + it->second->id + " selected\": ";
 			
 			if (it->second->selected_to_show) {
@@ -4896,30 +4918,30 @@ bool Settings::load(const string &json) {
 		try {
 			this->lock_settings = element["general"]["lock_settings"];
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			this->show_offline_devices = element["general"]["show_offline_devices"];
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			string_view sv = element["general"]["lock_to_mix"];
 			this->lock_to_mix = string{sv};
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			string_view sv = element["general"]["label_aux1"];
 			this->label_aux1 = string{ sv };
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			string_view sv = element["general"]["label_aux2"];
 			this->label_aux2 = string{ sv };
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		updateAllMuteBtnText();
 
@@ -4927,18 +4949,18 @@ bool Settings::load(const string &json) {
 			int64_t reconnect_time = element["general"]["reconnect_time"];
 			this->reconnect_time = (unsigned int)reconnect_time;
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			this->extended_logging = element["general"]["extended_logging"];
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		try {
 			this->maximized = element["window"]["maximized"];
 			this->fullscreen = element["window"]["fullscreen"];
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		int64_t x, y, w, h;
 		x = element["window"]["x"];
@@ -4955,17 +4977,17 @@ bool Settings::load(const string &json) {
 			int64_t channel_width = element["view"]["channel_width"];
 			this->channel_width = (int)channel_width;
 		}
-		catch (simdjson_error&) {}
+		catch (const simdjson_error&) {}
 
 		for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
 			try {
 				string_view sv = element["serverlist"][to_string(n+1)];
 				this->serverlist[n] = string{sv};
 			}
-			catch (simdjson_error&) {}
+			catch (const simdjson_error&) {}
 		}
 	}
-	catch (simdjson_error&) {
+	catch (const simdjson_error&) {
 		return false;
 	}
 
@@ -5174,7 +5196,7 @@ int main(int argc, char* argv[]) {
 	try {
 		gfx = new GFXEngine(WND_TITLE, g_settings.x, g_settings.y, g_settings.w, g_settings.h, flag, &g_window);
 	}
-	catch (invalid_argument&) {
+	catch (const invalid_argument&) {
 		writeLog(LOG_ERROR, "InitGfx failed : " + string(SDL_GetError()));
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","InitGfx failed", NULL);
 		return 1;
@@ -5194,10 +5216,10 @@ int main(int argc, char* argv[]) {
 #endif
         for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
             if (!g_settings.serverlist[n].empty()) {
-                g_ua_server_list.push_back(g_settings.serverlist[n]);
+                serverListAdd(g_settings.serverlist[n]);
             }
         }
-        if (!g_ua_server_list.empty()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
+        if (!g_ua_serverList.empty()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
         {
             g_serverlist_defined = true;
             updateConnectButtons();
@@ -5531,7 +5553,7 @@ int main(int argc, char* argv[]) {
 					case SDL_WINDOWEVENT_RESTORED: {
 						gfx->Resize();
 						updateLayout();
-						updateMaxPages();
+						updateMaxPages(!g_btnSelectChannels->isHighlighted());
 						updateSubscriptions();
 						break;
 					}
@@ -5546,7 +5568,6 @@ int main(int argc, char* argv[]) {
 				case SDL_USEREVENT: {
 					switch (e.user.code - g_userEventBeginNum) {
 					case EVENT_CONNECT:
-						disconnect();
 						if (g_ua_server_last_connection == -1 && g_btnConnect.size() > 0) {
 							connect(g_btnConnect[0]->getId() - ID_BTN_CONNECT);
 						}
@@ -5558,11 +5579,9 @@ int main(int argc, char* argv[]) {
 						disconnect();
 						break;
 					case EVENT_DEVICES_INITIATE_RELOAD:
-						if (!isLoading()) {
-							cleanUpUADevices();
-							setLoadingState(true);
-							tcpClientSend("get /devices");
-						}
+						cleanUpUADevices();
+						setLoadingState(true);
+						tcpClientSend("get /devices");
 						break;
 					case EVENT_DEVICES_LOAD:
 					{
@@ -5570,6 +5589,7 @@ int main(int argc, char* argv[]) {
 						cleanUpUADevices();
 						//load device info
 						tcpClientSend("subscribe /devices/0/CueBusCount");
+						g_mutex_uaDevices.lock();
 						for (vector<string>::iterator it = strDevices->begin(); it != strDevices->end(); ++it) {
 							UADevice* dev = new UADevice(*it);
 							if (dev) {
@@ -5577,6 +5597,7 @@ int main(int argc, char* argv[]) {
 								tcpClientSend("get /devices/" + dev->id + "/inputs");
 							}
 						}
+						g_mutex_uaDevices.unlock();
 						if (!g_ua_devices.empty()) {
 							tcpClientSend("get /devices/0/auxs");
 							tcpClientSend("get /devices/0/outputs");
@@ -5708,7 +5729,7 @@ int main(int argc, char* argv[]) {
 						g_visibleChannelsCount = -1;
 						browseToSelectedChannel(g_browseToChannel);
 						updateSubscriptions();
-						updateMaxPages();
+						updateMaxPages(!g_btnSelectChannels->isHighlighted());
 						setRedrawWindow(true);
 						break;
 					}
@@ -5721,7 +5742,7 @@ int main(int argc, char* argv[]) {
 						setRedrawWindow(true);
 						break;
 					case EVENT_AFTER_UPDATE_PROPERTIES:
-						updateMaxPages();
+						updateMaxPages(!g_btnSelectChannels->isHighlighted());
 						updateSubscriptions();
 						setRedrawWindow(true);
 						break;
@@ -5737,8 +5758,12 @@ int main(int argc, char* argv[]) {
 						SAFE_DELETE(devId);
 						break;
 					}
+					case EVENT_UPDATE_CONNECT_BUTTONS:
+						updateConnectButtons();
+						break;
 					case EVENT_RESET_ORDER:
 					{
+						g_mutex_uaDevices.lock();
 						g_channelsInOrder.clear();
 						int n = 0;
 						for (vector<UADevice*>::iterator it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
@@ -5761,6 +5786,7 @@ int main(int argc, char* argv[]) {
 						if (channel) {
 							g_channelsInOrder.insert({ n, channel });
 						}
+						g_mutex_uaDevices.unlock();
 						g_btnReorderChannels->setCheck(false);
 						updateSubscriptions();
 						setRedrawWindow(true);
