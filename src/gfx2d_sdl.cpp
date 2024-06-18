@@ -1413,10 +1413,7 @@ GFXFont* GFXEngine::CreateFontFromFile(string ttf_path, int _height, bool bold, 
 		return fnt;
 	}
 
-	float xscale, yscale;
-	SDL_RenderGetScale(renderer, &xscale, &yscale);
-
-	fnt->ttf = TTF_OpenFont(ttf_path.c_str(), _height * (int)round(yscale));
+    fnt->ttf = TTF_OpenFont(ttf_path.c_str(), _height);
 	if (!fnt->ttf)
 	{
 		SAFE_DELETE(fnt);
@@ -1502,11 +1499,10 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 			it->second->used = true;
 		}
 		else { // not in cache -> render
-
 			SDL_Surface* sf_text = TTF_RenderUTF8_Blended(_font->ttf, txt_line.c_str(), color);
 			if (sf_text)
 			{
-				tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
+                tx_text = SDL_CreateTextureFromSurface(renderer, sf_text);
 				if (tx_text) {
 					this->textRenderCache.insert({ uid, new GFXTextRenderCache(tx_text) });
 				}
@@ -1525,7 +1521,7 @@ void GFXEngine::_Write(GFXSurface* gs, GFXFont* _font, unsigned int _color, floa
 			float fw = (float)w / xscale;
 			float fh = (float)h / yscale;
 
-			float x_ratio = 1.0f;
+            float x_ratio = 1.0f;
 			float y_ratio = 1.0f;
 
 			if (_stretch)

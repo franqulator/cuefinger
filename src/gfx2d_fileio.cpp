@@ -469,10 +469,10 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 	unsigned char type = *ptr;
 	ptr++;
 
-	unsigned int width, height;
-	width = *((unsigned int*)ptr);
+	unsigned int width = 0, height = 0;
+	memcpy(&width, ptr, 4);
 	ptr += 4;
-	height = *((unsigned int*)ptr);
+	memcpy(&height, ptr, 4);
 	ptr += 4;
 
 	GFXSurface *gsurf = CreateSurface(width, height);
@@ -505,7 +505,8 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 	if (type & GFX_24BIT)
 	{
 		//decodestep 1
-		unsigned int szRcs = *((unsigned int*)ptr);
+		unsigned int szRcs = 0;
+		memcpy(&szRcs, ptr, 4);
 		ptr += 4;
 
 		//check buffer size
@@ -521,18 +522,20 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 		}
 
 		unsigned char *p8 = (unsigned char*)gsurf->bgra;
-		unsigned int color;
+		unsigned char color[4];
 
 		for (unsigned int n = 0; n < szRcs; n++)
 		{
 			if (gsurf->use_alpha)
 			{
-				color = *(unsigned int*)ptr;
+				memcpy(color, ptr, 4);
 				ptr += 4;
 			}
 			else
 			{
-				color = ((*(unsigned int*)ptr) & 0x00FFFFFF) | 0xFF000000;
+
+				memcpy(color, ptr, 3);
+                color[3] = 0xFF;
 				ptr += 3;
 			}
 
@@ -554,7 +557,7 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 				{
 					if (!used[y*gsurf->w + x])
 					{
-						gsurf->bgra[y*gsurf->w + x] = color;
+						memcpy(&gsurf->bgra[y*gsurf->w + x], color, 4);
 						used[y*gsurf->w + x] = true;
 						parts--;
 					}
@@ -587,16 +590,17 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 			{
 				if (gsurf->use_alpha)
 				{
-					color = (*(unsigned int*)ptr);
+					memcpy(color, ptr, 4);
 					ptr += 4;
 				}
 				else
 				{
-					color = ((*(unsigned int*)ptr) & 0x00FFFFFF) | 0xFF000000;
+					memcpy(&color, ptr, 3);
+					color[3]= 0xFF;
 					ptr += 3;
 				}
 
-				int nums = *ptr;
+				int nums = (int)(unsigned char)*ptr;
 				ptr++;
 				if (!nums)
 					nums = 256;
@@ -608,7 +612,7 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 
 					idx = ids[n * 256 + pos];
 
-					gsurf->bgra[idx] = color;
+					memcpy(&gsurf->bgra[idx], color, 4);
 					used[idx] = true;
 				}
 			}
@@ -624,12 +628,13 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 			{
 				if (gsurf->use_alpha)
 				{
-					*(unsigned int*)p8 = *(unsigned int*)ptr;
+					memcpy(p8, ptr, 4);
 					ptr += 4;
 				}
 				else
 				{
-					*(unsigned int*)p8 = ((*(unsigned int*)ptr) & 0x00FFFFFF) | 0xFF000000;
+					memcpy(p8, ptr, 3);
+					p8[3] = 0xFF;
 					ptr += 3;
 				}
 			}
@@ -638,7 +643,7 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 	}
 	else if (type & GFX_8BIT_PALETTE)
 	{
-		unsigned int clr[256] = { 0 };
+		unsigned char clr[256][4] = { 0 };
 		int pClr = *ptr;
 		ptr++;
 		if (!pClr)
@@ -648,24 +653,26 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 		{
 			if (gsurf->use_alpha)
 			{
-				clr[n] = *(unsigned int*)ptr;
+				memcpy(clr[n], ptr, 4);
 				ptr += 4;
 			}
 			else
 			{
-				clr[n] = ((*(unsigned int*)ptr) & 0x00FFFFFF) | 0xFF000000;
+				memcpy(clr[n], ptr, 3);
+				clr[n][3] = 0xFF;
 				ptr += 3;
 			}
 		}
 
 		//decodestep 1
-		unsigned int szRcs = *((unsigned int*)ptr);
+		unsigned int szRcs;
+		memcpy(&szRcs, ptr, 4);
 		ptr += 4;
 
 		unsigned int color;
 		for (unsigned int n = 0; n < szRcs; n++)
 		{
-			color = clr[*ptr];
+			memcpy(&color, clr[*ptr], 4);
 			ptr++;
 
 			SmallRect rc;
@@ -694,7 +701,7 @@ GFXSurface * GFXEngine::LoadGfxFromBuffer(unsigned char *_data, size_t _size)
 		{
 			if (!used[i])
 			{
-				gsurf->bgra[i] = clr[*ptr];
+				memcpy(&gsurf->bgra[i], clr[*ptr], 4);
 				ptr++;
 			}
 		}

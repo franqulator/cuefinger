@@ -3,7 +3,7 @@ This file is part of Cuefinger 1
 
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
-Copyright © 2024 Frank Brempel
+Copyright ï¿½ 2024 Frank Brempel
 
 Cuefinger 1 is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ void ReleaseNetwork() {
 	WSACleanup();
 }
 
-string GetComputerNameByIP(string ip) {
+string GetComputerNameByIP(const string &ip) {
 
 	struct sockaddr_in sa;
 	if (inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 1) {
@@ -87,7 +87,7 @@ bool GetClientIPs(void(*MessageCallback)(string ip)) {
 	return result;
 }
 
-TCPClient::TCPClient(string host, string port, void (__cdecl *MessageCallback)(int,const string&)) {
+TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&)) {
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
 	this->receiveThreadIsRunning = false;

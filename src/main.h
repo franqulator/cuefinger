@@ -37,6 +37,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <map>
 #include <queue>
 
+#ifdef __ANDROID__
+#include "cuefinger_jni.h"
+#endif
+
 using namespace simdjson;
 
 const string APP_VERSION = "1.3.3";
@@ -154,6 +158,13 @@ https://github.com/franqulator/cuefinger";
 #define ORANGE	RGB(190, 90, 20)
 #define PURPLE	RGB(80, 10, 170)
 
+#define LOG_INFO        0b0001
+#define LOG_ERROR       0b0010
+#define LOG_EXTENDED    0b0100
+
+void writeLog(int type, const string &s);
+void terminateAllPingThreads();
+
 class Settings {
 public:
 	int x, y, w, h;
@@ -184,7 +195,7 @@ public:
 		label_aux1 = "AUX";
 		label_aux2 = "AUX";
 	}
-	bool load(string *json = NULL);
+	bool load(const string& json = "");
 	bool save();
     string toJSON();
 };
@@ -200,7 +211,7 @@ private:
 	bool visible;
 	void (*onStateChanged)(Button *btn);
 public:
-	Button(int type=BUTTON, int id = 0, string text = "", float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+	Button(int type=BUTTON, int id = 0, const string &text = "", float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
 		bool checked = false, bool enabled = true, bool visible = true, void (*onStateChanged)(Button *btn) = NULL);
 	bool onPress(SDL_Point *pt);
 	bool onRelease();
@@ -211,7 +222,7 @@ public:
 	bool isVisible();
 	void setEnable(bool enabled);
 	bool isEnabled();
-	void setText(string text);
+	void setText(const string &text);
 	string getText();
 	void setBounds(float x, float y, float w, float h);
 	void setSize(float w, float h);
@@ -221,7 +232,7 @@ public:
 	float getHeight();
 	int getId();
 	bool isHighlighted();
-	void draw(int color, string overrideName="");
+	void draw(int color, const string &overrideName="");
 };
 
 class Touchpoint {
@@ -242,7 +253,7 @@ public:
 	string id;
 	bool online;
 	int channelsTotal;
-	UADevice(string us_deviceId);
+	UADevice(const string &us_deviceId);
 	~UADevice();
 };
 
@@ -258,7 +269,7 @@ public:
 	int subscriptions;
 	bool clip;
 	bool clip2;
-	Module(string id);
+	Module(const string &id);
 	virtual ~Module();
 	virtual void changeLevel(double level_change, bool absolute = false) {};
 	virtual void changePan(double pan_change, bool absolute = false) {};
@@ -272,7 +283,7 @@ class Send : public Module {
 public:
 	Channel *channel;
 
-	Send(Channel* channel, string id);
+	Send(Channel* channel, const string &id);
 	~Send();
 	void init();
 	void updateSubscription(bool subscribe, int flags);
@@ -304,7 +315,7 @@ public:
 
 	Touchpoint touch_point;
 
-	Channel(UADevice* device, string id, int type);
+	Channel(UADevice* device, const string &id, int type);
 	~Channel();
 	void init();
 	void updateSubscription(bool subscribe, int flags); // also handles subscrption for sends
@@ -321,8 +332,8 @@ public:
 	bool isOverriddenShow();
 	bool isOverriddenHide();
 	bool isVisible(bool only_selected);
-	Send* getSendByName(string name);
-	Send* getSendByUAId(string id);
+	Send* getSendByName(const string &name);
+	Send* getSendByUAId(const string &id);
 	void updateProperties();
 	string getName();
 	void setName(const string &name);
@@ -343,10 +354,10 @@ void disconnect();
 void draw();
 bool loadAllGfx();
 void releaseAllGfx();
-bool loadServerSettings(string server_name, Button *btnSend);
-bool loadServerSettings(string server_name);
-bool saveServerSettings(string server_name);
-Button *addSendButton(string name);
+bool loadServerSettings(const string &server_name, Button *btnSend);
+bool loadServerSettings(const string &server_name);
+bool saveServerSettings(const string &server_name);
+Button *addSendButton(const string &name);
 void updateConnectButtons();
 void updateSubscriptions();
 void initSettingsDialog();

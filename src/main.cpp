@@ -178,7 +178,7 @@ string g_masterChannelId;
 #define LOG_ERROR       0b0010
 #define LOG_EXTENDED    0b0100
 
-void writeLog(int type, string s) {
+void writeLog(int type, const string &s) {
 
 	if (!(type & LOG_EXTENDED) || g_settings.extended_logging) {
 		if (type & LOG_INFO) {
@@ -286,7 +286,7 @@ int calculateChannelsPerPage() {
 }
 
 int maxPages() {
-	return (getActiveChannelsCount(true) - 1) / g_channels_per_page;
+	return max(0, getActiveChannelsCount(true) / g_channels_per_page - 1);
 }
 
 void updateMaxPages() {
@@ -336,8 +336,9 @@ void updateLayout() {
 	
 	int w,h;
 	SDL_GetWindowSize(g_window, &w, &h);
-	float win_width = (float)w;
-	float win_height = (float)h;
+	auto win_width = (float)w;
+	auto win_height = (float)h;
+
 	/*
 	int smaller_btn_height = win_height /7;
 	if (smaller_btn_height < g_btn_height)
@@ -385,7 +386,7 @@ void updateLayout() {
 		g_pantracker_height = g_channel_width;
 	
 	//reload labelfont if size changed
-	if (g_channel_label_fontsize != g_fader_label_height * 0.5f)
+	if (g_channel_label_fontsize != g_fader_label_height * 0.5f || !g_fntLabel)
 	{
 		g_channel_label_fontsize = g_fader_label_height * 0.5f;
 
@@ -393,26 +394,30 @@ void updateLayout() {
 			gfx->DeleteFont(g_fntLabel);
 			g_fntLabel = NULL;
 		}
-
-		g_fntLabel = gfx->CreateFontFromFile(getDataPath("chelseamarket.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
-	}
+        g_fntLabel = gfx->CreateFontFromFile(getDataPath("chelseamarket.ttf"), (int)round(g_channel_label_fontsize * 96.0f / 100.0f));
+        if(!g_fntLabel) {
+            writeLog(LOG_ERROR, "load g_fntLabel failed");
+        }
+    }
 
 	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
 	//reload mainfont if size changed
-	if (g_main_fontsize != new_main_fontsize) {
+	if (g_main_fontsize != new_main_fontsize || !g_fntMain) {
 		g_main_fontsize = new_main_fontsize;
 
 		if (g_fntMain) {
 			gfx->DeleteFont(g_fntMain);
 			g_fntMain = NULL;
 		}
-
-		g_fntMain = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f), false);
-	}
+        g_fntMain = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_main_fontsize * 96.0f / 100.0f), false);
+	    if(!g_fntMain) {
+            writeLog(LOG_ERROR, "load fntMain failed");
+        }
+    }
 
 //	float new_info_fontsize = min(win_height / 33.0f, win_width / 33.0f);
 	float new_info_fontsize = min(g_btn_height / 2.0f, g_btn_width / 5.5f);
-	if (g_info_fontsize != new_info_fontsize) {
+	if (g_info_fontsize != new_info_fontsize || !g_fntInfo) {
 		g_info_fontsize = new_info_fontsize;
 		if (g_fntInfo) {
 			gfx->DeleteFont(g_fntInfo);
@@ -420,10 +425,13 @@ void updateLayout() {
 		}
 
 		g_fntInfo = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_info_fontsize * 96.0f / 100.0f));
-	}
+        if(!g_fntInfo) {
+            writeLog(LOG_ERROR, "load g_fntInfo failed");
+        }
+    }
 
 	float new_faderscale_fontsize = min(g_channel_btn_size / 4.0f, g_channel_label_fontsize);
-	if (g_faderscale_fontsize != new_faderscale_fontsize) {
+	if (g_faderscale_fontsize != new_faderscale_fontsize || !g_fntFaderScale) {
 		g_faderscale_fontsize = new_faderscale_fontsize;
 
 		if (g_fntFaderScale) {
@@ -432,10 +440,13 @@ void updateLayout() {
 		}
 
 		g_fntFaderScale = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_faderscale_fontsize * 96.0f / 100.0f));
-	}
+        if(!g_fntFaderScale) {
+            writeLog(LOG_ERROR, "load g_fntFaderScale failed");
+        }
+    }
 
 	float new_btnbold_fontsize = g_channel_btn_size / 3;
-	if (g_btnbold_fontsize != new_btnbold_fontsize) {
+	if (g_btnbold_fontsize != new_btnbold_fontsize || !g_fntChannelBtn) {
 		g_btnbold_fontsize = new_btnbold_fontsize;
 
 		if (g_fntChannelBtn) {
@@ -444,12 +455,15 @@ void updateLayout() {
 		}
 
 		g_fntChannelBtn = gfx->CreateFontFromFile(getDataPath("chakrapetch.ttf"), (int)round(g_btnbold_fontsize * 96.0f / 100.0f), false);
-	}
+        if(!g_fntChannelBtn) {
+            writeLog(LOG_ERROR, "load g_fntChannelBtn failed");
+        }
+    }
 
 	float new_offline_fontsize = min(win_width / 6.0f, win_height / 3.0f);
 
 	//reload font if size changed
-	if (g_offline_fontsize != new_offline_fontsize) {
+	if (g_offline_fontsize != new_offline_fontsize || !g_fntOffline) {
 		g_offline_fontsize = new_offline_fontsize;
 
 		if (g_fntOffline) {
@@ -458,7 +472,10 @@ void updateLayout() {
 		}
 
 		g_fntOffline = gfx->CreateFontFromFile(getDataPath("changa.ttf"), (int)round(g_offline_fontsize * 96.0f / 100.0f));
-	}
+        if(!g_fntOffline) {
+            writeLog(LOG_ERROR, "load g_fntOffline failed");
+        }
+    }
 
 	//btnleiste links
 	g_btnSettings->setBounds(g_channel_offset_x - g_btn_width * 1.18f + SPACE_X, g_channel_offset_y, g_btn_width, g_btn_height);
@@ -562,7 +579,7 @@ void updateLayout() {
 	setRedrawWindow(true);
 }
 
-Button::Button(int type, int id, string text, float x, float y, float w, float h, bool checked, 
+Button::Button(int type, int id, const string &text, float x, float y, float w, float h, bool checked, 
 	bool enabled, bool visible, void (*onStateChanged)(Button*)) {
 	this->type = type;
 	this->id = id;
@@ -695,7 +712,7 @@ bool Button::isEnabled() {
 	return this->enabled;
 }
 
-void Button::setText(string text) {
+void Button::setText(const string &text) {
 	this->text = text;
 	setRedrawWindow(true);
 }
@@ -706,7 +723,7 @@ string Button::getText() {
 
 int Button::getId() { return this->id; }
 
-void Button::draw(int color, string overrideName)
+void Button::draw(int color, const string &overrideName)
 {
 	if (!this->visible)
 		return;
@@ -744,7 +761,7 @@ void Button::draw(int color, string overrideName)
 	gfx->SetFilter_Brightness(gs, 1.0f);
 	gfx->SetFilter_Contrast(gs, 1.0f);
 
-	string text = overrideName.length() == 0 ? this->text : overrideName;
+	string text = overrideName.empty() ? this->text : overrideName;
 
 	float max_width = this->w * 0.9f;
 	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, text, GFX_CENTER | GFX_AUTOBREAK, max_width);
@@ -757,7 +774,7 @@ Touchpoint::Touchpoint() {
 	memset(this, 0, sizeof(Touchpoint));
 }
 
-Module::Module(string id) {
+Module::Module(const string &id) {
 	this->id = id;
 	this->level = 0.0;
 	this->mute = false;
@@ -773,7 +790,7 @@ Module::Module(string id) {
 Module::~Module() {
 }
 
-Send::Send(Channel* channel, string id) : Module(id) {
+Send::Send(Channel* channel, const string &id) : Module(id) {
 	this->channel = channel;
 }
 Send::~Send() {
@@ -809,7 +826,7 @@ void Send::changePan(double pan_change, bool absolute)
 		string type_str = this->channel->type == INPUT ? "/inputs/" : "/auxs/";
 
 		string msg = "set /devices/" + this->channel->device->id + type_str + this->channel->id + "/sends/" + this->id + "/Pan/value/ " + to_string(this->pan);
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 }
 
@@ -831,7 +848,7 @@ void Send::changeLevel(double level_change, bool absolute)
 
 		string type_str = this->channel->type == INPUT ? "/inputs/" : "/auxs/";
 		string msg = "set /devices/" + this->channel->device->id + type_str + this->channel->id + "/sends/" + this->id + "/Gain/value/ " + to_string(toDbFS(this->level));
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 }
 
@@ -848,7 +865,7 @@ void Send::pressMute(int state)
 
 	string type_str = this->channel->type == INPUT ? "/inputs/" : "/auxs/";
 	string msg = "set /devices/" + this->channel->device->id + type_str + this->channel->id + "/sends/" + this->id + "/Bypass/value/ " + value;
-	tcpClientSend(msg.c_str());
+	tcpClientSend(msg);
 }
 
 
@@ -870,42 +887,42 @@ void Send::updateSubscription(bool subscribe, int flags)
 
 	if ((flags & LEVEL) && ((bool)(this->subscriptions & LEVEL) != subscribe)) {
 		string cmd = root + "/Gain/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 		this->subscriptions ^= LEVEL;
 	}
 
 	if ((flags & PAN) && ((bool)(this->subscriptions & PAN) != subscribe)) {
 		if (this->channel->type == INPUT) {
 			string cmd = root + "/Pan/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 			this->subscriptions ^= PAN;
 		}
 	}
 
 	if ((flags & METER) && ((bool)(this->subscriptions & METER) != subscribe)) {
 		string cmd = root + "/meters/0/MeterLevel/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 
 		cmd = root + "/meters/0/MeterClip/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 
 		cmd = root + "/meters/1/MeterLevel/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 
 		cmd = root + "/meters/1/MeterClip/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 
 		this->subscriptions ^= METER;
 	}
 
 	if ((flags & MUTE) && ((bool)(this->subscriptions & MUTE) != subscribe)) {
 		string cmd = root + "/Bypass/";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 		this->subscriptions ^= MUTE;
 	}
 }
 
-Channel::Channel(UADevice* device, string id, int type) : Module(id) {
+Channel::Channel(UADevice* device, const string &id, int type) : Module(id) {
 	this->label_gfx = rand() % 4;
 	this->label_rotation = (float)(rand() % 100) / 2000.0f - 0.025f;
 	this->device = device;
@@ -943,7 +960,7 @@ void Channel::init() {
 	if (this->type != MASTER) {
 		string type_str = this->type == INPUT ? "/inputs/" : "/auxs/";
 		string cmd = "get /devices/" + this->device->id + type_str + this->id + "/sends";
-		tcpClientSend(cmd.c_str());
+		tcpClientSend(cmd);
 	}
 }
 
@@ -1064,7 +1081,7 @@ void Channel::changePan(double pan_change, bool absolute)
 		this->pan = _pan;
 		string type_str = this->type == INPUT ? "/inputs/" : "/auxs/";
 		string msg = "set /devices/" + this->device->id + type_str + this->id + "/Pan/value/ " + to_string(this->pan);
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 }
 
@@ -1088,7 +1105,7 @@ void Channel::changePan2(double pan_change, bool absolute)
 		this->pan2 = _pan;
 		string type_str = this->type == INPUT ? "/inputs/" : "/auxs/";
 		string msg = "set /devices/" + this->device->id + type_str + this->id + "/Pan2/value/ " + to_string(this->pan2);
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 }
 
@@ -1117,12 +1134,12 @@ void Channel::changeLevel(double level_change, bool absolute)
 
 		if (this->type == MASTER) {
 			string msg = "set /devices/" + this->device->id + "/outputs/" + this->id + "/CRMonitorLevel/value/ " + to_string(toDbFS(_level));
-			tcpClientSend(msg.c_str());
+			tcpClientSend(msg);
 		}
 		else {
 			string type_str = this->type == INPUT ? "/inputs/" : "/auxs/";
 			string msg = "set /devices/" + this->device->id + type_str + this->id + "/FaderLevel/value/ " + to_string(toDbFS(_level));
-			tcpClientSend(msg.c_str());
+			tcpClientSend(msg);
 		}
 	}
 }
@@ -1141,12 +1158,12 @@ void Channel::pressMute(int state)
 
 	if (this->type == MASTER) {
 		string msg = "set /devices/" + this->device->id + "/outputs/" + this->id + "/Mute/value/ " + value;
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 	else {
 		string type_str = this->type == INPUT ? "/inputs/" : "/auxs/";
 		string msg = "set /devices/" + this->device->id + type_str + this->id + "/Mute/value/ " + value;
-		tcpClientSend(msg.c_str());
+		tcpClientSend(msg);
 	}
 }
 
@@ -1162,7 +1179,7 @@ void Channel::pressSolo(int state)
 		value = "false";
 
 	string msg = "set /devices/" + this->device->id + "/inputs/" + this->id + "/Solo/value/ " + value;
-	tcpClientSend(msg.c_str());
+	tcpClientSend(msg);
 }
 
 void Channel::pressPostFader(int state)
@@ -1177,7 +1194,7 @@ void Channel::pressPostFader(int state)
 		value = "false";
 
 	string msg = "set /devices/" + this->device->id + "/auxs/" + this->id + "/SendPostFader/value/ " + value;
-	tcpClientSend(msg.c_str());
+	tcpClientSend(msg);
 }
 
 void Channel::updateProperties() {
@@ -1222,10 +1239,6 @@ string Channel::getName() {
 void Channel::setName(const string &name) {
 	this->name = name;
 	this->updateProperties();
-
-	if (this->name.length() == 0) {
-		int debug = 1;
-	}
 }
 
 void Channel::setStereoname(const string &stereoname) {
@@ -1320,11 +1333,11 @@ void Channel::updateSubscription(bool subscribe, int flags)
 
 		if ((flags & NAME) && ((bool)(this->subscriptions & NAME) != subscribe)) {
 			string cmd = root + "/Name/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			if (this->type == INPUT) {
 				cmd = root + "/StereoName/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= NAME;
 			}
@@ -1333,7 +1346,7 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & STEREO) && ((bool)(this->subscriptions & STEREO) != subscribe)) {
 			if (this->type == INPUT) {
 				string cmd = root + "/Stereo/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= STEREO;
 			}
@@ -1341,7 +1354,7 @@ void Channel::updateSubscription(bool subscribe, int flags)
 
 		if ((flags & MUTE) && ((bool)(this->subscriptions & MUTE) != subscribe)) {
 			string cmd = root + "/Mute/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			this->subscriptions ^= MUTE;
 		}
@@ -1349,13 +1362,13 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & STATE) && ((bool)(this->subscriptions & STATE) != subscribe)) {
 			if (this->type == INPUT) {
 				string cmd = root + "/ChannelHidden/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				cmd = root + "/EnabledByUser/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				cmd = root + "/Active/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= STATE;
 			}
@@ -1364,11 +1377,11 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & LEVEL) && ((bool)(this->subscriptions & LEVEL) != subscribe)) {
 			if (this->type == MASTER) {
 				string cmd = root + "/CRMonitorLevel/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 			}
 			else {
 				string cmd = root + "/FaderLevel/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 			}
 			this->subscriptions ^= LEVEL;
 		}
@@ -1376,7 +1389,7 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & SOLO) && ((bool)(this->subscriptions & SOLO) != subscribe)) {
 			if (this->type == INPUT) {
 				string cmd = root + "/Solo/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= SOLO;
 			}
@@ -1385,7 +1398,7 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & SEND_POST) && ((bool)(this->subscriptions & SEND_POST) != subscribe)) {
 			if (this->type == AUX) {
 				string cmd = root + "/SendPostFader/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= SEND_POST;
 			}
@@ -1394,10 +1407,10 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		if ((flags & PAN) && ((bool)(this->subscriptions & PAN) != subscribe)) {
 			if (this->type == INPUT) {
 				string cmd = root + "/Pan/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				cmd = root + "/Pan2/";
-				tcpClientSend(cmd.c_str());
+				tcpClientSend(cmd);
 
 				this->subscriptions ^= PAN;
 			}
@@ -1405,16 +1418,16 @@ void Channel::updateSubscription(bool subscribe, int flags)
 
 		if ((flags & METER) && ((bool)(this->subscriptions & METER) != subscribe)) {
 			string cmd = root + "/meters/0/MeterLevel/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			cmd = root + "/meters/0/MeterClip/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			cmd = root + "/meters/1/MeterLevel/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			cmd = root + "/meters/1/MeterClip/";
-			tcpClientSend(cmd.c_str());
+			tcpClientSend(cmd);
 
 			this->subscriptions ^= METER;
 		}
@@ -1433,13 +1446,13 @@ void Channel::updateSubscription(bool subscribe, int flags)
 	}
 }
 
-UADevice::UADevice(string us_deviceId) {
+UADevice::UADevice(const string &us_deviceId) {
 	this->online = false;
 	this->id = us_deviceId;
 	this->channelsTotal = 0;
 
 	string msg = "subscribe /devices/" + this->id + "/DeviceOnline/";
-	tcpClientSend(msg.c_str());
+	tcpClientSend(msg);
 }
 UADevice::~UADevice() {
 }
@@ -1528,7 +1541,7 @@ UADevice *getDeviceByUAId(string ua_device_id)
 	return NULL;
 }
 
-Send *Channel::getSendByName(string name)
+Send *Channel::getSendByName(const string &name)
 {
 	unordered_map<string, Send*>::iterator res = this->sendsByName.find(name);
 
@@ -1539,7 +1552,7 @@ Send *Channel::getSendByName(string name)
 	return NULL;
 }
 
-Send* Channel::getSendByUAId(string id)
+Send* Channel::getSendByUAId(const string &id)
 {
 	unordered_map<string, Send*>::iterator res = this->sendsById.find(id);
 
@@ -2205,11 +2218,9 @@ void tcpClientProc(int msg, const string &data)
 							else if (path_parameter[4] == "Name") {
 								if (path_parameter[5] == "value") {
 
-									writeLog(LOG_INFO, "setname " + path_parameter[3]);
 									string_view sv = element["data"];
 									string value{ sv };
 									channel->setName(unescape_to_utf8(value));
-									writeLog(LOG_INFO, "->ok\n");
 								}
 							}
 							else if (path_parameter[4] == "Pan" && channel->touch_point.action != TOUCH_ACTION_PAN)
@@ -2309,8 +2320,7 @@ void tcpClientProc(int msg, const string &data)
 				//ua-error
 				const char *c;
 				if (element["error"].get_c_str().get(c) == SUCCESS) {
-					string s(c);
-					writeLog(LOG_ERROR| LOG_EXTENDED, "UA-Error " + s);
+					writeLog(LOG_ERROR| LOG_EXTENDED, "UA-Error " + string(c));
 				}
 			}
 			catch (simdjson_error&) {}
@@ -4325,7 +4335,7 @@ void cleanUpStaticButtons()
 	SAFE_DELETE(g_btnFullscreen);
 }
 
-Button *addSendButton(string name)
+Button *addSendButton(const string &name)
 {
 	Button* btn = new Button(RADIO, ID_BTN_SENDS + (int)g_btnSends.size(), name, 0, 0, 0, 0, false, true, true, &onStateChanged_btnsSelectMix);
 	g_btnSends.push_back({ name, btn });
@@ -4412,6 +4422,9 @@ void updateAllMuteBtnText() {
 }
 
 GFXSurface* loadGfx(string filename, bool keepRAM = false) {
+
+	writeLog(LOG_INFO|LOG_EXTENDED, "loadGfx " + filename);
+
 	string path = getDataPath(filename);
 	GFXSurface *gs = gfx->LoadGfx(path);
 	if (!gs) {
@@ -4678,7 +4691,7 @@ void releaseSettingsDialog() {
 	g_btnsServers.clear();
 }
 
-bool loadServerSettings(string server_name, Button *btnSend)
+bool loadServerSettings(const string &server_name, Button *btnSend)
 {
 	if (server_name.length() == 0 || !btnSend)
 		return false;
@@ -4739,7 +4752,7 @@ bool loadServerSettings(string server_name, Button *btnSend)
 	return result;
 }
 
-bool loadServerSettings(string server_name) // läd channel-select & group-setting
+bool loadServerSettings(const string &server_name) // läd channel-select & group-setting
 {
 	if (server_name.length() == 0)
 		return false;
@@ -4801,7 +4814,7 @@ bool loadServerSettings(string server_name) // läd channel-select & group-setti
 	return true;
 }
 
-bool saveServerSettings(string server_name)
+bool saveServerSettings(const string &server_name)
 {
 	if (server_name.length() == 0)
 		return false;
@@ -4867,19 +4880,19 @@ bool saveServerSettings(string server_name)
 	return true;
 }
 
-bool Settings::load(string *json) {
+bool Settings::load(const string &json) {
+
 	//JSON
 	try {
         dom::parser parser;
         dom::element element;
-        if (!json) {
+        if (json.empty()) {
             string filename = "settings.json";
             element = parser.load(getPrefPath(filename));
         }
         else {
-            element = parser.parse(*json);
+            element = parser.parse(json);
         }
-
 		try {
 			this->lock_settings = element["general"]["lock_settings"];
 		}
@@ -5052,77 +5065,6 @@ bool Settings::save()
 	return true;
 }
 
-#ifdef __ANDROID__
-extern "C" void Java_franqulator_cuefinger_Cuefinger_load(JNIEnv *env, jobject obj, jobject assetManager){
-
-    AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
-    if (mgr == NULL) {
-		writeLog(LOG_ERROR, "error loading asset manager");
-    }
-    else {
-        android_fopen_set_asset_manager(mgr);
-    }
-}
-
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_loadSettings(JNIEnv *env, jobject obj, jstring json){
-    string njson((const char*)env->GetStringUTFChars(json, NULL));
-    g_settings.load(&njson);
-    g_settings.fullscreen = true; // auf android immer im fullscreen starten
-}
-
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getSettingsJSON(JNIEnv *env, jobject obj){
-    return env->NewStringUTF(g_settings.toJSON().c_str());
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_loadServerSettings(JNIEnv* env, jobject obj, jstring json) {
-	string njson((const char*)env->GetStringUTFChars(json, NULL));
-
-	size_t posSvr = njson.find("svr=", 0);
-	while (posSvr != string::npos) {
-		posSvr += 4;
-
-		size_t posSet = njson.find("set=", posSvr);
-		if (posSet == string::npos) {
-			break;
-		}
-		string server = njson.substr(posSvr, posSet - posSvr);
-		
-		posSet += 4;
-		posSvr = njson.find("svr=", posSet);
-        if(posSvr == string::npos) {
-            posSvr = njson.length();
-        }
-		string settings = njson.substr(posSet, posSvr - posSet);
-
-		serverSettingsJSON.insert_or_assign(server, settings);
-	}
-}
-
-extern "C" jstring Java_franqulator_cuefinger_Cuefinger_getServerSettingsJSON(JNIEnv* env, jobject obj) {
-	string njson;
-
-    if(g_ua_server_connected.length() != 0) {
-        saveServerSettings(g_ua_server_connected);
-    }
-
-	for (map<string, string>::iterator it = serverSettingsJSON.begin(); it != serverSettingsJSON.end(); ++it) {
-		njson += "svr=" + it->first + "set=" +  it->second;
-	}
-
-	return env->NewStringUTF(njson.c_str());
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_terminateAllPingThreads(JNIEnv* env, jobject obj) {
-	terminateAllPingThreads(); // also stores serverdata at disconnect()
-}
-
-extern "C" void Java_franqulator_cuefinger_Cuefinger_cleanUp(JNIEnv *env, jobject obj){
-    cleanUp(); // also stores serverdata at disconnect()
-}
-
-#endif
-
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *lpCmdLine, int nCmdShow) {
 	int argc = __argc;
@@ -5175,7 +5117,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifndef __ANDROID__
-	writeLog(LOG_INFO, "load settings");
+	writeLog(LOG_INFO|LOG_EXTENDED, "load settings");
 	if (!g_settings.load())
 	{
 		writeLog(LOG_ERROR, "settings.load failed");
@@ -5205,9 +5147,9 @@ int main(int argc, char* argv[]) {
     g_settings.w=rc.w;
     g_settings.h=rc.h;
 #endif
-	g_settings.extended_logging = true;
+	g_settings.extended_logging = false;
 
-	writeLog(LOG_INFO, "create gui objects");
+	writeLog(LOG_INFO | LOG_EXTENDED, "create gui objects");
 	createStaticButtons();
 
 #ifndef __ANDROID__
@@ -5228,8 +5170,7 @@ int main(int argc, char* argv[]) {
 		flag |= GFX_FULLSCREEN_DESKTOP;
 	}
 
-
-	writeLog(LOG_INFO, "init gfx engine");
+	writeLog(LOG_INFO | LOG_EXTENDED, "init gfx engine " + to_string(g_settings.w) + "x" +to_string(g_settings.h));
 	try {
 		gfx = new GFXEngine(WND_TITLE, g_settings.x, g_settings.y, g_settings.w, g_settings.h, flag, &g_window);
 	}
@@ -5238,24 +5179,25 @@ int main(int argc, char* argv[]) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR ,"Error","InitGfx failed", NULL);
 		return 1;
 	}
+
 	SDL_SetWindowMinimumSize(g_window, 320, 240);
 
-
-	writeLog(LOG_INFO, "load gfx");
+	writeLog(LOG_INFO | LOG_EXTENDED, "load gfx");
 	if (loadAllGfx()) {
 
-		writeLog(LOG_INFO, "update layout and load fonts");
+		writeLog(LOG_INFO | LOG_EXTENDED, "update layout and load fonts");
         updateLayout();
+        setRedrawWindow(true);
 
 #ifdef _WIN32
         InitNetwork();
 #endif
         for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
-            if (g_settings.serverlist[n].length() > 0) {
+            if (!g_settings.serverlist[n].empty()) {
                 g_ua_server_list.push_back(g_settings.serverlist[n]);
             }
         }
-        if (g_ua_server_list.size()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
+        if (!g_ua_server_list.empty()) // serverliste wurde definiert, automatische Serversuche wird nicht ausgeführt
         {
             g_serverlist_defined = true;
             updateConnectButtons();
@@ -5267,7 +5209,7 @@ int main(int argc, char* argv[]) {
         bool running = true;
         SDL_Event e;
 
-		writeLog(LOG_INFO, "start message loop");
+		writeLog(LOG_INFO | LOG_EXTENDED, "start message loop");
         while (running) {
 			if (SDL_WaitEventTimeout(&e, 33) > 0)
 				//	while (SDL_PollEvent(&e) > 0)
@@ -5854,7 +5796,7 @@ int main(int argc, char* argv[]) {
 }
 
 void cleanUp() {
-	writeLog(LOG_INFO, "terminate threads");
+	writeLog(LOG_INFO | LOG_EXTENDED, "terminate threads");
 	terminateAllPingThreads();
     disconnect();
 
@@ -5862,11 +5804,11 @@ void cleanUp() {
     ReleaseNetwork();
 #endif
 
-	writeLog(LOG_INFO, "clean up gui objects");
+	writeLog(LOG_INFO | LOG_EXTENDED, "clean up gui objects");
     cleanUpConnectionButtons();
     cleanUpStaticButtons();
 
-	writeLog(LOG_INFO, "clean up fonts and gfx");
+	writeLog(LOG_INFO | LOG_EXTENDED, "clean up fonts and gfx");
     gfx->DeleteFont(g_fntMain);
     gfx->DeleteFont(g_fntInfo);
     gfx->DeleteFont(g_fntChannelBtn);
