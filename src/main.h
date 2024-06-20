@@ -77,7 +77,7 @@ https://github.com/franqulator/cuefinger";
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
-#define CONNECTION_TEST_INTERVAL    25 //ms
+#define CONNECTION_TEST_INTERVAL    10 //ms
 #define SERVER_TEST_TIMEOUT			500
 
 #define UA_MAX_SERVER_LIST_SETTING	7 
