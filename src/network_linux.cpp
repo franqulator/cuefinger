@@ -177,8 +177,8 @@ TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallb
 	fds[0].events = POLLOUT;
 	int res = poll(fds, 1, timeout);
 	if (res < 1) {
-		shutdown(this->socketConnect, SHUT_RDWR);
-		close(this->socketConnect);
+	//	shutdown(this->socketConnect, SHUT_RDWR);
+	//	close(this->socketConnect);
 		this->socketConnect = 0;
 		throw invalid_argument("Error on poll (" + to_string(res) + ") " + host + ":" + port);
 	}

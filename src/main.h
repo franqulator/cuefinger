@@ -77,6 +77,8 @@ https://github.com/franqulator/cuefinger";
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
+#define CONNECTION_TEST_INTERVAL    25 //ms
+#define SERVER_TEST_TIMEOUT			500
 
 #define UA_MAX_SERVER_LIST_SETTING	7 
 
@@ -102,8 +104,7 @@ https://github.com/franqulator/cuefinger";
 #define METER_COLOR_YELLOW	RGB(200, 162, 42)
 #define METER_COLOR_RED		RGB(250, 62, 42)
 
-#define UA_SERVER_RESFRESH_TIME	7000 //in ms
-#define IS_UA_SERVER_REFRESHING (g_server_refresh_start_time != 0&& (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME))
+#define IS_UA_SERVER_REFRESHING (g_server_refresh_end_time != 0 && (g_server_refresh_end_time > GetTickCount64()))
 
 #define TOUCH_ACTION_NONE	0
 #define TOUCH_ACTION_LEVEL	1

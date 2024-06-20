@@ -177,7 +177,7 @@ GFXSurface* g_gsLabelYellow[4];
 GFXSurface* g_gsLabelOrange[4];
 GFXSurface* g_gsLabelPurple[4];
 
-unsigned long long g_server_refresh_start_time;
+unsigned long long g_server_refresh_end_time;
 vector<UADevice*> g_ua_devices;
 unordered_map<string, Channel*> g_channelsById;
 map<int, Channel*> g_channelsInOrder;
@@ -1672,7 +1672,7 @@ string serverListGet(int i) {
 	return "";
 }
 
-int SDLCALL pingServer(void *param)
+int SDLCALL testServer(void *param)
 {
 	if (!param)
 		return 0;
@@ -1681,11 +1681,11 @@ int SDLCALL pingServer(void *param)
 	string ip(c_ip);
 
 	try {
-		TCPClient* tcpPing = new TCPClient(ip, UA_TCP_PORT, NULL, 3000);
-		if (tcpPing) {
-			if (tcpPing->Send("get /devices")) {
+		TCPClient* tcpTest = new TCPClient(ip, UA_TCP_PORT, NULL, SERVER_TEST_TIMEOUT);
+		if (tcpTest) {
+			if (tcpTest->Send("get /devices")) {
 				string rec;
-				if (tcpPing->Receive(rec, 3000) > 0) {
+				if (tcpTest->Receive(rec, SERVER_TEST_TIMEOUT) > 0) {
 					try {
 						dom::parser parser;
 						padded_string json = padded_string(rec);
@@ -1705,9 +1705,9 @@ int SDLCALL pingServer(void *param)
 				}
 			}
 			else {
-				writeLog(LOG_INFO | LOG_EXTENDED, "Ping message not received: " + ip);
+				writeLog(LOG_INFO | LOG_EXTENDED, "Test message not received: " + ip);
 			}
-			SAFE_DELETE(tcpPing);
+			SAFE_DELETE(tcpTest);
 		}
 	}
 	catch (const invalid_argument &e) {
@@ -1900,39 +1900,18 @@ void setNetworkTimeout() {
 #endif
 }
 
-#ifdef SIMULATION
-bool getServerList()
-{
-	g_ua_server_last_connection = -1;
-
-	cleanUpConnectionButtons();
-
-	setRedrawWindow(true);
-
-	serverListClear();
-	serverListAdd("Simulation");
-
-	updateConnectButtons();
-
-	return true;
-}
-#endif
-
-#ifndef SIMULATION
-bool getServerList()
+int SDLCALL getServerListThread(void *param)
 {
 	if (g_serverlist_defined)
-		return false;
+		return 0;
 
 	if (IS_UA_SERVER_REFRESHING)
-		return false;
+		return 0;
 
 	g_ua_server_last_connection = -1;
 	serverListClear();
 
 	updateConnectButtons();
-
-	g_server_refresh_start_time = GetTickCount64();
 
 	if(g_timer_network_serverlist == 0)
 		g_timer_network_serverlist = SDL_AddTimer(1000, timerCallbackRefreshServerList, NULL);
@@ -1943,15 +1922,17 @@ bool getServerList()
 	if (!GetClientIPs(getServerListCallback))
 		return false;
 
-	// ping servers
+    g_server_refresh_end_time = GetTickCount64() + ipSearchMask.size() * 255 * CONNECTION_TEST_INTERVAL;
+
+	// test servers
 	for (auto it = ipSearchMask.begin(); it != ipSearchMask.end(); ++it) {
 		for (int n = 1; n < 255; n++) {
 			string ip = (*it) + to_string(n);
 			char* scanIpBuffer = new char[ip.length() + 1];
 			if (scanIpBuffer) {
 				strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
-				string threadName = "PingUAServer on " + ip;
-				SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
+				string threadName = "TestUAServer on " + ip;
+				SDL_Thread* thread = SDL_CreateThread(testServer, threadName.c_str(), scanIpBuffer);
 				if (!thread) {
 					writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
 				}
@@ -1959,16 +1940,17 @@ bool getServerList()
 			else {
 				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
 			}
+            SDL_Delay(CONNECTION_TEST_INTERVAL);
 		}
 	}
-
+#ifndef __ANDROID__
 	//localhost
 	string ip = "127.0.0.1";
 	char* scanIpBuffer = new char[ip.length() + 1];
 	if (scanIpBuffer) {
 		strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
-		string threadName = "PingUAServer on " + ip;
-		SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
+		string threadName = "TestUAServer on " + ip;
+		SDL_Thread* thread = SDL_CreateThread(testServer, threadName.c_str(), scanIpBuffer);
 		if (!thread) {
 			writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
 		}
@@ -1976,11 +1958,13 @@ bool getServerList()
 	else {
 		writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
 	}
-
+#endif
 	return true;
 }
-#endif
 
+void getServerList() {
+    SDL_CreateThread(getServerListThread, "getServerListThread", NULL);
+}
 
 void tcpClientProc(int msg, const string &data)
 {
@@ -5201,7 +5185,7 @@ void initGlobals() { // needed to reset globals for android
 	g_fntLabel = NULL;
 	g_fntFaderScale = NULL;
 	g_fntOffline = NULL;
-	g_server_refresh_start_time = 0;
+	g_server_refresh_end_time = 0;
 }
 
 #ifdef _WIN32
