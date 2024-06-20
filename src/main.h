@@ -43,7 +43,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.3";
+const string APP_VERSION = "1.3.4";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -102,8 +102,8 @@ https://github.com/franqulator/cuefinger";
 #define METER_COLOR_YELLOW	RGB(200, 162, 42)
 #define METER_COLOR_RED		RGB(250, 62, 42)
 
-#define UA_SERVER_RESFRESH_TIME	11000 //in ms
-#define IS_UA_SERVER_REFRESHING (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME)
+#define UA_SERVER_RESFRESH_TIME	7000 //in ms
+#define IS_UA_SERVER_REFRESHING (g_server_refresh_start_time != 0&& (GetTickCount64() - g_server_refresh_start_time < UA_SERVER_RESFRESH_TIME))
 
 #define TOUCH_ACTION_NONE	0
 #define TOUCH_ACTION_LEVEL	1
@@ -159,7 +159,6 @@ https://github.com/franqulator/cuefinger";
 #define LOG_EXTENDED    0b0100
 
 void writeLog(int type, const string &s);
-void terminateAllPingThreads();
 
 class Settings {
 public:
@@ -387,5 +386,7 @@ inline double toMeterScale(double linVal) {
 inline double fromMeterScale(double taperedVal) {
 	return pow(taperedVal * pow(4.0, 0.2), 1.0 / 0.2);
 }
+
+string shortenString(string s, GFXFont* fnt, float width);
 
 #endif

@@ -22,6 +22,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "main.h"
 #include <mutex>
 
+bool g_running;
+
 mutex g_mutex_serverList;
 mutex g_mutex_uaDevices;
 
@@ -45,61 +47,64 @@ int g_userEventBeginNum = 0;
 
 GFXEngine *gfx = NULL;
 
-SDL_Window *g_window=NULL;
-SDL_TimerID g_timer_network_serverlist = 0;
-SDL_TimerID g_timer_network_reconnect = 0;
-SDL_TimerID g_timer_network_timeout = 0;
-SDL_TimerID g_timer_network_send_timeout_msg = 0;
-SDL_TimerID g_timerFlipPage = 0;
-SDL_TimerID g_timerResetOrder = 0;
-SDL_TimerID g_timerUnmuteAll = 0;
-SDL_TimerID g_timerSelectAllChannels = 0;
-int g_dragPageFlip = 0;
-int g_resetOrderCountdown = 0;
-int g_unmuteAllCountdown = 0;
-int g_selectAllChannelsCountdown = 0;
+SDL_Window *g_window;
+SDL_TimerID g_timer_network_serverlist;
+SDL_TimerID g_timer_network_reconnect;
+SDL_TimerID g_timer_network_timeout;
+SDL_TimerID g_timer_network_send_timeout_msg;
+SDL_TimerID g_timerFlipPage;
+SDL_TimerID g_timerResetOrder;
+SDL_TimerID g_timerUnmuteAll;
+SDL_TimerID g_timerSelectAllChannels;
+int g_dragPageFlip;
+int g_resetOrderCountdown;
+int g_unmuteAllCountdown;
+int g_selectAllChannelsCountdown;
 
 Settings g_settings;
 map<string, string> serverSettingsJSON;
 
-string g_msg = "";
+string g_msg;
 
 vector<string> g_ua_serverList;
-string g_ua_server_connected = "";
-int g_ua_server_last_connection = -1;
+string g_ua_server_connected;
+int g_ua_server_last_connection;
 
-string g_selectedMixBus = "MIX";
+string g_selectedMixBus;
 
-int g_channels_per_page = 0;
-int g_browseToChannel = 0;
+int g_channels_per_page;
+int g_browseToChannel;
 
-int g_activeChannelsCount = -1;
-int g_visibleChannelsCount = -1;
+int g_activeChannelsCount;
+int g_visibleChannelsCount;
 
-bool g_redraw = true;
-bool g_serverlist_defined = false;
-bool g_reorder_dragging = false;
+bool g_redraw;
+bool g_serverlist_defined;
+bool g_reorder_dragging;
 
 //Channel Layout (werden in UpdateLayout-Funktion berechnet)
-const float MIN_BTN_WIDTH = 80.0f;
+const float MIN_BTN_WIDTH = 40.0f;
 const float MAX_BTN_WIDTH = 160.0f;
 const float SPACE_X = 2.0f;
 const float SPACE_Y = 2.0f;
-float g_channel_offset_x = 20.0f;
-float g_channel_offset_y = 40.0f;
+float g_channel_offset_x;
+float g_channel_offset_y;
 float g_fader_label_height;
 float g_fadertracker_width;
 float g_fadertracker_height;
-float g_pantracker_width = 3.0f;
-float g_pantracker_height = 28.0f;
-float g_channel_height = 400.0f;
-float g_channel_width = 100.0f;
-float g_channel_pan_height = 30.0f;
+float g_pantracker_width;
+float g_pantracker_height;
+float g_channel_height;
+float g_channel_width;
+float g_channel_pan_height;
 float g_faderrail_width;
 float g_faderrail_height;
 
-float g_btn_width = 120.0f;
-float g_btn_height = 60.0f;
+float g_btn_width;
+float g_btn_height;
+float g_settingsBtnWidth;
+float g_settingsBtnHeight;
+float g_settingsLabelWidth;
 float g_channel_btn_size;
 
 float g_channel_label_fontsize;
@@ -109,39 +114,42 @@ float g_offline_fontsize;
 float g_btnbold_fontsize;
 float g_faderscale_fontsize;
 
+float g_settingsDlgWidth;
+float g_settingsDlgHeight;
+
 vector<Button*> g_btnConnect;
 vector<pair<string, Button*>> g_btnSends;
-Button *g_btnSelectChannels=NULL;
-Button* g_btnReorderChannels = NULL;
-Button *g_btnChannelWidth=NULL;
-Button *g_btnPageLeft=NULL;
-Button *g_btnPageRight=NULL;
-Button *g_btnMix=NULL;
-Button *g_btnSettings=NULL;
-Button* g_btnMuteAll = NULL;
-Button* g_btnLockSettings = NULL;
-Button* g_btnPostFaderMeter = NULL;
-Button* g_btnShowOfflineDevices = NULL;
-Button* g_btnLockToMixMIX = NULL;
-Button* g_btnLockToMixCUE[4] = {NULL, NULL, NULL, NULL};
-Button* g_btnLockToMixAUX[2] = { NULL, NULL };
-Button* g_btnLabelAUX1[4] = { NULL, NULL, NULL, NULL };
-Button* g_btnLabelAUX2[4] = { NULL, NULL, NULL, NULL };
-Button* g_btnInfo = NULL;
-Button* g_btnFullscreen = NULL;
-Button* g_btnReconnect = NULL;
-Button* g_btnServerlistScan = NULL;
+Button *g_btnSelectChannels;
+Button* g_btnReorderChannels;
+Button *g_btnChannelWidth;
+Button *g_btnPageLeft;
+Button *g_btnPageRight;
+Button *g_btnMix;
+Button *g_btnSettings;
+Button* g_btnMuteAll;
+Button* g_btnLockSettings;
+Button* g_btnPostFaderMeter;
+Button* g_btnShowOfflineDevices;
+Button* g_btnLockToMixMIX;
+Button* g_btnLockToMixCUE[4];
+Button* g_btnLockToMixAUX[2];
+Button* g_btnLabelAUX1[4];
+Button* g_btnLabelAUX2[4];
+Button* g_btnInfo;
+Button* g_btnFullscreen;
+Button* g_btnReconnect;
+Button* g_btnServerlistScan;
 vector<Button*> g_btnsServers;
 
-TCPClient *g_tcpClient = NULL;
-int g_page = 0;
+TCPClient *g_tcpClient;
+int g_page;
 
-GFXFont *g_fntMain = NULL;
-GFXFont* g_fntInfo = NULL;
-GFXFont *g_fntChannelBtn = NULL;
-GFXFont *g_fntLabel = NULL;
-GFXFont *g_fntFaderScale = NULL;
-GFXFont *g_fntOffline = NULL;
+GFXFont *g_fntMain;
+GFXFont* g_fntInfo;
+GFXFont *g_fntChannelBtn;
+GFXFont *g_fntLabel;
+GFXFont *g_fntFaderScale;
+GFXFont *g_fntOffline;
 
 GFXSurface *g_gsButtonYellow[2];
 GFXSurface *g_gsButtonRed[2];
@@ -169,15 +177,14 @@ GFXSurface* g_gsLabelYellow[4];
 GFXSurface* g_gsLabelOrange[4];
 GFXSurface* g_gsLabelPurple[4];
 
-vector<SDL_Thread*> pingThreadsList;
-
-unsigned long long g_server_refresh_start_time = -UA_SERVER_RESFRESH_TIME;
+unsigned long long g_server_refresh_start_time;
 vector<UADevice*> g_ua_devices;
 unordered_map<string, Channel*> g_channelsById;
 map<int, Channel*> g_channelsInOrder;
 set<Channel*> g_touchpointChannels;
 set<string> g_channelsMutedBeforeAllMute;
 string g_masterChannelId;
+set<string> ipSearchMask;
 
 #define LOG_INFO        0b0001
 #define LOG_ERROR       0b0010
@@ -409,7 +416,7 @@ void updateLayout() {
         }
     }
 
-	float new_main_fontsize = min(g_btn_height / 3.0f, g_btn_width / 7.0f);
+	float new_main_fontsize = min(g_btn_height / 2.8f, g_btn_width / 6.0f);
 	//reload mainfont if size changed
 	if (g_main_fontsize != new_main_fontsize || !g_fntMain) {
 		g_main_fontsize = new_main_fontsize;
@@ -530,56 +537,71 @@ void updateLayout() {
 		g_btn_width, g_btn_height);
 
 	//settings dialog
+	g_settingsLabelWidth = 8.0f * g_main_fontsize;
+	g_settingsLabelWidth = min(g_settingsLabelWidth, (win_width - g_channel_offset_x) / 3.0f);
+	g_settingsBtnWidth = (win_width - g_channel_offset_x - g_settingsLabelWidth - 40.0f) / 2.0f;
+	g_settingsBtnHeight = (win_height - 160.0f) / 15.0f;
+	g_settingsBtnWidth = min(g_settingsBtnWidth, g_settingsBtnHeight * 4.0f);
+
+	g_settingsBtnWidth = min(g_settingsBtnWidth, g_btn_width * 2.0f);
+	g_settingsBtnHeight = min(g_settingsBtnHeight, g_btn_height);
+
 	float x = g_channel_offset_x + 20.0f;
 	float y = 20.0f;
 	float vspace = 20.0f;
 
-	g_btnInfo->setBounds(x + g_main_fontsize * 10.0f + g_btn_width, y, g_btn_width, g_btn_height / 2.0f);
-	g_btnFullscreen->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width, g_btn_height / 2.0f);
-	g_btnLockSettings->setBounds(x, y, g_btn_width, g_btn_height / 2.0f);
-	y += g_btn_height / 2.0f + 2.0f + vspace;
+	g_btnInfo->setBounds(x + g_settingsLabelWidth + g_settingsBtnWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
+	g_btnFullscreen->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
+	g_btnLockSettings->setBounds(x, y, g_settingsLabelWidth, g_settingsBtnHeight);
+	y += g_settingsBtnHeight + 2.0f + vspace;
 
-	g_btnLockToMixMIX->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width / 2.0f, g_btn_height / 2.0f);
+	g_btnLockToMixMIX->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight);
 	for (int n = 0; n < 2; n++) {
-		g_btnLockToMixAUX[n]->setBounds(x + g_main_fontsize * 10.0f + (float)(1 + n) * g_btn_width / 2.0f,
-			y, g_btn_width / 2.0f, g_btn_height / 2.0f);
+		g_btnLockToMixAUX[n]->setBounds(x + g_settingsLabelWidth + (float)(1 + n) * g_settingsBtnWidth / 2.0f,
+			y, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight);
 	}
-	y += g_btn_height / 2.0f + 2.0f;
+	y += g_settingsBtnHeight + 2.0f;
 	for (int n = 0; n < 4; n++) {
-		g_btnLockToMixCUE[n]->setBounds(x + g_main_fontsize * 10.0f + (float)n * g_btn_width / 2.0f, y,
-			g_btn_width / 2.0f, g_btn_height / 2.0f);
+		g_btnLockToMixCUE[n]->setBounds(x + g_settingsLabelWidth + (float)n * g_settingsBtnWidth / 2.0f, y,
+			g_settingsBtnWidth / 2.0f, g_settingsBtnHeight);
 	}
 
-	y += g_btn_height / 2.0f + 2.0f + vspace;
-
-	for (int n = 0; n < 4; n++) {
-		g_btnLabelAUX1[n]->setBounds(x + g_main_fontsize * 10.0f + (float)n * g_btn_width / 2.0f, y,
-			g_btn_width / 2.0f, g_btn_height / 2.0f);
-	}
-
-	y += g_btn_height / 2.0f + 2.0f;
+	y += g_settingsBtnHeight + 2.0f + vspace;
 
 	for (int n = 0; n < 4; n++) {
-		g_btnLabelAUX2[n]->setBounds(x + g_main_fontsize * 10.0f + (float)n * g_btn_width / 2.0f, y,
-			g_btn_width / 2.0f, g_btn_height / 2.0f);
+		g_btnLabelAUX1[n]->setBounds(x + g_settingsLabelWidth + (float)n * g_settingsBtnWidth / 2.0f, y,
+			g_settingsBtnWidth / 2.0f, g_settingsBtnHeight);
 	}
 
-	y += g_btn_height / 2.0f + 2.0f + vspace;
+	y += g_settingsBtnHeight + 2.0f;
 
-	g_btnPostFaderMeter->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width, g_btn_height / 2.0f);
-	y += g_btn_height / 2.0f + 2.0f + vspace;
+	for (int n = 0; n < 4; n++) {
+		g_btnLabelAUX2[n]->setBounds(x + g_settingsLabelWidth + (float)n * g_settingsBtnWidth / 2.0f, y,
+			g_settingsBtnWidth / 2.0f, g_settingsBtnHeight);
+	}
 
-	g_btnShowOfflineDevices->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width, g_btn_height / 2.0f);
-	y += g_btn_height / 2.0f + 2.0f + vspace;
+	y += g_settingsBtnHeight + 2.0f + vspace;
 
-	g_btnReconnect->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width, g_btn_height / 2.0f);
-	y += g_btn_height / 2.0f + 2.0f + vspace;
+	g_btnPostFaderMeter->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
+	y += g_settingsBtnHeight + 2.0f + vspace;
 
-	g_btnServerlistScan->setBounds(x + g_main_fontsize * 10.0f, y, g_btn_width, g_btn_height / 2.0f);
+	g_btnShowOfflineDevices->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
+	y += g_settingsBtnHeight + 2.0f + vspace;
+
+	g_btnReconnect->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
+	y += g_settingsBtnHeight + 2.0f + vspace;
+
+	g_btnServerlistScan->setBounds(x + g_settingsLabelWidth, y, g_settingsBtnWidth, g_settingsBtnHeight);
 
 	for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
-		(*it)->setBounds(x + g_main_fontsize * 10.0f + (g_btn_width + 2.0f), y, g_btn_width, g_btn_height / 2.0f);
-		y += g_btn_height / 2.0f + 2.0f;
+		(*it)->setBounds(x + g_settingsLabelWidth + (g_settingsBtnWidth + 2.0f), y, g_settingsBtnWidth, g_settingsBtnHeight);
+		y += g_settingsBtnHeight + 2.0f;
+	}
+
+	g_settingsDlgWidth = g_btnInfo->getX() + g_settingsBtnWidth + 20.0f - g_channel_offset_x;
+	g_settingsDlgHeight = g_btnServerlistScan->getY() + g_settingsBtnHeight + 20.0f;
+	if (g_btnsServers.size() > 1) {
+		g_settingsDlgHeight = g_btnsServers.back()->getY() + g_settingsBtnHeight + 20.0f;
 	}
 
 	browseToSelectedChannel(g_browseToChannel);
@@ -773,10 +795,10 @@ void Button::draw(int color, const string &overrideName)
 	string text = overrideName.empty() ? this->text : overrideName;
 
 	float max_width = this->w * 0.9f;
-	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, text, GFX_CENTER | GFX_AUTOBREAK, max_width);
+	Vector2D sz = gfx->GetTextBlockSize(g_fntMain, text, GFX_CENTER);
 	Vector2D szText(max_width, this->h);
 	gfx->SetColor(g_fntMain, clr);
-	gfx->Write(g_fntMain, this->x + (this->w - max_width) / 2.0f, this->y + this->h / 2.0f - sz.getY() / 2.0f, text, GFX_CENTER | GFX_AUTOBREAK, &szText, 0, 0.8f);
+	gfx->Write(g_fntMain, this->x + (this->w - max_width) / 2.0f, this->y + this->h / 2.0f - sz.getY() / 2.0f, shortenString(text, g_fntMain, max_width), GFX_CENTER, &szText, 0, 0.8f);
 }
 
 Touchpoint::Touchpoint() {
@@ -1650,26 +1672,48 @@ string serverListGet(int i) {
 	return "";
 }
 
-static int pingServer(void *param)
+int SDLCALL pingServer(void *param)
 {
 	if (!param)
 		return 0;
 
-	string ip ((char*)param);
+	char* c_ip = (char*)param;
+	string ip(c_ip);
 
 	try {
-		TCPClient* tcpClient = new TCPClient(ip, UA_TCP_PORT, NULL);
-		string computername = GetComputerNameByIP(ip);
-		writeLog(LOG_INFO, "UA-Server found on " + computername);
-		serverListAdd(computername);
-		pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
-
-		SAFE_DELETE(tcpClient);
+		TCPClient* tcpPing = new TCPClient(ip, UA_TCP_PORT, NULL, 3000);
+		if (tcpPing) {
+			if (tcpPing->Send("get /devices")) {
+				string rec;
+				if (tcpPing->Receive(rec, 3000) > 0) {
+					try {
+						dom::parser parser;
+						padded_string json = padded_string(rec);
+						dom::element element = parser.parse(json);
+						const dom::object obj = element["data"]["children"];
+						string computername = GetComputerNameByIP(ip);
+						writeLog(LOG_INFO, "UA-Server found on " + computername);
+						serverListAdd(computername);
+						pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
+					}
+					catch (const simdjson_error& e) {
+						writeLog(LOG_INFO | LOG_EXTENDED, "Server seems not to be a UA-Server: " + ip + " (" + e.what() + ")");
+					}
+				}
+				else {
+					writeLog(LOG_INFO | LOG_EXTENDED, "Server does not answer: " + ip);
+				}
+			}
+			else {
+				writeLog(LOG_INFO | LOG_EXTENDED, "Ping message not received: " + ip);
+			}
+			SAFE_DELETE(tcpPing);
+		}
 	}
-	catch (const invalid_argument &) {
-		writeLog(LOG_INFO| LOG_EXTENDED, "No UA-Server found on " + ip);
+	catch (const invalid_argument &e) {
+		writeLog(LOG_INFO| LOG_EXTENDED, "No UA-Server found on " + ip +" (" + e.what() + ")");
 	}
-	free(param);
+	delete[] c_ip;
 
 	return 0;
 }
@@ -1679,65 +1723,14 @@ void getServerListCallback(string ip) {
 		return;
 	}
 
-	if (ip.substr(0, 4) == "127.") {
-		//check localhost
-		writeLog(LOG_INFO, "Create ip buffer " + ip);
-		char* scanIpBuffer = (char*)malloc(sizeof(char) * ip.length() + 1);
-		if (scanIpBuffer) {
-			ip.copy(scanIpBuffer, ip.length());
-			scanIpBuffer[ip.length()] = '\0';
-			string threadName = "PingUAServer on " + ip;
-			writeLog(LOG_INFO, "Create thrad " + threadName);
-			SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), (void*)scanIpBuffer);
-			if (!thread) {
-				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
-			}
-			else {
-				pingThreadsList.push_back(thread);
-			}
-		}
-		else {
-			writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
-		}
-	}
-	else {
+	if (ip.substr(0, 4) != "127.") {
 		size_t cut = ip.find_last_of('.');
 		if (cut != string::npos) {
-			string ipFragment = ip.substr(0, cut + 1);
-
-			for (int n = 1; n < 255; n++) {
-				ip = ipFragment + to_string(n);
-				writeLog(LOG_INFO, "Create ip buffer " + ip);
-				char* scanIpBuffer = (char*)malloc(sizeof(char) * ip.length() + 1);
-				if (scanIpBuffer) {
-					ip.copy(scanIpBuffer, ip.length());
-					scanIpBuffer[ip.length()] = '\0';
-					string threadName = "PingUAServer on " + ip;
-					writeLog(LOG_INFO, "Create thrad " + threadName);
-					SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
-					if (!thread) {
-						writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
-					}
-					else {
-						pingThreadsList.push_back(thread);
-					}
-				}
-				else {
-					writeLog(LOG_ERROR,
-						"Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
-				}
-			}
+			ip = ip.substr(0, cut + 1);
+			ipSearchMask.insert(ip);
 		}
 	}
 }
-
-void terminateAllPingThreads() {
-	for (vector<SDL_Thread*>::iterator it = pingThreadsList.begin(); it != pingThreadsList.end(); ++it) {
-		SDL_DetachThread(*it);
-	}
-	pingThreadsList.clear();
-}
-
 
 void cleanUpConnectionButtons()
 {
@@ -1934,34 +1927,63 @@ bool getServerList()
 	if (IS_UA_SERVER_REFRESHING)
 		return false;
 
-	writeLog(LOG_INFO, "begin updating serverlist");
-
-	terminateAllPingThreads();
-
 	g_ua_server_last_connection = -1;
 	serverListClear();
 
 	updateConnectButtons();
 
-	g_server_refresh_start_time = GetTickCount64(); //10sec
+	g_server_refresh_start_time = GetTickCount64();
 
 	if(g_timer_network_serverlist == 0)
 		g_timer_network_serverlist = SDL_AddTimer(1000, timerCallbackRefreshServerList, NULL);
 
 	setRedrawWindow(true);
 
+	ipSearchMask.clear();
 	if (!GetClientIPs(getServerListCallback))
 		return false;
+
+	// ping servers
+	for (auto it = ipSearchMask.begin(); it != ipSearchMask.end(); ++it) {
+		for (int n = 1; n < 255; n++) {
+			string ip = (*it) + to_string(n);
+			char* scanIpBuffer = new char[ip.length() + 1];
+			if (scanIpBuffer) {
+				strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
+				string threadName = "PingUAServer on " + ip;
+				SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
+				if (!thread) {
+					writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+				}
+			}
+			else {
+				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
+			}
+		}
+	}
+
+	//localhost
+	string ip = "127.0.0.1";
+	char* scanIpBuffer = new char[ip.length() + 1];
+	if (scanIpBuffer) {
+		strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
+		string threadName = "PingUAServer on " + ip;
+		SDL_Thread* thread = SDL_CreateThread(pingServer, threadName.c_str(), scanIpBuffer);
+		if (!thread) {
+			writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
+		}
+	}
+	else {
+		writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
+	}
 
 	return true;
 }
 #endif
 
+
 void tcpClientProc(int msg, const string &data)
 {
-	if (!g_tcpClient)
-		return;
-
 	switch (msg)
 	{
 	case MSG_CLIENT_CONNECTED:
@@ -2676,36 +2698,6 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 
 	Vector2D max_size = Vector2D(_width , g_fader_label_height);
 
-	// remove spaces if name too long
-	size_t n = name.length() - 1;
-	do {
-		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
-		if (sz.getX() > _width && (name[n] == ' ' || name[n] == '\t')) {
-			name = name.substr(0, n) + name.substr(n + 1, name.length() - n + 1);
-		}
-		n--;
-	} while (sz.getX() > _width && n > 0);
-
-	// remove vowels if name too long
-	n = name.length() - 1;
-	do {
-		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
-		if (sz.getX() > _width && 
-			(name[n] == 'a' || name[n] == 'e' || name[n] == 'i' || name[n] == 'o' || name[n] == 'u'
-			|| name[n] == 'A' || name[n] == 'E' || name[n] == 'I' || name[n] == 'O' || name[n] == 'U')) {
-			name = name.substr(0, n) + name.substr(n + 1, name.length() - n + 1);
-		}
-		n--;
-	} while (sz.getX() > _width && n > 0);
-
-	// if name still too long remove chars from the end
-	do {
-		sz = gfx->GetTextBlockSize(g_fntLabel, name, GFX_CENTER);
-		if (sz.getX() > _width) {
-			name = name.substr(0, name.length() - 1);
-		}
-	} while (sz.getX() > _width);
-
 	if (gsLabel == g_gsLabelBlack[this->label_gfx]) {
 		gfx->SetColor(g_fntLabel, WHITE);
 	}
@@ -2713,7 +2705,74 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 		gfx->SetColor(g_fntLabel, BLACK);
 	}
 
-	gfx->Write(g_fntLabel, _x, _y + (g_fader_label_height - sz.getY()) / 2, name, GFX_CENTER, &max_size);
+	gfx->Write(g_fntLabel, _x, _y + (g_fader_label_height - g_channel_label_fontsize) / 2.5f, shortenString(name, g_fntLabel, _width), GFX_CENTER, &max_size);
+}
+
+string shortenString(string s, GFXFont *fnt, float width) {
+
+	//split lines
+	vector<string> lines;
+	size_t front = 0;
+	size_t end;
+	do {
+		end = s.find_first_of('\n', front);
+		if (end == string::npos) {
+			lines.push_back(s.substr(front));
+		}
+		else {
+			end++;
+			lines.push_back(s.substr(front, end));
+			front = end;
+		}
+
+	} while (end != string::npos);
+
+	s = "";
+	for (auto it = lines.begin(); it != lines.end(); ++it) {
+		// remove spaces if (*it) too long
+		Vector2D sz;
+		size_t n = (*it).length() - 1;
+		do {
+			sz = gfx->GetTextBlockSize(fnt, (*it), GFX_CENTER);
+			if (sz.getX() > width && isspace((*it)[n])) {
+				(*it) = (*it).substr(0, n) + (*it).substr(n + 1, (*it).length() - n + 1);
+			}
+			n--;
+		} while (sz.getX() > width && n > 0);
+
+		// remove punctuation
+		n = (*it).length() - 1;
+		do {
+			sz = gfx->GetTextBlockSize(fnt, (*it), GFX_CENTER);
+			if (sz.getX() > width && ispunct((*it)[n])) {
+				(*it) = (*it).substr(0, n) + (*it).substr(n + 1, (*it).length() - n + 1);
+			}
+			n--;
+		} while (sz.getX() > width && n > 0);
+
+		// remove vowels if (*it) too long
+		n = (*it).length() - 1;
+		do {
+			sz = gfx->GetTextBlockSize(fnt, (*it), GFX_CENTER);
+			if (sz.getX() > width &&
+				((*it)[n] == 'a' || (*it)[n] == 'e' || (*it)[n] == 'i' || (*it)[n] == 'o' || (*it)[n] == 'u'
+					|| (*it)[n] == 'A' || (*it)[n] == 'E' || (*it)[n] == 'I' || (*it)[n] == 'O' || (*it)[n] == 'U')) {
+				(*it) = (*it).substr(0, n) + (*it).substr(n + 1, (*it).length() - n + 1);
+			}
+			n--;
+		} while (sz.getX() > width && n > 0);
+
+		// if (*it) still too long remove chars from the end
+		do {
+			sz = gfx->GetTextBlockSize(fnt, (*it), GFX_CENTER);
+			if (sz.getX() > width) {
+				(*it) = (*it).substr(0, (*it).length() - 1);
+			}
+		} while (sz.getX() > width);
+
+		s += (*it);
+	}
+	return s;
 }
 
 int getMiddleSelectedChannel() {
@@ -2920,15 +2979,10 @@ void draw() {
 
 	if (g_btnSettings->isHighlighted()) {
 
-		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.8f);
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.7f);
 
-		float box_width = g_btnInfo->getX() + g_btn_width + 20.0f - g_channel_offset_x;
-		float box_height = g_btnServerlistScan->getY() + g_btn_height / 2.0f + 20.0f;
-		if (g_btnsServers.size() > 1) {
-			box_height = g_btnsServers.back()->getY() + g_btn_height / 2.0f + 20.0f;
-		}
-		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, box_width, box_height, 0, 0.3f);
-		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2.0f, 2.0f, box_width - 4.0f, box_height - 4.0f, 0, 0.9f);
+		gfx->DrawShape(GFX_RECTANGLE, WHITE, g_channel_offset_x, 0, g_settingsDlgWidth, g_settingsDlgHeight, 0, 0.3f);
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, g_channel_offset_x + 2.0f, 2.0f, g_settingsDlgWidth - 4.0f, g_settingsDlgHeight - 4.0f, 0, 0.9f);
 
 		g_btnInfo->draw(BTN_COLOR_YELLOW);
 		g_btnFullscreen->draw(BTN_COLOR_GREEN);
@@ -2939,7 +2993,8 @@ void draw() {
 		string s = "Lock to mix";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnLockToMixMIX->getY() + g_btnLockToMixMIX->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnLockToMixMIX->getY() + g_btnLockToMixMIX->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		g_btnLockToMixMIX->draw(BTN_COLOR_GREEN);
 		for (int n = 0; n < 2; n++) {
 			g_btnLockToMixAUX[n]->draw(BTN_COLOR_GREEN);
@@ -2951,7 +3006,8 @@ void draw() {
 		s = "Label AUX 1";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnLabelAUX1[0]->getY() + g_btnLabelAUX1[0]->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnLabelAUX1[0]->getY() + g_btnLabelAUX1[0]->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		for (int n = 0; n < 4; n++) {
 			g_btnLabelAUX1[n]->draw(BTN_COLOR_GREEN);
 		}
@@ -2959,7 +3015,8 @@ void draw() {
 		s = "Label AUX 2";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnLabelAUX2[0]->getY() + g_btnLabelAUX2[0]->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnLabelAUX2[0]->getY() + g_btnLabelAUX2[0]->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		for (int n = 0; n < 4; n++) {
 			g_btnLabelAUX2[n]->draw(BTN_COLOR_GREEN);
 		}
@@ -2967,25 +3024,29 @@ void draw() {
 		s = "MIX Meter";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnPostFaderMeter->getY() + g_btnPostFaderMeter->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnPostFaderMeter->getY() + g_btnPostFaderMeter->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		g_btnPostFaderMeter->draw(BTN_COLOR_GREEN);
 
-		s = "Show offline devices";
+		s = "Offline devices";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnShowOfflineDevices->getY() + g_btnShowOfflineDevices->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnShowOfflineDevices->getY() + g_btnShowOfflineDevices->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		g_btnShowOfflineDevices->draw(BTN_COLOR_GREEN);
 
-		s = "Try to reconnect\nautomatically";
+		s = "Reconnect";
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
 		gfx->SetColor(g_fntMain, WHITE);
-		gfx->Write(g_fntMain, x, g_btnReconnect->getY() + g_btnReconnect->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnReconnect->getY() + g_btnReconnect->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		g_btnReconnect->draw(BTN_COLOR_GREEN);
 
 		s = "Server list";
 		gfx->SetColor(g_fntMain, WHITE);
 		sz = gfx->GetTextBlockSize(g_fntMain, s);
-		gfx->Write(g_fntMain, x, g_btnServerlistScan->getY() + g_btnServerlistScan->getHeight() / 2 - sz.getY() / 2.0f, s, GFX_LEFT);
+		gfx->Write(g_fntMain, x, g_btnServerlistScan->getY() + g_btnServerlistScan->getHeight() / 2 - sz.getY() / 2.0f, 
+			shortenString(s, g_fntMain, g_settingsLabelWidth), GFX_LEFT);
 		g_btnServerlistScan->draw(BTN_COLOR_GREEN);
 		for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
 			(*it)->draw(BTN_COLOR_GREEN);
@@ -2997,7 +3058,7 @@ void draw() {
 
 	if (g_btnInfo->isHighlighted()) {
 
-		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.8f);
+		gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height, 0, 0.7f);
 
 		sz = gfx->GetTextBlockSize(g_fntInfo, INFO_TEXT);
 		gfx->SetColor(g_fntInfo, RGB(220,220,220));
@@ -4152,7 +4213,6 @@ void onStateChanged_btnsServerlist(Button* btn) {
 		}
 		else {
 			if (g_btnServerlistScan->isHighlighted()) {
-				terminateAllPingThreads();
 				g_btnServerlistScan->setCheck(false);
 			}
 			int count = 0;
@@ -4271,49 +4331,49 @@ void createStaticButtons()
 	g_btnPageRight = new Button(BUTTON, ID_BTN_PAGELEFT, "Page Right",0,0,g_btn_width, g_btn_height,false, false, true, &onStateChanged_btnPageRight);
 	g_btnMix = new Button(RADIO, ID_BTN_MIX, "MIX", 0, 0, g_btn_width, g_btn_height, true,false, true, &onStateChanged_btnsSelectMix);
 
-	g_btnLockSettings = new Button(CHECK, 0, "Lock settings", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.lock_settings, 
+	g_btnLockSettings = new Button(CHECK, 0, "Lock settings", 0, 0, g_settingsBtnWidth, g_settingsBtnHeight, g_settings.lock_settings,
 		true, true, &onStateChanged_btnLockSettings);
-	g_btnPostFaderMeter = new Button(CHECK, 0, "Post Fader", 0, 0, g_btn_width, g_btn_height / 2.0f, false, false, true, &onStateChanged_btnPostFaderMeter);
-	g_btnShowOfflineDevices = new Button(CHECK, 0, "On", 0, 0, g_btn_width, g_btn_height / 2.0f, g_settings.show_offline_devices, !g_settings.lock_settings,
+	g_btnPostFaderMeter = new Button(CHECK, 0, "Post Fader", 0, 0, g_settingsBtnWidth, g_settingsBtnHeight, false, false, true, &onStateChanged_btnPostFaderMeter);
+	g_btnShowOfflineDevices = new Button(CHECK, 0, "Show", 0, 0, g_settingsBtnWidth, g_settingsBtnHeight, g_settings.show_offline_devices, !g_settings.lock_settings,
 		true, &onStateChanged_btnShowOfflineDevices);
-	g_btnLockToMixMIX = new Button(CHECK, 0, "MIX", 0, 0, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.lock_to_mix == "MIX", !g_settings.lock_settings,
+	g_btnLockToMixMIX = new Button(CHECK, 0, "MIX", 0, 0, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.lock_to_mix == "MIX", !g_settings.lock_settings,
 		true, &onStateChanged_btnsLockToMix);
 
 	for (int n = 0; n < 2; n++) {
-		g_btnLockToMixAUX[n] = new Button(CHECK, 0, "AUX " + to_string(n + 1), 0, 0, g_btn_width / 2.0f, g_btn_height / 2.0f,
+		g_btnLockToMixAUX[n] = new Button(CHECK, 0, "AUX " + to_string(n + 1), 0, 0, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight,
 			g_settings.lock_to_mix == "AUX " + to_string(n + 1), !g_settings.lock_settings, true, &onStateChanged_btnsLockToMix);
 	}
 	for (int n = 0; n < 4; n++) {
-		g_btnLockToMixCUE[n] = new Button(CHECK, 0, "CUE " + to_string(n + 1), 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f,
+		g_btnLockToMixCUE[n] = new Button(CHECK, 0, "CUE " + to_string(n + 1), 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight,
 			g_settings.lock_to_mix == "CUE " + to_string(n + 1), !g_settings.lock_settings, true, &onStateChanged_btnsLockToMix);
 	}
 
-	g_btnLabelAUX1[0] = new Button(RADIO, 0, "AUX", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux1 == "AUX", 
+	g_btnLabelAUX1[0] = new Button(RADIO, 0, "AUX", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux1 == "AUX",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX1);
-	g_btnLabelAUX1[1] = new Button(RADIO, 0, "FX", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux1 == "FX", 
+	g_btnLabelAUX1[1] = new Button(RADIO, 0, "FX", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux1 == "FX",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX1);
-	g_btnLabelAUX1[2] = new Button(RADIO, 0, "Reverb", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux1 == "Reverb", 
+	g_btnLabelAUX1[2] = new Button(RADIO, 0, "Reverb", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux1 == "Reverb",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX1);
-	g_btnLabelAUX1[3] = new Button(RADIO, 0, "Delay", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux1 == "Delay", 
+	g_btnLabelAUX1[3] = new Button(RADIO, 0, "Delay", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux1 == "Delay",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX1);
 
-	g_btnLabelAUX2[0] = new Button(RADIO, 0, "AUX", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux2 == "AUX", 
+	g_btnLabelAUX2[0] = new Button(RADIO, 0, "AUX", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux2 == "AUX",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX2);
-	g_btnLabelAUX2[1] = new Button(RADIO, 0, "FX", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux2 == "FX", 
+	g_btnLabelAUX2[1] = new Button(RADIO, 0, "FX", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux2 == "FX",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX2);
-	g_btnLabelAUX2[2] = new Button(RADIO, 0, "Reverb", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux2 == "Reverb", 
+	g_btnLabelAUX2[2] = new Button(RADIO, 0, "Reverb", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux2 == "Reverb",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX2);
-	g_btnLabelAUX2[3] = new Button(RADIO, 0, "Delay", 0.0f, 0.0f, g_btn_width / 2.0f, g_btn_height / 2.0f, g_settings.label_aux2 == "Delay", 
+	g_btnLabelAUX2[3] = new Button(RADIO, 0, "Delay", 0.0f, 0.0f, g_settingsBtnWidth / 2.0f, g_settingsBtnHeight, g_settings.label_aux2 == "Delay",
 		!g_settings.lock_settings, true, &onStateChanged_btnsLabelAUX2);
 
-	g_btnReconnect = new Button(CHECK, 0, "On", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, g_settings.reconnect_time != 0, !g_settings.lock_settings,
+	g_btnReconnect = new Button(CHECK, 0, "Auto", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight, g_settings.reconnect_time != 0, !g_settings.lock_settings,
 		true, &onStateChanged_btnReconnect);
 
-	g_btnServerlistScan = new Button(RADIO, 0, "Scan network", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, true, !g_settings.lock_settings,
+	g_btnServerlistScan = new Button(RADIO, 0, "Auto scan", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight, true, !g_settings.lock_settings,
 		true, &onStateChanged_btnsServerlist);
 
-	g_btnInfo = new Button(CHECK, 0, "Info", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, false, true, true, &onStateChanged_btnInfo);
-	g_btnFullscreen = new Button(CHECK, 0, "Fullscreen", 0.0f, 0.0f, g_btn_width, g_btn_height / 2.0f, 
+	g_btnInfo = new Button(CHECK, 0, "Info", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight, false, true, true, &onStateChanged_btnInfo);
+	g_btnFullscreen = new Button(CHECK, 0, "Fullscreen", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight,
 		g_settings.fullscreen, true, true, &onStateChanged_btnFullscreen);
 }
 
@@ -5087,6 +5147,63 @@ bool Settings::save()
 	return true;
 }
 
+void initGlobals() { // needed to reset globals for android
+	g_running = true;
+	g_window = NULL;
+	g_timer_network_serverlist = 0;
+	g_timer_network_reconnect = 0;
+	g_timer_network_timeout = 0;
+	g_timer_network_send_timeout_msg = 0;
+	g_timerFlipPage = 0;
+	g_timerResetOrder = 0;
+	g_timerUnmuteAll = 0;
+	g_timerSelectAllChannels = 0;
+	g_dragPageFlip = 0;
+	g_resetOrderCountdown = 0;
+	g_unmuteAllCountdown = 0;
+	g_selectAllChannelsCountdown = 0;
+	g_ua_server_connected = "";
+	g_ua_server_last_connection = -1;
+	g_msg = "";
+	g_selectedMixBus = "MIX";
+	g_channels_per_page = 0;
+	g_browseToChannel = 0;
+	g_activeChannelsCount = -1;
+	g_visibleChannelsCount = -1;
+	g_redraw = false;
+	g_serverlist_defined = false;
+	g_reorder_dragging = false;
+	g_btnSelectChannels = NULL;
+	g_btnReorderChannels = NULL;
+	g_btnChannelWidth = NULL;
+	g_btnPageLeft = NULL;
+	g_btnPageRight = NULL;
+	g_btnMix = NULL;
+	g_btnSettings = NULL;
+	g_btnMuteAll = NULL;
+	g_btnLockSettings = NULL;
+	g_btnPostFaderMeter = NULL;
+	g_btnShowOfflineDevices = NULL;
+	g_btnLockToMixMIX = NULL;
+	memset(g_btnLockToMixCUE, 4, sizeof(Button*));
+	memset(g_btnLockToMixAUX, 2, sizeof(Button*));
+	memset(g_btnLabelAUX1, 4, sizeof(Button*));
+	memset(g_btnLabelAUX2, 4, sizeof(Button*));
+	g_btnInfo = NULL;
+	g_btnFullscreen = NULL;
+	g_btnReconnect = NULL;
+	g_btnServerlistScan = NULL;
+	g_tcpClient = NULL;
+	g_page = 0;
+	g_fntMain = NULL;
+	g_fntInfo = NULL;
+	g_fntChannelBtn = NULL;
+	g_fntLabel = NULL;
+	g_fntFaderScale = NULL;
+	g_fntOffline = NULL;
+	g_server_refresh_start_time = 0;
+}
+
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *lpCmdLine, int nCmdShow) {
 	int argc = __argc;
@@ -5095,6 +5212,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *lpCmdLine
 int main(int argc, char* argv[]) {
 #endif
 
+	initGlobals();
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 	g_userEventBeginNum = SDL_RegisterEvents(USER_EVENT_COUNT);
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_INFO);
@@ -5202,7 +5320,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	SDL_SetWindowMinimumSize(g_window, 320, 240);
+	SDL_SetWindowMinimumSize(g_window, 320, 320);
 
 	writeLog(LOG_INFO | LOG_EXTENDED, "load gfx");
 	if (loadAllGfx()) {
@@ -5228,13 +5346,13 @@ int main(int argc, char* argv[]) {
             g_serverlist_defined = false;
             getServerList();
         }
-        bool running = true;
+        
         SDL_Event e;
+		unsigned long long maxFpsTimer = 0;
 
 		writeLog(LOG_INFO | LOG_EXTENDED, "start message loop");
-        while (running) {
-			if (SDL_WaitEventTimeout(&e, 33) > 0)
-				//	while (SDL_PollEvent(&e) > 0)
+        while (g_running) {
+			while (SDL_PollEvent(&e))
 			{
 				switch (e.type) {
 				case SDL_FINGERDOWN: {
@@ -5530,14 +5648,9 @@ int main(int argc, char* argv[]) {
 					break;
 				}
 				case SDL_DISPLAYEVENT: {
-					if (e.display.event == SDL_DISPLAYEVENT_ORIENTATION) {
-						int w, h;
-						SDL_GetWindowSize(g_window, &w, &h);
-						float win_width = (float)w;
-						float win_height = (float)h;
-						gfx->AbortUpdate();
-						gfx->DrawShape(0, 0, 0, 0, win_width, win_height);
-						gfx->Update();
+					if (e.display.event == SDL_DISPLAYEVENT_ORIENTATION
+						&& (int)e.display.display == SDL_GetWindowDisplayIndex(g_window)) {
+						gfx->Update(); // clear screen
 					}
 					break;
 				}
@@ -5551,10 +5664,12 @@ int main(int argc, char* argv[]) {
 					case SDL_WINDOWEVENT_RESIZED:
 					case SDL_WINDOWEVENT_MAXIMIZED:
 					case SDL_WINDOWEVENT_RESTORED: {
+						gfx->Update(); // clear screen
 						gfx->Resize();
 						updateLayout();
 						updateMaxPages(!g_btnSelectChannels->isHighlighted());
 						updateSubscriptions();
+						setRedrawWindow(true);
 						break;
 					}
 					}
@@ -5562,7 +5677,7 @@ int main(int argc, char* argv[]) {
 				}
 				case SDL_QUIT:
 				case SDL_APP_TERMINATING: {
-					running = false;
+					g_running = false;
 					break;
 				}
 				case SDL_USEREVENT: {
@@ -5607,7 +5722,7 @@ int main(int argc, char* argv[]) {
 					}
 					case EVENT_SENDS_LOAD:
 					{
-						int *cueBusCount = (int*)e.user.data1;
+						int* cueBusCount = (int*)e.user.data1;
 						if (*cueBusCount + 2 != (int)g_btnSends.size()) {
 							cleanUpSendButtons();
 
@@ -5795,15 +5910,15 @@ int main(int argc, char* argv[]) {
 					}
 					break;
 				}
-				default:
-					continue;
 				}
-            }
+			}
 
-			if (getRedrawWindow()) {
+			if (getRedrawWindow() && GetTickCount64() - maxFpsTimer > 16) { // max aprox 60fps
+				maxFpsTimer = GetTickCount64();
                 setRedrawWindow(false);
                 draw();
             }
+			SDL_WaitEventTimeout(NULL, 33);
         }
     }
     else
@@ -5823,8 +5938,8 @@ int main(int argc, char* argv[]) {
 
 void cleanUp() {
 	writeLog(LOG_INFO | LOG_EXTENDED, "terminate threads");
-	terminateAllPingThreads();
     disconnect();
+	g_ua_serverList.clear();
 
 #ifdef _WIN32
     ReleaseNetwork();
@@ -5844,4 +5959,6 @@ void cleanUp() {
     releaseAllGfx();
 
     SAFE_DELETE(gfx);
+
+	SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 }

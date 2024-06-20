@@ -19,7 +19,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#ifndef _NETWORK_
+#define _NETWORK_
+
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <fcntl.h>
@@ -31,8 +33,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace std;
 
-#define MAX_CLIENTS	16
 #define TCP_BUFFER_SIZE 512
+#define TCP_TIMEOUT	4000
 
 #define MSG_CLIENT_CONNECTED		1
 #define MSG_CLIENT_DISCONNECTED		2
@@ -51,10 +53,13 @@ private:
 	HANDLE receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
-	TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&));
+	TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&), int timeout = TCP_TIMEOUT);
 	~TCPClient();
-	void Send(const string &data);
+	bool Send(const string &data);
+	int Receive(string& msg, int timeout = TCP_TIMEOUT);
 private:
 	static DWORD WINAPI receiveThread(void *param);
 	void(*MessageCallback)(int msg, const string &data);
 };
+
+#endif _NETWORK_

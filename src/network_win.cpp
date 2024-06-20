@@ -87,7 +87,15 @@ bool GetClientIPs(void(*MessageCallback)(string ip)) {
 	return result;
 }
 
-TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&)) {
+TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&), int timeout) {
+
+	if (host.empty()) {
+		throw invalid_argument("Host string is empty");
+	}
+	if (port.empty()) {
+		throw invalid_argument("Port string is empty");
+	}
+
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
 	this->receiveThreadIsRunning = false;
@@ -103,6 +111,9 @@ TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *Mess
 	if (getaddrinfo(host.c_str(), port.c_str(), &hints, &result) != 0) {
 		throw invalid_argument("Error on resolving hostname on " + host + ":" + port);
 	}
+	if (!result) {
+		throw invalid_argument("Error on resolving hostname (result == NULL) on " + host + ":" + port);
+	}
 
 	this->socketConnect = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (this->socketConnect == -1) {
@@ -111,41 +122,51 @@ TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *Mess
 	}
 
 	u_long mode = 1;  // set non-blocking socket
-	ioctlsocket(this->socketConnect, FIONBIO, &mode);
-
-	if (connect(this->socketConnect, result->ai_addr, (int)result->ai_addrlen) > -1) {
-		closesocket(this->socketConnect);
-		this->socketConnect = 0;
-		freeaddrinfo(result);
-		throw invalid_argument("Error on connecting to " + host + ":" + port);
+	if (ioctlsocket(this->socketConnect, FIONBIO, &mode) != 0) {
+		throw invalid_argument("Error on ioctlsocket");
 	}
 
+	if (connect(this->socketConnect, result->ai_addr, (int)result->ai_addrlen) == -1) {
+		if (WSAGetLastError() != WSAEWOULDBLOCK) {
+			closesocket(this->socketConnect);
+			this->socketConnect = 0;
+			freeaddrinfo(result);
+			throw invalid_argument("Error on connecting to " + host + ":" + port);
+		}
+	}
 	freeaddrinfo(result);
 
-	fd_set fdset;
-	struct timeval tv;
-	FD_ZERO(&fdset);
-	FD_SET(this->socketConnect, &fdset);
-	tv.tv_sec = 10; //10 second timeout
-	tv.tv_usec = 0;
-
-	if (select(this->socketConnect + 1, NULL, &fdset, NULL, &tv) < 1) {
+	struct pollfd fds[1];
+	fds[0].fd = this->socketConnect;
+	fds[0].events = POLLOUT;
+	int res = WSAPoll(fds, 1, timeout);
+	if (res < 1) {
+		shutdown(this->socketConnect, SD_BOTH);
 		closesocket(this->socketConnect);
 		this->socketConnect = 0;
-		throw invalid_argument("Error on select on " + host + ":" + port);
+		throw invalid_argument("Error on poll (" + to_string(res) + ") " + host + ":" + port);
 	}
 
-	char opt_val;
+	mode = 0;  // set blocking socket
+	if (ioctlsocket(this->socketConnect, FIONBIO, &mode) != 0) {
+		shutdown(this->socketConnect, SD_BOTH);
+		closesocket(this->socketConnect);
+		this->socketConnect = 0;
+		throw invalid_argument("Error on ioctlsocket");
+	}
+/*
+	bool opt_val;
 	socklen_t len = sizeof(opt_val);
-	getsockopt(this->socketConnect, SOL_SOCKET, SO_ERROR, &opt_val, &len);
-	if (opt_val != 0) {
+	if(getsockopt(this->socketConnect, SOL_SOCKET, SO_ACCEPTCONN, (char*)&opt_val, &len) != 0) {
 		closesocket(this->socketConnect);
 		this->socketConnect = 0;
 		throw invalid_argument("Error on getsockopt on " + host + ":" + port);
 	}
-
-	mode = 0;  // set blocking socket
-	ioctlsocket(this->socketConnect, FIONBIO, &mode);
+	if (!opt_val) {
+		closesocket(this->socketConnect);
+		this->socketConnect = 0;
+		throw invalid_argument("Error on getsockopt on " + host + ":" + port);
+	}*/
 
 	if (this->MessageCallback) {
 		this->receiveThreadHandle = CreateThread(NULL, 0, this->receiveThread, (void*)this, NULL, NULL);
@@ -153,6 +174,7 @@ TCPClient::TCPClient(const string &host, const string &port, void (__cdecl *Mess
 			this->MessageCallback(MSG_CLIENT_CONNECTED, "");
 		}
 		else {
+			shutdown(this->socketConnect, SD_BOTH);
 			closesocket(this->socketConnect);
 			this->socketConnect = 0;
 			throw invalid_argument("Error on creating thread");
@@ -191,7 +213,7 @@ DWORD WINAPI TCPClient::receiveThread(void *param)
 	string completeMessage = "";
 
 	while(tcpClient->socketConnect) {
-		int bytes = recv(tcpClient->socketConnect, buffer, TCP_BUFFER_SIZE, NULL);
+		int bytes = recv(tcpClient->socketConnect, buffer, TCP_BUFFER_SIZE, 0);
 
 		if(bytes > 0) {
 			size_t i = 0;
@@ -215,18 +237,8 @@ DWORD WINAPI TCPClient::receiveThread(void *param)
 			}			
 		}
 		else {
-			bool connectionLost = (bytes == 0);
-			if(bytes == SOCKET_ERROR) {
-				int err = WSAGetLastError();
-				if(err!=WSAEINTR) {
-					connectionLost = true;
-				}
-			}
-			if(connectionLost) {
-				if (tcpClient->MessageCallback) {
-					tcpClient->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
-				}
-				break;
+			if (tcpClient->MessageCallback) {
+				tcpClient->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
 			}
 		}
 	}
@@ -236,7 +248,61 @@ DWORD WINAPI TCPClient::receiveThread(void *param)
 	return 0;
 }
 
-void TCPClient::Send(const string &data) {
+int TCPClient::Receive(string& msg, int timeout) {
+	char buffer[TCP_BUFFER_SIZE];
+	msg = "";
+
+	u_long mode = 1;  // set non-blocking socket
+	if (ioctlsocket(this->socketConnect, FIONBIO, &mode) != 0) {
+		return -1;
+	}
+
+	int result = 0;
+	while (this->socketConnect && !result) {
+
+		struct pollfd fds[1];
+		fds[0].fd = this->socketConnect;
+		fds[0].events = POLLIN;
+		if (WSAPoll(fds, 1, timeout) < 1) {
+			result = -1;
+			break;
+		}
+
+		int bytes = recv(this->socketConnect, buffer, TCP_BUFFER_SIZE, 0);
+
+		if (bytes > 0) {
+			size_t i = 0;
+			while (i < (size_t)bytes) {
+				size_t len = strnlen(&buffer[i], TCP_BUFFER_SIZE - i);
+				msg += string(&buffer[i], len);
+
+				if (i + len >= (size_t)bytes) {
+					//message nicht komplett, warte auf weitere pakete
+				}
+				else {
+					//message komplett
+					result = bytes;
+					break;
+				}
+
+				//suche nach weiteren messages im stream
+				i += strnlen(&buffer[i], TCP_BUFFER_SIZE - i) + 1;
+			}
+		}
+		else {
+			result = bytes;
+			break;
+		}
+	}
+
+	mode = 0;  // set blocking socket
+	if (ioctlsocket(this->socketConnect, FIONBIO, &mode) != 0) {
+		return -1;
+	}
+	return result;
+}
+
+bool TCPClient::Send(const string &data) {
 	if(this->socketConnect) {
 		size_t p = 0;
 		while(p < data.length() + 1) {
@@ -251,10 +317,11 @@ void TCPClient::Send(const string &data) {
 					if (this->MessageCallback) {
 						this->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
 					}
-					return;
+					return false;
 				}
 			}
 			p += (size_t)lenSent;
 		}
 	}
+	return true;
 }

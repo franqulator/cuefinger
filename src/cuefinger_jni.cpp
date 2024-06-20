@@ -88,13 +88,8 @@ Java_franqulator_cuefinger_Cuefinger_getServerSettingsJSON(JNIEnv *env, jobject 
     return env->NewStringUTF(njson.c_str());
 }
 
-JNIEXPORT void JNICALL
-Java_franqulator_cuefinger_Cuefinger_terminateAllPingThreads(JNIEnv *env, jobject obj) {
-    terminateAllPingThreads(); // also stores serverdata at disconnect()
-}
-
-JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_cleanUp(JNIEnv *env, jobject obj) {
-    cleanUp(); // also stores serverdata at disconnect()
+JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_exit(JNIEnv *env, jobject obj) {
+    g_running = false;
 }
 
 #ifdef __cplusplus

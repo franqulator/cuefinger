@@ -34,6 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <netdb.h>
 #include <string>
 #include <unistd.h>
@@ -42,8 +43,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace std;
 
-#define MAX_CLIENTS	16
 #define TCP_BUFFER_SIZE 512
+#define TCP_TIMEOUT 4000
 
 #define MSG_CLIENT_CONNECTED		1
 #define MSG_CLIENT_DISCONNECTED		2
@@ -60,11 +61,12 @@ private:
 	SDL_Thread *receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
-	TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&)); // throws exception
+	TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&), int timeout = TCP_TIMEOUT); // throws exception
 	~TCPClient();
-	void Send(const string &data);
+	bool Send(const string &data);
+	int Receive(string &msg, int timeout = TCP_TIMEOUT);
 private:
-	static int receiveThread(void* param);
+	static int SDLCALL receiveThread(void* param);
 	void (*MessageCallback)(int msg, const string &data);
 };
 

@@ -4,6 +4,7 @@
 #ifndef CUEFINGER_FRANQULATOR_CUEFINGER_CUEFINGER_H
 #define CUEFINGER_FRANQULATOR_CUEFINGER_CUEFINGER_H
 
+extern bool g_running;
 class Settings;
 extern Settings g_settings;
 extern map<string, string> serverSettingsJSON;
@@ -17,8 +18,7 @@ JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_loadSettings(JNIEnv 
 JNIEXPORT jstring JNICALL Java_franqulator_cuefinger_Cuefinger_getSettingsJSON(JNIEnv *env, jobject obj);
 JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_loadServerSettings(JNIEnv* env, jobject obj, jstring json);
 JNIEXPORT jstring JNICALL Java_franqulator_cuefinger_Cuefinger_getServerSettingsJSON(JNIEnv* env, jobject obj);
-JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_terminateAllPingThreads(JNIEnv* env, jobject obj);
-JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_cleanUp(JNIEnv *env, jobject obj);
+JNIEXPORT void JNICALL Java_franqulator_cuefinger_Cuefinger_exit(JNIEnv *env, jobject obj);
 
 #ifdef __cplusplus
 }

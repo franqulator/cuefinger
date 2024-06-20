@@ -131,8 +131,9 @@ const int COLLISION_TANGENT_AREA = 8; //Bereich (Rechteck) um den Kollisionpunkt
 #define SAFE_DELETE_ARRAY(a) if( (a) != NULL ) delete[] (a); (a) = NULL;
 #define SAFE_RELEASE(a) if( (a) != NULL ) a->Release(); (a) = NULL;
 
-struct GFXFilter
+class GFXFilter
 {
+public:
 	unsigned int shift_color;
 	float shift_intensity;
 	float brightness;
@@ -152,8 +153,9 @@ struct GFXFilter
 	}
 };
 
-struct GFXFontProperties
+class GFXFontProperties
 {
+public:
 	float shadow_distance;
 	float shadow_direction;
 	unsigned int shadow_color;
@@ -161,6 +163,15 @@ struct GFXFontProperties
 	unsigned int outline_color;
 	float outline_opacity;
 	float outline_strength;
+	GFXFontProperties() {
+		this->shadow_distance = 0.0f;
+		this->shadow_direction = 0.0f;
+		this->shadow_color = 0;
+		this->shadow_opacity = 0.0f;
+		this->outline_color = 0;
+		this->outline_opacity = 0.0f;
+		this->outline_strength = 0.0f;
+	}
 };
 
 class GFXSurface;
@@ -198,8 +209,23 @@ public:
 
 	int zorder;
 
-	GFXJob();
-	void init();
+	GFXJob() {
+		init();
+		this->x = 0.0f;
+		this->y = 0.0f;
+		this->opacity = 0.0;
+		this->rotation = 0.0f;
+		this->flags = 0;
+		this->color = 0;
+		this->alignment = 0;
+		this->zorder = 0;
+	}
+	inline void init() {
+		this->gs = NULL;
+		this->font = NULL;
+		this->shape = 0;
+		this->spritebatch = NULL;
+	}
 };
 
 class GFXSpriteBatch {
@@ -305,7 +331,10 @@ public:
 
 	GFXFont()
 	{
-		memset(this, 0, sizeof(GFXFont));
+		this->ttf = NULL;
+		this->color = 0;
+		this->will_delete = false;
+		this->will_draw = 0;
 	}
 };
 
@@ -325,7 +354,6 @@ public:
 class GFXEngine {
 private:
 	SDL_Window* window;
-//	SDL_Surface *window_surface=NULL;
 	SDL_Renderer *renderer;
 	int renderer_width, renderer_height;
 
@@ -347,7 +375,7 @@ public:
 	//Grundfunktionen
 	GFXEngine(string title, int x, int y, int w, int h, int flags, SDL_Window **r_window=NULL);
 	~GFXEngine();
-	bool Resize(unsigned int width = 0, unsigned int height = 0);
+	bool Resize(int width = 0, int height = 0);
 	bool Update();
 	void AbortUpdate();
 

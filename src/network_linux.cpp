@@ -56,9 +56,12 @@ bool GetClientIPs(void(*MessageCallback)(string ip))
 			{
 				tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 				char addressBuffer[INET_ADDRSTRLEN];
-				inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
-
-				MessageCallback(string(addressBuffer));
+				if (inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN)) {
+					MessageCallback(string(addressBuffer));
+				}
+				else {
+					return false;
+				}
 			}
 		/*	else if (ifa->ifa_addr->sa_family == AF_INET6)
 			{
@@ -69,8 +72,9 @@ bool GetClientIPs(void(*MessageCallback)(string ip))
 				MessageCallback(addressBuffer);
 			}*/
 		}
-		if (ifAddrStruct!=NULL)
+		if (ifAddrStruct) {
 			freeifaddrs(ifAddrStruct);
+		}
 
 		return true;
 	}
@@ -78,7 +82,7 @@ bool GetClientIPs(void(*MessageCallback)(string ip))
 }
 
 
-int TCPClient::receiveThread(void *param)
+int SDLCALL TCPClient::receiveThread(void *param)
 {
 	TCPClient* tcpClient = (TCPClient*)param;
 
@@ -124,13 +128,15 @@ int TCPClient::receiveThread(void *param)
 	return 0;
 }
 
-TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&))
+TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&), int timeout)
 {
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s enter tcpclient", host.c_str());
 
     if(host.empty()) {
         throw invalid_argument("Host string is empty");
     }
+	if (port.empty()) {
+		throw invalid_argument("Port string is empty");
+	}
 
 	this->socketConnect = 0;
 	this->receiveThreadHandle = NULL;
@@ -143,77 +149,81 @@ TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallb
 	hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s getaddrinfo", host.c_str());
-
 	//resolve host name to ip if necessary
 	if(getaddrinfo(host.c_str(), port.c_str(), &hints, &result) != 0) {
 		throw invalid_argument("Error on resolving hostname on " + host + ":" + port);
 	}
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s socket", host.c_str());
+	if (!result) {
+		throw invalid_argument("Error on resolving hostname (result == NULL) on " + host + ":" + port);
+	}
+
 	this->socketConnect = socket(result->ai_family, result->ai_socktype | SOCK_NONBLOCK, result->ai_protocol);
 	if(this->socketConnect == -1) {
 		freeaddrinfo(result);
 		throw invalid_argument("Error on creating socket");
 	}
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s connect", host.c_str());
-	if(connect(this->socketConnect,result->ai_addr,result->ai_addrlen) > -1) {
-		close(this->socketConnect);
-		this->socketConnect = 0;
-		freeaddrinfo(result);
-		throw invalid_argument("Error on connecting to " + host + ":" + port);
+	if(connect(this->socketConnect,result->ai_addr,result->ai_addrlen) == -1) {
+		if (errno != EINPROGRESS) {
+			close(this->socketConnect);
+			this->socketConnect = 0;
+			freeaddrinfo(result);
+			throw invalid_argument("Error on connecting to " + host + ":" + port);
+		}
 	}
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s freeaddrinfo", host.c_str());
 	freeaddrinfo(result);
 
-    fd_set fdset;
-    struct timeval tv;
-    FD_ZERO(&fdset);
-    FD_SET(this->socketConnect, &fdset);
-    tv.tv_sec = 10; // 10 second timeout
-    tv.tv_usec = 0;
-
-    if (select(this->socketConnect + 1, NULL, &fdset, NULL, &tv) < 1) {
+	struct pollfd fds[1];
+	fds[0].fd = this->socketConnect;
+	fds[0].events = POLLOUT;
+	int res = poll(fds, 1, timeout);
+	if (res < 1) {
+		shutdown(this->socketConnect, SHUT_RDWR);
 		close(this->socketConnect);
 		this->socketConnect = 0;
-        throw invalid_argument("Error on select on " + host + ":" + port);
-    }
+		throw invalid_argument("Error on poll (" + to_string(res) + ") " + host + ":" + port);
+	}
 
-    int opt_val;
-    socklen_t len = sizeof(opt_val);
-    getsockopt(this->socketConnect, SOL_SOCKET, SO_ERROR, &opt_val, &len);
-    if (opt_val != 0) {
+	// set to blocking
+	int arg;
+	if ((arg = fcntl(this->socketConnect, F_GETFL, NULL)) < 0) {
+		shutdown(this->socketConnect, SHUT_RDWR);
 		close(this->socketConnect);
 		this->socketConnect = 0;
-        throw invalid_argument("Error on getsockopt on " + host + ":" + port);
-    }
-
-    // set to blocking
-    int arg;
-    if ((arg = fcntl(this->socketConnect, F_GETFL, NULL)) < 0) {
+		throw invalid_argument("Error on fcntl");
+	}
+	arg &= (~O_NONBLOCK);
+	if (fcntl(this->socketConnect, F_SETFL, arg) < 0) {
+		shutdown(this->socketConnect, SHUT_RDWR);
 		close(this->socketConnect);
 		this->socketConnect = 0;
-        throw invalid_argument("Error on fcntl");
-    }
-    arg &= (~O_NONBLOCK);
-    if (fcntl(this->socketConnect, F_SETFL, arg) < 0) {
+		throw invalid_argument("Error on fcntl");
+	}
+
+/*	int opt_val;
+	socklen_t len = sizeof(opt_val);
+	if (getsockopt(this->socketConnect, SOL_SOCKET, SO_ERROR, &opt_val, &len) != 0) {
 		close(this->socketConnect);
 		this->socketConnect = 0;
-        throw invalid_argument("Error on fcntl");
-    }
+		throw invalid_argument("Error on getsockopt on " + host + ":" + port);
+	}
+	if (opt_val != 0) {
+		close(this->socketConnect);
+		this->socketConnect = 0;
+		throw invalid_argument("Error on getsockopt on " + host + ":" + port);
+	}*/
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s messagecallback", host.c_str());
 	if (this->MessageCallback) {
 		this->receiveThreadHandle = SDL_CreateThread(receiveThread, "ReceiveThread",(void*)this);
 		if (this->receiveThreadHandle) {
 			this->MessageCallback(MSG_CLIENT_CONNECTED, "");
 		}
 		else {
+			shutdown(this->socketConnect, SHUT_RDWR);
 			close(this->socketConnect);
 			this->socketConnect = 0;
 			throw invalid_argument("Error on creating thread");
 		}
 	}
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s done", host.c_str());
 }
 
 TCPClient::~TCPClient() {
@@ -239,7 +249,68 @@ TCPClient::~TCPClient() {
 	}
 }
 
-void TCPClient::Send(const string &data) {
+int TCPClient::Receive(string &msg, int timeout) {
+	char buffer[TCP_BUFFER_SIZE];
+	msg = "";
+	
+	// set to non-blocking
+	int arg;
+	if ((arg = fcntl(this->socketConnect, F_GETFL, NULL)) < 0) {
+		return -1;
+	}
+	arg |= O_NONBLOCK;
+	if (fcntl(this->socketConnect, F_SETFL, arg) < 0) {
+		return -1;
+	}
+
+	int result = 0;
+	while (this->socketConnect && !result) {
+
+		struct pollfd fds[1];
+		fds[0].fd = this->socketConnect;
+		fds[0].events = POLLIN;
+		if (poll(fds, 1, timeout) < 1) {
+			result = -1;
+			break;
+		}
+
+		ssize_t bytes = read(this->socketConnect, buffer, TCP_BUFFER_SIZE);
+
+		if (bytes > 0) {
+			size_t i = 0;
+			while (i < (size_t)bytes) {
+				size_t len = strnlen(&buffer[i], TCP_BUFFER_SIZE - i);
+				msg += string(&buffer[i], len);
+
+				if (i + len >= (size_t)bytes) {
+					//message nicht komplett, warte auf weitere pakete
+				}
+				else {
+					//message komplett
+					result = bytes;
+					break;
+				}
+
+				//suche nach weiteren messages im stream
+				i += strnlen(&buffer[i], TCP_BUFFER_SIZE - i) + 1;
+			}
+		}
+		else if (bytes == -1) {
+			result = -1;
+		}
+	}
+	// set to blocking
+	if ((arg = fcntl(this->socketConnect, F_GETFL, NULL)) < 0) {
+		return -1;
+	}
+	arg &= (~O_NONBLOCK);
+	if (fcntl(this->socketConnect, F_SETFL, arg) < 0) {
+		return -1;
+	}
+	return result;
+}
+
+bool TCPClient::Send(const string &data) {
 	if(this->socketConnect) {
 		size_t p=0;
 		while(p < data.length() + 1)
@@ -255,9 +326,11 @@ void TCPClient::Send(const string &data) {
 				if (this->MessageCallback) {
 					this->MessageCallback(MSG_CLIENT_CONNECTION_LOST, "");
 				}
-				break;
+				return false;
 			}
+			
 			p += lenSent;
 		}
 	}
+	return true;
 }

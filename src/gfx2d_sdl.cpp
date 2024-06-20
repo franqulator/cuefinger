@@ -23,16 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gfx2d_sdl.h"
 
-GFXJob::GFXJob() {
-	init();
-}
-void GFXJob::init() {
-	this->gs = NULL;
-	this->font = NULL;
-	this->shape = 0;
-	this->spritebatch = NULL;
-}
-
 void GFXEngine::debugDrawLine(Vector2D pos, Vector2D v, unsigned int color, float strength, Vector2D offset) {
 	Vector2D rotationCenter(-v.length() / 2, strength / 2);
 	DrawShape(0, color,
@@ -60,8 +50,7 @@ void GFXEngine::_AddJob(GFXFont* font, float x, float y, const string &text, int
 
 	font->will_draw++;
 
-	if (!text.length())
-	{
+	if (text.empty()) {
 		return;
 	}
 
@@ -69,12 +58,16 @@ void GFXEngine::_AddJob(GFXFont* font, float x, float y, const string &text, int
 
 	if (jobsList[layer].empty() || jobsIterator[layer] == jobsList[layer].end()) {
 		job = new GFXJob;
+		if (!job)
+			return;
 		jobsList[layer].push_back(job);
 		jobsIterator[layer] = jobsList[layer].end();
 	}
 	else {
-		job = (*jobsIterator[layer]);
-		jobsIterator[layer]++;
+		job = *(jobsIterator[layer]);
+		if (!job)
+			return;
+		++jobsIterator[layer];
 		job->init();
 	}
 
@@ -129,15 +122,19 @@ bool GFXEngine::_AddJob(GFXSurface* gs, int shape, unsigned int color, float x, 
 		gs->will_draw++;
 
 	GFXJob* job = NULL;
-
+	auto prevJobsIterator = jobsIterator[layer];
 	if (jobsList[layer].empty() || jobsIterator[layer] == jobsList[layer].end()) {
 		job = new GFXJob;
+		if (!job)
+			return false;
 		jobsList[layer].push_back(job);
 		jobsIterator[layer] = jobsList[layer].end();
 	}
 	else {
-		job = (*jobsIterator[layer]);
-		jobsIterator[layer]++;
+		job = *(jobsIterator[layer]);
+		if (!job)
+			return false;
+		++jobsIterator[layer];
 		job->init();
 	}
 
@@ -208,7 +205,7 @@ bool GFXEngine::_AddJob(GFXSurface* gs, int shape, unsigned int color, float x, 
 		|| center.getY() + radius < 1.0f || center.getY() - radius > (float)renderer_height;
 
 	if (remove_job) {
-		jobsIterator[layer]--;
+		jobsIterator[layer] = prevJobsIterator;
 		return false;
 	}
 
@@ -284,11 +281,6 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 		throw invalid_argument("Error in GFXEngine: SDL_CreateRenderer -> " + string(SDL_GetError()));
 	}
 
-	/*	window_surface = SDL_GetWindowSurface(window);
-		if(!window_surface) {
-			throw invalid_argument("Error in GFXEngine: SDL_GetWindowSurface -> " + string(SDL_GetError()));
-		}
-	*/
 	SDL_RenderSetLogicalSize(renderer, width, height);
 
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -307,7 +299,7 @@ GFXEngine::GFXEngine(string title, int x, int y, int width, int height, int flag
 	}
 }
 
-bool GFXEngine::Resize(unsigned int width, unsigned int height) {
+bool GFXEngine::Resize(int width, int height) {
 
 	if (width == 0 && height == 0) {
 		int w, h;
@@ -316,13 +308,12 @@ bool GFXEngine::Resize(unsigned int width, unsigned int height) {
 		height = h;
 	}
 
-	SDL_RenderSetLogicalSize(renderer, width, height);
+	if (SDL_RenderSetLogicalSize(renderer, width, height) != 0) {
+		return false;
+	}
 
 	renderer_width = width;
 	renderer_height = height;
-
-	float xscale, yscale;
-	SDL_RenderGetScale(renderer, &xscale, &yscale);
 
 	return true;
 }
@@ -348,11 +339,6 @@ GFXEngine::~GFXEngine() {
 		SDL_DestroyRenderer(renderer);
 		renderer = NULL;
 	}
-
-	/*	if(window_surface) {
-			//don't use free since it's handled by the window
-			window_surface = NULL;
-		}*/
 
 	if (window) {
 		SDL_DestroyWindow(window);
@@ -1311,19 +1297,52 @@ bool GFXEngine::Draw(GFXSurface* gs, float x, float y, Rect* rc,
 bool GFXEngine::DrawShapeOnSurface(GFXSurface* gs_dest, int shape, unsigned int color, float x, float y, float w, float h,
 	int flags, float opacity, float rotation, Vector2D* rotationOffset)
 {
+	if (!gs_dest) {
+		return false;
+	}
+
 	Rect rc_src;
 	rc_src.left = 0;
 	rc_src.top = 0;
-	rc_src.right = (int)round(w);
-	rc_src.bottom = (int)round(h);
+	if (w == 0.0f) {
+		rc_src.right = gs_dest->w;
+	}
+	else {
+		rc_src.right = (int)round(w);
+	}
+	if (h == 0.0f) {
+		rc_src.bottom = gs_dest->h;
+	}
+	else {
+		rc_src.bottom = (int)round(h);
+	}
+	if (shape == 0) {
+		shape = GFX_RECTANGLE;
+	}
 	return _Draw(gs_dest, NULL, shape, color, x, y, &rc_src, opacity, rotation, rotationOffset, NULL, flags);
 }
 
 bool GFXEngine::DrawShape(int shape, unsigned int color, float x, float y, float w, float h,
 	int flags, float opacity, float rotation, Vector2D* rotationOffset, int layer)
 {
-	Rect rc = { 0,0,(int)w,(int)h };
-
+	Rect rc;
+	rc.left = 0;
+	rc.top = 0;
+	if (w == 0.0f) {
+		rc.right = renderer_width;
+	}
+	else {
+		rc.right = (int)round(w);
+	}
+	if (h == 0.0f) {
+		rc.bottom = renderer_height;
+	}
+	else {
+		rc.bottom = (int)round(h);
+	}
+	if (shape == 0) {
+		shape = GFX_RECTANGLE;
+	}
 	return _AddJob(NULL, shape, color, x, y, &rc, flags, opacity, rotation, rotationOffset, NULL, layer);
 }
 
