@@ -56,6 +56,7 @@ SDL_TimerID g_timerFlipPage;
 SDL_TimerID g_timerResetOrder;
 SDL_TimerID g_timerUnmuteAll;
 SDL_TimerID g_timerSelectAllChannels;
+SDL_TimerID g_timerReenableMuteAll;
 int g_dragPageFlip;
 int g_resetOrderCountdown;
 int g_unmuteAllCountdown;
@@ -139,6 +140,7 @@ Button* g_btnInfo;
 Button* g_btnFullscreen;
 Button* g_btnReconnect;
 Button* g_btnServerlistScan;
+Button* g_btnSimulation;
 vector<Button*> g_btnsServers;
 
 TCPClient *g_tcpClient;
@@ -177,14 +179,13 @@ GFXSurface* g_gsLabelYellow[4];
 GFXSurface* g_gsLabelOrange[4];
 GFXSurface* g_gsLabelPurple[4];
 
-unsigned long long g_server_refresh_end_time;
+bool g_refreshingServerList;
 vector<UADevice*> g_ua_devices;
 unordered_map<string, Channel*> g_channelsById;
 map<int, Channel*> g_channelsInOrder;
 set<Channel*> g_touchpointChannels;
 set<string> g_channelsMutedBeforeAllMute;
 string g_masterChannelId;
-set<string> ipSearchMask;
 
 #define LOG_INFO        0b0001
 #define LOG_ERROR       0b0010
@@ -511,6 +512,8 @@ void updateLayout() {
 		g_btn_width, g_btn_height);
 
 	//btnleiste rechts
+	g_btnSimulation->setBounds(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f, g_channel_offset_y,
+		g_btn_width, g_btn_height);
 	for (int n = 0; n < (int)g_btnConnect.size(); n++)
 	{
 		g_btnConnect[n]->setBounds(win_width - g_channel_offset_x + SPACE_X + g_btn_width * 0.13f, g_channel_offset_y + (float)n * (g_btn_height + SPACE_Y),
@@ -1656,6 +1659,7 @@ bool serverListAdd(const string& server) {
 		g_ua_serverList.push_back(server);
 		return true;
 	}
+
 	return false;
 }
 
@@ -1670,66 +1674,6 @@ string serverListGet(int i) {
 		return g_ua_serverList[i];
 	}
 	return "";
-}
-
-int SDLCALL testServer(void *param)
-{
-	if (!param)
-		return 0;
-
-	char* c_ip = (char*)param;
-	string ip(c_ip);
-
-	try {
-		TCPClient* tcpTest = new TCPClient(ip, UA_TCP_PORT, NULL, SERVER_TEST_TIMEOUT);
-		if (tcpTest) {
-			if (tcpTest->Send("get /devices")) {
-				string rec;
-				if (tcpTest->Receive(rec, SERVER_TEST_TIMEOUT) > 0) {
-					try {
-						dom::parser parser;
-						padded_string json = padded_string(rec);
-						dom::element element = parser.parse(json);
-						const dom::object obj = element["data"]["children"];
-						string computername = GetComputerNameByIP(ip);
-						writeLog(LOG_INFO, "UA-Server found on " + computername);
-						serverListAdd(computername);
-						pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
-					}
-					catch (const simdjson_error& e) {
-						writeLog(LOG_INFO | LOG_EXTENDED, "Server seems not to be a UA-Server: " + ip + " (" + e.what() + ")");
-					}
-				}
-				else {
-					writeLog(LOG_INFO | LOG_EXTENDED, "Server does not answer: " + ip);
-				}
-			}
-			else {
-				writeLog(LOG_INFO | LOG_EXTENDED, "Test message not received: " + ip);
-			}
-			SAFE_DELETE(tcpTest);
-		}
-	}
-	catch (const invalid_argument &e) {
-		writeLog(LOG_INFO| LOG_EXTENDED, "No UA-Server found on " + ip +" (" + e.what() + ")");
-	}
-	delete[] c_ip;
-
-	return 0;
-}
-
-void getServerListCallback(string ip) {
-	if (ip.empty()) {
-		return;
-	}
-
-	if (ip.substr(0, 4) != "127.") {
-		size_t cut = ip.find_last_of('.');
-		if (cut != string::npos) {
-			ip = ip.substr(0, cut + 1);
-			ipSearchMask.insert(ip);
-		}
-	}
 }
 
 void cleanUpConnectionButtons()
@@ -1780,15 +1724,26 @@ Uint32 timerCallbackSelectAllChannels(Uint32 interval, void* param) {
 	return interval;
 }
 
+Uint32 timerCallbackReenableMuteAll(Uint32 interval, void* param) {
+	SDL_RemoveTimer(g_timerReenableMuteAll);
+	g_timerReenableMuteAll = 0;
+	g_btnMuteAll->setEnable(true);
+	setRedrawWindow(true);
+	return 0;
+}
+
 Uint32 timerCallbackUnmuteAll(Uint32 interval, void* param) {
 	if (g_unmuteAllCountdown == 1) {
 		g_unmuteAllCountdown = 0;
 		SDL_RemoveTimer(g_timerUnmuteAll);
 		g_timerUnmuteAll = 0;
 
-		muteChannels(false, true);
-		
+		g_btnMuteAll->setEnable(false);
+		if (!g_timerReenableMuteAll) {
+			g_timerReenableMuteAll = SDL_AddTimer(getActiveChannelsCount(false) * MUTE_ALL_CHANNEL_INTERVAL, timerCallbackReenableMuteAll, NULL);
+		}		
 		setRedrawWindow(true);
+		muteChannels(false, true);
 
 		return 0;
 	}
@@ -1832,7 +1787,7 @@ Uint32 timerCallbackFlipPage(Uint32 interval, void* param) {
 
 Uint32 timerCallbackRefreshServerList(Uint32 interval, void *param) //g_timer_network_serverlist
 {
-	if (!IS_UA_SERVER_REFRESHING)
+	if (!g_refreshingServerList)
 	{
 		setRedrawWindow(true);
 		SDL_RemoveTimer(g_timer_network_serverlist);
@@ -1887,7 +1842,7 @@ Uint32 timerCallbackNetworkSendTimeoutMsg(Uint32 interval, void* param) //g_time
 }
 
 void setNetworkTimeout() {
-#ifndef SIMULATION
+
 	if (g_timer_network_send_timeout_msg != 0) {
 		SDL_RemoveTimer(g_timer_network_send_timeout_msg);
 	}
@@ -1897,7 +1852,59 @@ void setNetworkTimeout() {
 		SDL_RemoveTimer(g_timer_network_timeout);
 	}
 	g_timer_network_timeout = SDL_AddTimer(10000, timerCallbackNetworkTimeout, NULL);
-#endif
+}
+
+int SDLCALL muteAllThread(void* param) {
+	bool mute = (*(int*)param) & 0b01;
+	bool all = (*(int*)param) & 0b10;
+
+	if (mute) {
+		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
+			if (it->second->mute) {
+				g_channelsMutedBeforeAllMute.insert("MIX." + it->first);
+			}
+			if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == "MIX") {
+				it->second->pressMute(ON);
+			}
+
+			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
+				Send* send = it->second->getSendByName(itB->first);
+				if (send) {
+
+					if (send->mute) {
+						g_channelsMutedBeforeAllMute.insert(itB->first + "." + it->first);
+					}
+					if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == itB->second->getText()) {
+						send->pressMute(ON);
+					}
+				}
+			}
+			SDL_Delay(MUTE_ALL_CHANNEL_INTERVAL);
+		}
+	}
+	else {
+		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
+			if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == "MIX") {
+				if (all || g_channelsMutedBeforeAllMute.find("MIX." + it->first) == g_channelsMutedBeforeAllMute.end()) {
+					it->second->pressMute(OFF);
+				}
+			}
+
+			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
+				if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == itB->first) {
+					if (all || g_channelsMutedBeforeAllMute.find(itB->first + "." + it->first) == g_channelsMutedBeforeAllMute.end()) {
+						Send* send = it->second->getSendByName(itB->first);
+						if (send) {
+							send->pressMute(OFF);
+						}
+					}
+				}
+			}
+			SDL_Delay(MUTE_ALL_CHANNEL_INTERVAL);
+		}
+		g_channelsMutedBeforeAllMute.clear();
+	}
+	return 0;
 }
 
 int SDLCALL getServerListThread(void *param)
@@ -1905,64 +1912,64 @@ int SDLCALL getServerListThread(void *param)
 	if (g_serverlist_defined)
 		return 0;
 
-	if (IS_UA_SERVER_REFRESHING)
+	if (g_refreshingServerList)
 		return 0;
+
+	g_refreshingServerList = true;
 
 	g_ua_server_last_connection = -1;
 	serverListClear();
 
+	pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
 	updateConnectButtons();
+	g_btnSimulation->setVisible(false);
 
 	if(g_timer_network_serverlist == 0)
 		g_timer_network_serverlist = SDL_AddTimer(1000, timerCallbackRefreshServerList, NULL);
 
-	setRedrawWindow(true);
-
-	ipSearchMask.clear();
-	if (!GetClientIPs(getServerListCallback))
+	vector<string> ips;
+	if (!TCPClient::getClientIPs(ips))
 		return false;
 
-    g_server_refresh_end_time = GetTickCount64() + ipSearchMask.size() * 255 * CONNECTION_TEST_INTERVAL;
+	setRedrawWindow(true);
 
-	// test servers
-	for (auto it = ipSearchMask.begin(); it != ipSearchMask.end(); ++it) {
-		for (int n = 1; n < 255; n++) {
-			string ip = (*it) + to_string(n);
-			char* scanIpBuffer = new char[ip.length() + 1];
-			if (scanIpBuffer) {
-				strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
-				string threadName = "TestUAServer on " + ip;
-				SDL_Thread* thread = SDL_CreateThread(testServer, threadName.c_str(), scanIpBuffer);
-				if (!thread) {
-					writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
-				}
-			}
-			else {
-				writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
-			}
-            SDL_Delay(CONNECTION_TEST_INTERVAL);
+#ifndef __linux__
+	vector<string> serverList;
+	TCPClient::lookUpServers("127.0.0.", 1, 2, UA_TCP_PORT, SERVER_TEST_TIMEOUT, serverList);
+	if (!serverList.empty()) {
+		for (auto itSL = serverList.begin(); itSL != serverList.end(); ++itSL) {
+			serverListAdd(TCPClient::getComputerNameByIP(*itSL));
 		}
-	}
-#ifndef __ANDROID__
-	//localhost
-	string ip = "127.0.0.1";
-	char* scanIpBuffer = new char[ip.length() + 1];
-	if (scanIpBuffer) {
-		strcpy_s(scanIpBuffer, ip.length() + 1, ip.c_str());
-		string threadName = "TestUAServer on " + ip;
-		SDL_Thread* thread = SDL_CreateThread(testServer, threadName.c_str(), scanIpBuffer);
-		if (!thread) {
-			writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip);
-		}
-	}
-	else {
-		writeLog(LOG_ERROR, "Error in UA_GetServerListCallback at SDL_CreateThread " + ip + "(out of memory)");
+		pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
 	}
 #endif
+
+	for (auto it = ips.begin(); it != ips.end(); ++it) {
+		if ((*it).substr(0, 4) != "127.") {
+			size_t cut = (*it).find_last_of('.');
+			if (cut != string::npos) {
+				vector<string> serverList;
+				TCPClient::lookUpServers((*it).substr(0, cut + 1), 1, 255, UA_TCP_PORT, SERVER_TEST_TIMEOUT, serverList);
+				if (!serverList.empty()) {
+					for (auto itSL = serverList.begin(); itSL != serverList.end(); ++itSL) {
+						serverListAdd(TCPClient::getComputerNameByIP(*itSL));
+					}
+					pushEvent(EVENT_UPDATE_CONNECT_BUTTONS);
+				}
+			}
+		}
+	}
+	
+	g_btnSimulation->setVisible(g_ua_serverList.empty());
+	setRedrawWindow(true);
+
+	g_refreshingServerList = false;
+
 	return true;
 }
 
 void getServerList() {
+
     SDL_CreateThread(getServerListThread, "getServerListThread", NULL);
 }
 
@@ -2261,53 +2268,70 @@ void tcpClientProc(int msg, const string &data)
 							{
 								if (path_parameter[5] == "value")
 								{
-									channel->mute = element["data"];
-									if (channel->type == AUX || channel->type == MASTER) {
-										if (channel->type == MASTER) {
-											setLoadingState(false);
+									bool result;
+									if (element["data"].get(result) == 0) {
+										channel->mute = result;
+										if (channel->type == AUX || channel->type == MASTER) {
+											if (channel->type == MASTER) {
+												setLoadingState(false);
+											}
+											channel->active = true;
+											pushEvent(EVENT_CHANNEL_STATE_CHANGED);
 										}
-										channel->active = true;
-										pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+										setRedrawWindow(true);
 									}
-									setRedrawWindow(true);
 								}
 							}
 							else if (path_parameter[4] == "Stereo") {
 								if (path_parameter[5] == "value") {
-									g_activeChannelsCount = -1;
-									g_visibleChannelsCount = -1;
-									channel->setStereo(element["data"]);
+									bool result;
+									if (element["data"].get(result) == 0) {
+										g_activeChannelsCount = -1;
+										g_visibleChannelsCount = -1;
+										channel->setStereo(result);
+									}
 								}
 							}
 							else if (path_parameter[4] == "StereoName") {
 								if (path_parameter[5] == "value") {
-									string_view sv = element["data"];
-									string value{ sv };
-									channel->setStereoname(unescape_to_utf8(value));
+									string_view sv;
+									if (element["data"].get(sv) == 0) {
+										string value{ sv };
+										channel->setStereoname(unescape_to_utf8(value));
+									}
 								}
 							}
 							else if (path_parameter[4] == "ChannelHidden")
 							{
 								if (path_parameter[5] == "value")
 								{
-									channel->hidden = element["data"];
-									pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									bool result;
+									if (element["data"].get(result) == 0) {
+										channel->hidden = result;
+										pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									}
 								}
 							}
 							else if (path_parameter[4] == "EnabledByUser")
 							{
 								if (path_parameter[5] == "value")
 								{
-									channel->enabledByUser = element["data"];
-									pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									bool result;
+									if (element["data"].get(result) == 0) {
+										channel->enabledByUser = result;
+										pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									}
 								}
 							}
 							else if (path_parameter[4] == "Active")
 							{
 								if (path_parameter[5] == "value")
 								{
-									channel->active = element["data"];
-									pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									bool result;
+									if (element["data"].get(result) == 0) {
+										channel->active = result;
+										pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+									}
 								}
 							}
 						}
@@ -2336,9 +2360,13 @@ void tcpClientProc(int msg, const string &data)
 }
 
 void tcpClientSend(const string &msg) {
+	if (g_btnSimulation && g_btnSimulation->isHighlighted()) {
+		return;
+	}
+
 	if (g_tcpClient) {
 		writeLog(LOG_INFO| LOG_EXTENDED, "UA -> " + msg);
-		g_tcpClient->Send(msg);
+		g_tcpClient->send(msg);
 	}
 }
 
@@ -2380,13 +2408,13 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 	if (this->type == AUX) {
 		if (name == "AUX 1") {
 			name = g_settings.label_aux1;
-			if (g_settings.label_aux1 == g_settings.label_aux2) {
+			if (g_settings.label_aux1 == g_settings.label_aux2 || g_settings.label_aux1 == "AUX") {
 				name += " 1";
 			}
 		}
 		else if (name == "AUX 2") {
 			name = g_settings.label_aux2;
-			if (g_settings.label_aux1 == g_settings.label_aux2) {
+			if (g_settings.label_aux1 == g_settings.label_aux2 || g_settings.label_aux2 == "AUX") {
 				name += " 2";
 			}
 		}
@@ -2816,6 +2844,34 @@ void draw() {
 	//background
 	gfx->DrawShape(GFX_RECTANGLE, BLACK, 0, 0, win_width, win_height);
 
+	if (g_ua_server_connected.empty() && !g_btnSimulation->isHighlighted()) { //offline
+		sz = gfx->GetTextBlockSize(g_fntOffline, "Offline");
+		gfx->SetColor(g_fntOffline, RGB(100, 100, 100));
+		gfx->Write(g_fntOffline, win_width / 2, (win_height - sz.getY()) / 2, "Offline", GFX_CENTER);
+
+		string refresh_txt = ".refreshing serverlist.";
+		unsigned long long time = GetTickCount64() / 1000;
+
+		for (int n = 0; n < (int)(time % 4); n++)
+			refresh_txt = "." + refresh_txt + ".";
+
+		gfx->SetColor(g_fntMain, RGB(180, 180, 180));
+		if (!g_serverlist_defined) {
+			if (g_refreshingServerList)
+				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, refresh_txt, GFX_CENTER);
+			else {
+				string text = (g_btnConnect.empty() ? "No servers found\n" : "");
+				text += "Click to refresh the serverlist";
+				
+				if (g_btnConnect.empty()) {
+					text += "\nor start the simulation";
+				}
+
+				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, text, GFX_CENTER);
+			}
+		}
+	}
+
 	//bg right
 	stretch = Vector2D(g_channel_offset_x, win_height);
 	gfx->Draw(g_gsBgRight, g_channel_offset_x + g_channel_width * (float)g_channels_per_page, 0, NULL,
@@ -2830,7 +2886,7 @@ void draw() {
 	for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
 		if (it->second->getText() == "AUX 1") {
 			string text = g_settings.label_aux1;
-			if (g_settings.label_aux1 == g_settings.label_aux2) {
+			if (g_settings.label_aux1 == g_settings.label_aux2 || g_settings.label_aux1 == "AUX") {
 				text += " 1";
 			}
 			text += "\nSend";
@@ -2838,7 +2894,7 @@ void draw() {
 		}
 		else if (it->second->getText() == "AUX 2") {
 			string text = g_settings.label_aux2;
-			if (g_settings.label_aux1 == g_settings.label_aux2) {
+			if (g_settings.label_aux1 == g_settings.label_aux2 || g_settings.label_aux2 == "AUX") {
 				text += " 2";
 			}
 			text += "\nSend";
@@ -2853,12 +2909,12 @@ void draw() {
 	for (size_t n = 0; n < g_btnConnect.size(); n++) {
 		g_btnConnect[n]->draw(BTN_COLOR_GREEN);
 	}
+	g_btnSimulation->draw(BTN_COLOR_GREEN);
 	g_btnChannelWidth->draw(BTN_COLOR_YELLOW);
 	g_btnPageLeft->draw(BTN_COLOR_YELLOW);
 	g_btnPageRight->draw(BTN_COLOR_YELLOW);
 	g_btnSelectChannels->draw(BTN_COLOR_YELLOW);
 	g_btnReorderChannels->draw(BTN_COLOR_YELLOW);
-
 
 	float SPACE_X = 2.0f;
 	float SPACE_Y = 2.0f;
@@ -2869,29 +2925,7 @@ void draw() {
 	gfx->Write(g_fntMain, g_btnPageLeft->getX() + g_btnPageLeft->getWidth() / 2,
 		g_btnPageLeft->getY() - SPACE_Y * 2.0f - g_main_fontsize, str_page, GFX_CENTER);
 
-	if (g_ua_server_connected.length() == 0) { //offline
-		sz = gfx->GetTextBlockSize(g_fntOffline, "Offline");
-		gfx->SetColor(g_fntOffline, RGB(100, 100, 100));
-		gfx->Write(g_fntOffline, win_width/2, (win_height - sz.getY())/2, "Offline", GFX_CENTER);
-
-		string refresh_txt = ".refreshing serverlist.";
-		unsigned long long time = GetTickCount64() / 1000;
-
-		for (int n = 0; n < (int)(time % 4); n++)
-			refresh_txt = "." + refresh_txt + ".";
-
-		gfx->SetColor(g_fntMain, RGB(180, 180, 180));
-		if (!g_serverlist_defined) {
-			if (IS_UA_SERVER_REFRESHING)
-				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, refresh_txt, GFX_CENTER);
-			else {
-				string text = (g_btnConnect.empty() ? "No servers found\n" : "");
-				text += "Click to refresh the serverlist";
-				gfx->Write(g_fntMain, win_width / 2, (win_height + sz.getY()) / 2, text, GFX_CENTER);
-			}
-		}
-	}
-	else {
+	if(!g_ua_server_connected.empty() || g_btnSimulation->isHighlighted()) { // online
 		int count = 0;
 		int offset = 0;
 		bool btn_select = g_btnSelectChannels->isHighlighted();
@@ -3094,44 +3128,6 @@ void draw() {
 	gfx->Update();
 }
 
-#ifdef SIMULATION
-bool connect(int connection_index)
-{
-	if (connection_index != g_ua_server_last_connection) {
-		g_page = 0;
-	}
-
-	g_ua_server_connected = serverListGet(connection_index);
-
-	g_ua_devices[0].id = "0";
-	g_ua_devices[0].AllocChannels(UA_INPUT, SIMULATION_CHANNEL_COUNT);
-	for (int n = 0; n < SIMULATION_CHANNEL_COUNT; n++)
-	{
-		g_ua_devices[0].LoadChannels(UA_INPUT, n, to_string(n));
-		g_ua_devices[0].inputs[n].name = "Analog " + to_string(n + 1);
-		g_ua_devices[0].inputs[n].AllocSends(SIMULATION_SENDS_COUNT);
-		for (int i = 0; i < SIMULATION_SENDS_COUNT; i++)
-		{
-			g_ua_devices[0].inputs[n].LoadSends(i, to_string(i));
-		}
-	}
-
-	g_btnSelectChannels->setEnable(true);
-	g_btnReorderChannels->setEnable(true);
-	g_btnChannelWidth->setEnable(true);
-	g_btnPageLeft->setEnable(true);
-	g_btnPageRight->setEnable(true);
-	g_btnMix->setEnable(true);
-	g_btnMuteAll->setEnable(true);
-
-	g_ua_server_last_connection = connection_index;
-
-	setRedrawWindow(true);
-
-	return true;
-}
-#endif
-
 bool g_loading = false;
 void setLoadingState(bool loading) {
 	g_loading = loading;
@@ -3141,7 +3137,6 @@ bool isLoading() {
 	return g_loading;
 }
 
-#ifndef SIMULATION
 bool connect(int connection_index)
 {
 	if (g_ua_server_connected.length()) {
@@ -3150,6 +3145,7 @@ bool connect(int connection_index)
 
 	if (connection_index != g_ua_server_last_connection) {
 		g_page = 0;
+		SDL_RemoveTimer(g_timerReenableMuteAll);
 		g_btnMuteAll->setCheck(false);
 		g_channelsMutedBeforeAllMute.clear();
 	}
@@ -3161,7 +3157,7 @@ bool connect(int connection_index)
 	try
 	{
 		g_msg = "Connecting to " + serverListGet(connection_index) + ":" + UA_TCP_PORT;
-		writeLog(LOG_INFO, g_msg);
+		writeLog(LOG_INFO | LOG_EXTENDED, g_msg);
 		draw(); // force draw
 
 		g_tcpClient = new TCPClient(serverListGet(connection_index), UA_TCP_PORT, &tcpClientProc);
@@ -3204,7 +3200,6 @@ bool connect(int connection_index)
 	}
 	return true;
 }
-#endif
 
 void disconnect()
 {
@@ -3224,6 +3219,7 @@ void disconnect()
 	g_btnPageRight->setEnable(false);
 	g_btnMix->setEnable(false);
 	g_btnPostFaderMeter->setEnable(false);
+	SDL_RemoveTimer(g_timerReenableMuteAll);
 	g_btnMuteAll->setEnable(false);
 
 	saveServerSettings(g_ua_server_connected);
@@ -3884,55 +3880,25 @@ void onStateChanged_btnSettings(Button *btn) {
 }
 
 void muteChannels(bool mute, bool all) { // for unmute: all or previously muted
+	int* param = new int;
+	*param = 0;
 	if (mute) {
-		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-			if (it->second->mute) {
-				g_channelsMutedBeforeAllMute.insert("MIX." + it->first);
-			}
-			if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == "MIX") {
-				it->second->pressMute(ON);
-			}
-
-			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
-				Send* send = it->second->getSendByName(itB->first);
-				if (send) {
-
-					if (send->mute) {
-						g_channelsMutedBeforeAllMute.insert(itB->first + "." + it->first);
-					}
-					if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == itB->second->getText()) {
-						send->pressMute(ON);
-					}
-				}
-			}
-		}
+		*param |= 0b01;
 	}
-	else {
-		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-			if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == "MIX") {
-				if (all || g_channelsMutedBeforeAllMute.find("MIX." + it->first) == g_channelsMutedBeforeAllMute.end()) {
-					it->second->pressMute(OFF);
-				}
-			}
-
-			for (vector<pair<string, Button*>>::iterator itB = g_btnSends.begin(); itB != g_btnSends.end(); ++itB) {
-				if (g_settings.lock_to_mix.length() == 0 || g_settings.lock_to_mix == itB->first) {
-					if (all || g_channelsMutedBeforeAllMute.find(itB->first + "." + it->first) == g_channelsMutedBeforeAllMute.end()) {
-						Send* send = it->second->getSendByName(itB->first);
-						if (send) {
-							send->pressMute(OFF);
-						}
-					}
-				}
-			}
-		}
-		g_channelsMutedBeforeAllMute.clear();
+	if (all) {
+		*param |= 0b10;
 	}
+	SDL_CreateThread(muteAllThread, "muteAllThread", (void*)param);
 }
 
 void onStateChanged_btnMuteAll(Button *btn) {
 	if (btn->getState() & PRESSED) {
 		if (!(btn->getState() & CHECKED)) {
+			btn->setEnable(false);
+			if (!g_timerReenableMuteAll) {
+				g_timerReenableMuteAll = SDL_AddTimer(getActiveChannelsCount(false) * MUTE_ALL_CHANNEL_INTERVAL, timerCallbackReenableMuteAll, NULL);
+			}
+			setRedrawWindow(true);
 			muteChannels(true, true);
 		}
 		else {
@@ -3947,6 +3913,11 @@ void onStateChanged_btnMuteAll(Button *btn) {
 			SDL_RemoveTimer(g_timerUnmuteAll);
 			g_timerUnmuteAll = 0;
 			g_unmuteAllCountdown = 0;
+			btn->setEnable(false);
+			if (!g_timerReenableMuteAll) {
+				g_timerReenableMuteAll = SDL_AddTimer(getActiveChannelsCount(false) * MUTE_ALL_CHANNEL_INTERVAL, timerCallbackReenableMuteAll, NULL);
+			}
+			setRedrawWindow(true);
 			muteChannels(false, false);
 		}
 	}
@@ -4300,6 +4271,110 @@ void onStateChanged_btnFullscreen(Button* btn) {
 	}
 }
 
+void onStateChanged_btnSimulation(Button* btn) {
+	if (btn->getState() == PRESSED) {
+		g_ua_devices.push_back(new UADevice("0"));
+		g_ua_devices.front()->online = true;
+
+		// cues
+		for (int n = 0; n < 4; n++) {
+			string name = "CUE " + to_string(n + 1);
+			Button* btn = addSendButton(name);
+			loadServerSettings(g_ua_server_connected, btn);
+		}
+		// 2 aux sends
+		for (int n = 0; n < 2; n++) {
+			string name = "AUX " + to_string(n + 1);
+			Button* btn = addSendButton(name);
+			loadServerSettings(g_ua_server_connected, btn);
+		}
+		
+		string names[14] = { "Vocals?g", "Trumpet?y", "Trombone?y", "Guitar Mic?p", "Guitar DI?p", "Bass?bl", "Piano", "OH?o", "Room?o", "Kick?o", "Snare tp?o", "Snare bt?o", "Tom?o", "Hihat?o" };
+		int id = 0;
+		for (int n = 0; n < 14; n++) {
+			Channel* channel = new Channel(g_ua_devices.front(), to_string(id), INPUT);
+			channel->hidden = false;
+			channel->active = true;
+			channel->enabledByUser = true;
+			if (n == 6 || n == 7) {
+				channel->stereo = true;
+				channel->setStereoname(names[n]);
+				channel->pan = -1.0;
+				channel->pan2 = 1.0;
+				id++;
+			}
+			else {
+				channel->setName(names[n]);
+			}
+
+			size_t a = 2;
+			for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
+				a = a % g_btnSends.size();
+				string sendId = to_string(a++);
+				Send* send = new Send(channel, sendId);
+				channel->sendsByName.insert({ it->first, send });
+				channel->sendsById.insert({ sendId, send });
+				send->init();
+			}
+
+			g_channelsById.insert({ g_ua_devices.front()->id + ".input." + channel->id, channel });
+			g_channelsInOrder.insert({ n, channel });
+			id++;
+		}
+		for (int n = 0; n < 2; n++) {
+			Channel* channel = new Channel(g_ua_devices.front(), to_string(n), AUX);
+			channel->active = true;
+			channel->setName("AUX " + to_string(n + 1));
+			size_t a = 0;
+			for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
+				if (a >= g_btnSends.size() - 2) {
+					break;
+				}
+				else {
+					a = a % g_btnSends.size();
+				}
+				string sendId = to_string(a++);
+				Send* send = new Send(channel, sendId);
+				channel->sendsByName.insert({ it->first, send });
+				channel->sendsById.insert({ sendId, send });
+				send->init();
+			}
+
+			g_channelsById.insert({ g_ua_devices.front()->id + ".aux." + channel->id, channel });
+			g_channelsInOrder.insert({ 16 + n, channel });
+		}
+		Channel* channel = new Channel(g_ua_devices.front(), "0", MASTER);
+		channel->active = true;
+		channel->setName("MONITOR");
+		g_channelsById.insert({ g_ua_devices.front()->id + ".master." + channel->id, channel });
+		g_channelsInOrder.insert({ 20, channel });
+
+		g_btnSelectChannels->setEnable(true);
+		g_btnReorderChannels->setEnable(true);
+		g_btnChannelWidth->setEnable(true);
+		g_btnMix->setEnable(true);
+		g_selectedMixBus = "MIX";
+		SDL_RemoveTimer(g_timerReenableMuteAll);
+		g_btnMuteAll->setEnable(true);
+	}
+	else if (btn->getState() == RELEASED) {
+		cleanUpSendButtons();
+		cleanUpUADevices();
+
+		g_btnMix->setCheck(true);
+
+		g_btnSelectChannels->setEnable(false);
+		g_btnReorderChannels->setEnable(false);
+		g_btnChannelWidth->setEnable(false);
+		g_btnMix->setEnable(false);
+		g_selectedMixBus = "MIX";
+		SDL_RemoveTimer(g_timerReenableMuteAll);
+		g_btnMuteAll->setEnable(false);
+
+		setRedrawWindow(true);
+	}
+}
+
 void createStaticButtons()
 {
 	g_btnSettings = new Button(CHECK, ID_BTN_INFO, "Settings",0,0,g_btn_width, g_btn_height,false, true, true, &onStateChanged_btnSettings);
@@ -4359,6 +4434,8 @@ void createStaticButtons()
 	g_btnInfo = new Button(CHECK, 0, "Info", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight, false, true, true, &onStateChanged_btnInfo);
 	g_btnFullscreen = new Button(CHECK, 0, "Fullscreen", 0.0f, 0.0f, g_settingsBtnWidth, g_settingsBtnHeight,
 		g_settings.fullscreen, true, true, &onStateChanged_btnFullscreen);
+
+	g_btnSimulation = new Button(CHECK, 0, "Simulation", 0.0f, 0.0f, g_btn_width, g_btn_height, false, true, false, &onStateChanged_btnSimulation);
 }
 
 void cleanUpStaticButtons()
@@ -4386,6 +4463,7 @@ void cleanUpStaticButtons()
 	SAFE_DELETE(g_btnServerlistScan);
 	SAFE_DELETE(g_btnInfo);
 	SAFE_DELETE(g_btnFullscreen);
+	SAFE_DELETE(g_btnSimulation);
 }
 
 Button *addSendButton(const string &name)
@@ -4432,7 +4510,7 @@ void updateConnectButtons()
 
 		if (g_serverlist_defined) {
 			for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
-				if (g_settings.serverlist[n].length() && (*it) == g_settings.serverlist[n]) {
+				if (!g_settings.serverlist[n].empty() && (*it) == g_settings.serverlist[n]) {
 					useit = true;
 					break;
 				}
@@ -5185,7 +5263,7 @@ void initGlobals() { // needed to reset globals for android
 	g_fntLabel = NULL;
 	g_fntFaderScale = NULL;
 	g_fntOffline = NULL;
-	g_server_refresh_end_time = 0;
+	g_refreshingServerList = false;
 }
 
 #ifdef _WIN32
@@ -5314,7 +5392,7 @@ int main(int argc, char* argv[]) {
         setRedrawWindow(true);
 
 #ifdef _WIN32
-        InitNetwork();
+        TCPClient::initNetwork();
 #endif
         for (int n = 0; n < UA_MAX_SERVER_LIST; n++) {
             if (!g_settings.serverlist[n].empty()) {
@@ -5425,6 +5503,7 @@ int main(int argc, char* argv[]) {
 								for (size_t sel = 0; sel < g_btnConnect.size(); sel++) {
 									handled |= g_btnConnect[sel]->onPress(&pt);
 								}
+								handled |= g_btnSimulation->onPress(&pt);
 								//Click Select Channels
 								handled |= g_btnSelectChannels->onPress(&pt);
 								//Click Reorder Channels
@@ -5437,11 +5516,9 @@ int main(int argc, char* argv[]) {
 									SDL_Rect rc = { (int)g_channel_offset_x, 0 };
 									SDL_GetWindowSize(g_window, &rc.w, &rc.h);
 									rc.w -= (int)(2.0f * g_channel_offset_x);
-									if (g_ua_server_connected.length() == 0 && SDL_PointInRect(&pt, &rc))//offline
+									if (g_ua_server_connected.empty() && !g_btnSimulation->isHighlighted() && SDL_PointInRect(&pt, &rc))//offline
 									{
-										if (!IS_UA_SERVER_REFRESHING) {
-											getServerList();
-										}
+										getServerList();
 									}
 									else {
 										if (e.button.clicks == 2) {
@@ -5542,6 +5619,7 @@ int main(int argc, char* argv[]) {
 					for (vector<Button*>::iterator it = g_btnConnect.begin(); it != g_btnConnect.end(); ++it) {
 						(*it)->onRelease();
 					}
+					g_btnSimulation->onRelease();
 					for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
 						(*it).second->onRelease();
 					}
@@ -5710,7 +5788,7 @@ int main(int argc, char* argv[]) {
 						if (*cueBusCount + 2 != (int)g_btnSends.size()) {
 							cleanUpSendButtons();
 
-							// cues abfragen
+							// cues
 							for (int n = 0; n < *cueBusCount; n++) {
 								string name = "CUE " + to_string(n + 1);
 								Button* btn = addSendButton(name);
@@ -5725,6 +5803,7 @@ int main(int argc, char* argv[]) {
 							}
 							setRedrawWindow(true);
 						}
+						SAFE_DELETE(cueBusCount);
 						break;
 					}
 					case EVENT_INPUTS_LOAD:
@@ -5760,6 +5839,7 @@ int main(int argc, char* argv[]) {
 								loadServerSettings(g_ua_server_connected);
 							}
 						}
+						SAFE_DELETE(devStr);
 						SAFE_DELETE(pIds);
 						break;
 					}
@@ -5797,6 +5877,7 @@ int main(int argc, char* argv[]) {
 								}
 							}
 						}
+						SAFE_DELETE(devStr);
 						SAFE_DELETE(pIds);
 						break;
 					}
@@ -5819,6 +5900,7 @@ int main(int argc, char* argv[]) {
 								}
 							}
 						}
+						SAFE_DELETE(devStr);
 						SAFE_DELETE(pIds);
 						break;
 					}
@@ -5926,7 +6008,7 @@ void cleanUp() {
 	g_ua_serverList.clear();
 
 #ifdef _WIN32
-    ReleaseNetwork();
+    TCPClient::releaseNetwork();
 #endif
 
 	writeLog(LOG_INFO | LOG_EXTENDED, "clean up gui objects");

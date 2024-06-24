@@ -43,7 +43,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.4";
+const string APP_VERSION = "1.3.5";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -77,10 +77,11 @@ https://github.com/franqulator/cuefinger";
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
-#define CONNECTION_TEST_INTERVAL    10 //ms
-#define SERVER_TEST_TIMEOUT			500
+#define SERVER_TEST_TIMEOUT			1000
 
 #define UA_MAX_SERVER_LIST_SETTING	7 
+
+#define MUTE_ALL_CHANNEL_INTERVAL	10
 
 #define ID_BTN_CONNECT			50 // +connection index
 #define ID_BTN_INFO				2
@@ -103,8 +104,6 @@ https://github.com/franqulator/cuefinger";
 #define METER_COLOR_GREEN	RGB(62, 175, 72)
 #define METER_COLOR_YELLOW	RGB(200, 162, 42)
 #define METER_COLOR_RED		RGB(250, 62, 42)
-
-#define IS_UA_SERVER_REFRESHING (g_server_refresh_end_time != 0 && (g_server_refresh_end_time > GetTickCount64()))
 
 #define TOUCH_ACTION_NONE	0
 #define TOUCH_ACTION_LEVEL	1
@@ -149,11 +148,11 @@ https://github.com/franqulator/cuefinger";
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
 #define RED		RGB(140, 5, 5)
-#define GREEN	RGB(0, 140, 20)
+#define GREEN	RGB(0, 100, 20)
 #define BLUE	RGB(0, 50, 180)
-#define YELLOW	RGB(170, 170, 10)
+#define YELLOW	RGB(140, 130, 00)
 #define ORANGE	RGB(190, 90, 20)
-#define PURPLE	RGB(80, 10, 170)
+#define PURPLE	RGB(70, 0, 150)
 
 #define LOG_INFO        0b0001
 #define LOG_ERROR       0b0010

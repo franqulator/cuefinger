@@ -28,6 +28,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <exception>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #pragma comment(lib,"Ws2_32.lib")
 
@@ -41,25 +42,30 @@ using namespace std;
 #define MSG_CLIENT_CONNECTION_LOST	3
 #define MSG_TEXT					4
 
-bool InitNetwork();
-void ReleaseNetwork();
-bool GetClientIPs(void(*MessageCallback)(string ip));
-string GetComputerNameByIP(const string &ip);
-
 class TCPClient
 {
 private:
-	SOCKET socketConnect;
+	SOCKET sock;
 	HANDLE receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
+	TCPClient();
 	TCPClient(const string &host, const string &port, void (__cdecl *MessageCallback)(int,const string&), int timeout = TCP_TIMEOUT);
 	~TCPClient();
-	bool Send(const string &data);
-	int Receive(string& msg, int timeout = TCP_TIMEOUT);
+	bool send(const string &data);
+	int receive(string& msg, int timeout = TCP_TIMEOUT);
+
+	static bool initNetwork();
+	static void releaseNetwork();
+	static bool getClientIPs(vector<string>& ips);
+	static string getComputerNameByIP(const string& ip);
+	static bool lookUpServers(const string& ipMask, int start, int end, const string& port, int timeout, vector<string>& servers);
+
 private:
 	static DWORD WINAPI receiveThread(void *param);
 	void(*MessageCallback)(int msg, const string &data);
+	static bool setBlock(SOCKET sock, bool block);
+	static SOCKET connectNonBlock(const string& host, const string& port);
 };
 
 #endif _NETWORK_

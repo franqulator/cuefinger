@@ -39,6 +39,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <string>
 #include <unistd.h>
 #include <stdexcept>
+#include <vector>
 #include "translator.h"
 
 using namespace std;
@@ -51,23 +52,27 @@ using namespace std;
 #define MSG_CLIENT_CONNECTION_LOST	3
 #define MSG_TEXT					4
 
-bool GetClientIPs(void(*MessageCallback)(string ip));
-string GetComputerNameByIP(const string &ip);
-
 class TCPClient
 {
 private:
-	int socketConnect;
+	int sock;
 	SDL_Thread *receiveThreadHandle;
 	bool receiveThreadIsRunning;
 public:
+	TCPClient();
 	TCPClient(const string &host, const string &port, void (*MessageCallback)(int,const string&), int timeout = TCP_TIMEOUT); // throws exception
 	~TCPClient();
-	bool Send(const string &data);
-	int Receive(string &msg, int timeout = TCP_TIMEOUT);
+	bool send(const string &data);
+	int receive(string &msg, int timeout = TCP_TIMEOUT);
+
+	static bool getClientIPs(vector<string>& ips);
+	static string getComputerNameByIP(const string& ip);
+	static bool lookUpServers(const string& ipMask, int start, int end, const string& port, int timeout, vector<string>& servers);
 private:
 	static int SDLCALL receiveThread(void* param);
 	void (*MessageCallback)(int msg, const string &data);
+	static bool setBlock(int sock, bool block);
+	static int connectNonBlock(const string& host, const string& port);
 };
 
 #endif
