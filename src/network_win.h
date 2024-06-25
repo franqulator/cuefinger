@@ -35,7 +35,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace std;
 
 #define TCP_BUFFER_SIZE 512
-#define TCP_TIMEOUT	4000
+#define TCP_TIMEOUT	2000
 
 #define MSG_CLIENT_CONNECTED		1
 #define MSG_CLIENT_DISCONNECTED		2

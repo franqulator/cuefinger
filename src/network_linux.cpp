@@ -130,6 +130,7 @@ bool TCPClient::lookUpServers(const string& ipMask, int start, int end, const st
 					n++;
 				}
 				else if (fds[i].revents == POLLERR || fds[i].revents == POLLHUP || fds[i].revents == POLLNVAL) {
+					close(fds[i].fd);
 					fds[i].fd = -1;
 					n++;
 				}
@@ -161,8 +162,7 @@ TCPClient::TCPClient(const string &host, const string &port, void (*MessageCallb
 	fds[0].fd = this->sock;
 	fds[0].events = POLLOUT;
 	int res = poll(fds, 1, timeout);
-	if (res < 1) {
-		shutdown(this->sock, SHUT_RDWR);
+	if (res < 1 || fds[0].revents != POLLOUT) {
 		close(this->sock);
 		this->sock = 0;
 		throw invalid_argument("Error on poll (" + to_string(res) + ") " + host + ":" + port);

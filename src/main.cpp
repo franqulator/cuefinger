@@ -196,9 +196,15 @@ void writeLog(int type, const string &s) {
 	if (!(type & LOG_EXTENDED) || g_settings.extended_logging) {
 		if (type & LOG_INFO) {
 			SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", s.c_str());
+#ifndef __ANDROID__
+			toLog("Info: " + s);
+#endif
 		}
 		else if (type & LOG_ERROR) {
 			SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", s.c_str());
+#ifndef __ANDROID__
+			toLog("Error: " + s);
+#endif
 		}
 	}
 }
@@ -1932,7 +1938,7 @@ int SDLCALL getServerListThread(void *param)
 		return false;
 
 	setRedrawWindow(true);
-
+	
 #ifndef __linux__
 	vector<string> serverList;
 	TCPClient::lookUpServers("127.0.0.", 1, 2, UA_TCP_PORT, SERVER_TEST_TIMEOUT, serverList);
@@ -3160,6 +3166,8 @@ bool connect(int connection_index)
 		writeLog(LOG_INFO | LOG_EXTENDED, g_msg);
 		draw(); // force draw
 
+		g_ua_server_last_connection = connection_index;
+
 		g_tcpClient = new TCPClient(serverListGet(connection_index), UA_TCP_PORT, &tcpClientProc);
 		g_ua_server_connected = serverListGet(connection_index);
 		writeLog(LOG_INFO, "UA:  Connected on " + serverListGet(connection_index) + ":" + UA_TCP_PORT);
@@ -3184,8 +3192,6 @@ bool connect(int connection_index)
 			}
 		}
 
-		g_ua_server_last_connection = connection_index;
-
 		g_msg = "";
 
 		setNetworkTimeout();
@@ -3196,6 +3202,12 @@ bool connect(int connection_index)
 		g_msg = "Connection failed on " + serverListGet(connection_index) + ":" + UA_TCP_PORT + ": " + error.what();
 		writeLog(LOG_ERROR, "UA:  " + g_msg);
 		disconnect();
+
+		// try to reconnect
+		if (g_settings.reconnect_time && g_timer_network_reconnect == 0) {
+			g_timer_network_reconnect = SDL_AddTimer(g_settings.reconnect_time, timerCallbackReconnect, NULL);
+		}
+
 		return false;
 	}
 	return true;
@@ -3221,6 +3233,8 @@ void disconnect()
 	g_btnPostFaderMeter->setEnable(false);
 	SDL_RemoveTimer(g_timerReenableMuteAll);
 	g_btnMuteAll->setEnable(false);
+	g_btnSimulation->setCheck(false);
+	g_btnSimulation->setVisible(false);
 
 	saveServerSettings(g_ua_server_connected);
 
@@ -4157,7 +4171,7 @@ void onStateChanged_btnsConnect(Button* btn) {
 
 void onStateChanged_btnsServerlist(Button* btn) {
 	bool updateList = false;
-	if (btn->getState() == PRESSED) {
+	if (btn->getState() & PRESSED) {
 		if (btn == g_btnServerlistScan) {
 			for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
 				(*it)->setCheck(false);
@@ -4166,15 +4180,23 @@ void onStateChanged_btnsServerlist(Button* btn) {
 			g_serverlist_defined = false;
 			updateList = true;
 		}
-		else {
+		else if (!(btn->getState() & CHECKED)){
 			if (g_btnServerlistScan->isHighlighted()) {
 				g_btnServerlistScan->setCheck(false);
 			}
 			int count = 0;
+			bool discon = true;
 			for (vector<Button*>::iterator it = g_btnsServers.begin(); it != g_btnsServers.end(); ++it) {
 				if ((*it)->isHighlighted()) {
 					count++;
+					if (g_ua_server_connected == (*it)->getText()) {
+						discon = false;
+					}
 				}
+			}
+			if (discon) {
+				disconnect();
+				g_ua_server_last_connection = -1;
 			}
 			if (count >= UA_MAX_SERVER_LIST) {
 				btn->setCheck(false);
@@ -4220,8 +4242,8 @@ void onStateChanged_btnsServerlist(Button* btn) {
 					i++;
 				}
 			}
+			updateConnectButtons();
 		}
-		updateConnectButtons();
 	}
 }
 
@@ -4296,6 +4318,7 @@ void onStateChanged_btnSimulation(Button* btn) {
 			channel->hidden = false;
 			channel->active = true;
 			channel->enabledByUser = true;
+			channel->changeLevel((double)(rand() % 100) / 100.0, true);
 			if (n == 6 || n == 7) {
 				channel->stereo = true;
 				channel->setStereoname(names[n]);
@@ -4315,16 +4338,20 @@ void onStateChanged_btnSimulation(Button* btn) {
 				channel->sendsByName.insert({ it->first, send });
 				channel->sendsById.insert({ sendId, send });
 				send->init();
+				send->changeLevel((double)(rand() % 100) / 100.0, true);
 			}
 
 			g_channelsById.insert({ g_ua_devices.front()->id + ".input." + channel->id, channel });
 			g_channelsInOrder.insert({ n, channel });
 			id++;
+
+			g_ua_devices.front()->channelsTotal++;
 		}
 		for (int n = 0; n < 2; n++) {
 			Channel* channel = new Channel(g_ua_devices.front(), to_string(n), AUX);
 			channel->active = true;
 			channel->setName("AUX " + to_string(n + 1));
+			channel->changeLevel((double)(rand() % 100) / 100.0, true);
 			size_t a = 0;
 			for (vector<pair<string, Button*>>::iterator it = g_btnSends.begin(); it != g_btnSends.end(); ++it) {
 				if (a >= g_btnSends.size() - 2) {
@@ -4338,6 +4365,7 @@ void onStateChanged_btnSimulation(Button* btn) {
 				channel->sendsByName.insert({ it->first, send });
 				channel->sendsById.insert({ sendId, send });
 				send->init();
+				send->changeLevel((double)(rand() % 100) / 100.0, true);
 			}
 
 			g_channelsById.insert({ g_ua_devices.front()->id + ".aux." + channel->id, channel });
@@ -4346,6 +4374,7 @@ void onStateChanged_btnSimulation(Button* btn) {
 		Channel* channel = new Channel(g_ua_devices.front(), "0", MASTER);
 		channel->active = true;
 		channel->setName("MONITOR");
+		channel->changeLevel((double)(rand() % 100) / 100.0, true);
 		g_channelsById.insert({ g_ua_devices.front()->id + ".master." + channel->id, channel });
 		g_channelsInOrder.insert({ 20, channel });
 
@@ -4821,6 +4850,8 @@ void cleanUpUADevices() {
 		SAFE_DELETE(*it);
 	}
 	g_ua_devices.clear();
+	g_activeChannelsCount = -1;
+	g_visibleChannelsCount = -1;
 }
 
 void releaseSettingsDialog() {
@@ -5295,6 +5326,11 @@ int main(int argc, char* argv[]) {
 	SDL_free(cs);
 	initPrefPath(path);
 #endif	  
+
+
+#ifndef __ANDROID__
+	initLog(APP_NAME + " " + APP_VERSION);
+#endif
 
 	writeLog(LOG_INFO, APP_NAME + " " + APP_VERSION);
 

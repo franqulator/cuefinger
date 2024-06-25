@@ -82,40 +82,29 @@ string getAppPath(string subpath) {
 	return str;
 }
 
-void initLog(const string &info) {
-#ifndef __ANDROID__				   
+void initLog(const string &info) {			   
 	time_t tme = time(NULL);
+	char strT[26];
 	tm t;
-	errno_t err = localtime_s(&t, &tme);
+
+#ifdef __linux__
+	gmtime_r(&tme, &t);
+	asctime_r(&t, strT);
+#else
+	gmtime_s(&t, &tme);
+	asctime_s(strT, sizeof(strT), &t);
+#endif
 
 	string path = getPrefPath("cuefinger.log");
 
 	FILE *fh = NULL;
 	if (fopen_s(&fh, path.c_str(), "w") == 0) {
-		string str = info + "\ncuefiner.log from ";
-
-		if (err == 0) {
-			str += to_string(t.tm_year + 1900);
-			str += "-";
-			str += to_string(t.tm_mon + 1);
-			str += "-";
-			str += to_string(t.tm_mday);
-			str += ", ";
-			str += to_string(t.tm_hour);
-			str += ":";
-			str += to_string(t.tm_min);
-		}
-		else {
-			str += "localtime error";
-		}
-		str += "\n---\n";
+		string str = info + "\ncuefiner.log UTC " + string(strT) + "---\n";
 		fputs(str.c_str(), fh);
 		fclose(fh);
-	}
-#endif	  
+	}  
 }
-void toLog(const string &str) {
-#ifndef __ANDROID__			  															   
+void toLog(const string &str) {		  															   
 	string path;
 	path = getPrefPath("cuefinger.log");
 
@@ -124,8 +113,7 @@ void toLog(const string &str) {
 		fputs(str.c_str(), fh);
 		fputs("\n", fh);
 		fclose(fh);
-	}
-#endif	  
+	} 
 }
 
 
