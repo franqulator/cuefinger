@@ -1,7 +1,6 @@
 # Cuefinger 1.x
 
-Cuefinger 1 gives you the possibility to remote control Universal Audio's
-Console Application via Network (TCP).
+With Cuefinger you can remote control Universal Audio's Console Application via LAN/Wifi.
 
 In a recording studio this gives the studio musician the possibility to access the cue mix via a linux, android or windows tablet.
 Multiple connections from different devices at the same time are possible. E.g using an UA Apollo interface with 4 cue busses together with 4 tablet-pcs makes it possible for 4 musicians to each control their individual cue mix.
