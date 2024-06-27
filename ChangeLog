@@ -1,3 +1,6 @@
+--- v1.3.7 ---
+- Bugfix: Monitor-Channel missing after reset channel order
+
 --- v1.3.6 ---
 - Bugfixes
 

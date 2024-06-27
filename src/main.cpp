@@ -185,7 +185,6 @@ unordered_map<string, Channel*> g_channelsById;
 map<int, Channel*> g_channelsInOrder;
 set<Channel*> g_touchpointChannels;
 set<string> g_channelsMutedBeforeAllMute;
-string g_masterChannelId;
 
 #define LOG_INFO        0b0001
 #define LOG_ERROR       0b0010
@@ -1498,7 +1497,6 @@ void clearChannels() {
 	g_channelsById.clear();
 	g_channelsInOrder.clear();
 	g_touchpointChannels.clear();
-	g_masterChannelId = "";
 }
 
 void updateSubscriptions() {
@@ -5385,7 +5383,7 @@ int main(int argc, char* argv[]) {
     g_settings.w=rc.w;
     g_settings.h=rc.h;
 #endif
-	g_settings.extended_logging = false;
+//	g_settings.extended_logging = false;
 
 	writeLog(LOG_INFO | LOG_EXTENDED, "create gui objects");
 	createStaticButtons();
@@ -5999,10 +5997,15 @@ int main(int argc, char* argv[]) {
 								n++;
 							}
 						}
-						Channel* channel = getChannelByUAIds(g_ua_devices.front()->id, g_masterChannelId, MASTER);
-						if (channel) {
-							g_channelsInOrder.insert({ n, channel });
-						}
+						Channel* channel = NULL;
+						int id = 0;
+						do {
+							channel = getChannelByUAIds(g_ua_devices.front()->id, to_string(id), MASTER);
+							if (channel) {
+								g_channelsInOrder.insert({ n + id, channel });
+							}
+							id++;
+						} while (channel);
 						g_mutex_uaDevices.unlock();
 						g_btnReorderChannels->setCheck(false);
 						updateSubscriptions();
