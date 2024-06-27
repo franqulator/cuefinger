@@ -2,13 +2,24 @@
 
 With Cuefinger you can remote control Universal Audio's Console Application via LAN/Wifi.
 
-In a recording studio this gives the studio musician the possibility to access the cue mix via a linux, android or windows tablet.
-Multiple connections from different devices at the same time are possible. E.g using an UA Apollo interface with 4 cue busses together with 4 tablet-pcs makes it possible for 4 musicians to each control their individual cue mix.
+In a recording studio this gives the studio musician the possibility to access the cue mix via a linux, android or windows tablet/phone. As an example, you could use an UA Apollo interface with 4 cue busses in combination with 4 tablets/phones allowing 4 musicians to control their cue mix individually.
+Features:
+
+- Volume, Pan, Mute, Solo, Pre/Post of the Monitor, the CUE- and AUX-Mixes
+- Responsive design allows mixing also on tiny screens
+- Show only the channels you need via select channels
+- Reorder channels
+- Mix groups
+- Color coding
+- Lock to mix (e.g. allow access only to CUE 1)
+- Mute All button
+- Easily switch between servers
+- Low on CPU usage and uses GPU acceleration
 
 I use cuefinger in my studio since a few years now. Until now I couldn't find the time to publish it for others to use, but better late than never.
 Cuefinger runs in my studio on 3 low budget HP Stream 7 tablets with Linux Mint and I also use an old win10 tablet (32bit). They remotely control my cascaded Apollo Silver and Apollo 16 black. I also tested it with Apollo Solo. There is no iOS Version since I have no experience in writing for this platform.
 
-I hope you find this software useful, feel free to contact me or check out my music.
+I hope you find this software useful, feel free to contact me. You can donate to value countless hours of work by buying <a href="https://franqulator.de" target=_blank>my music</a>.
 
 Cuefinger 1 is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -95,10 +106,14 @@ You might need to install the SDL2 developer libraries:
 > ../build/linux/cuefinger
 
 ---
-## Screenshots
-Here are some screenshots of it's responsive GUI and the select channels feature:
 
-![Screenshot 2024-06-15 175747](https://github.com/franqulator/cuefinger/assets/97669947/d91d73d1-799e-4311-9f93-802fed8a300e)
-![Screenshot 2024-06-15 180231](https://github.com/franqulator/cuefinger/assets/97669947/82518e39-df4c-4a3f-b73b-8fcc521c75dd)
-![Screenshot 2024-06-15 180716](https://github.com/franqulator/cuefinger/assets/97669947/7e8246ac-7951-40e0-a0b1-da4a6cd4fe0e)
-![Screenshot 2024-06-15 180910](https://github.com/franqulator/cuefinger/assets/97669947/84f638e7-8a02-4fea-bce9-6ba9a81f38c1)
+### Pictures
+![vlcsnap-2024-06-27-12h50m30s818](https://github.com/franqulator/cuefinger/assets/97669947/0339aab8-3921-4e12-a602-e648f085fc1d)
+
+![cuefinger_mixer](https://github.com/franqulator/cuefinger/assets/97669947/9da1cd79-44f4-46cb-964b-4421fbd58375)
+
+![cuefinger_mixer_narrow](https://github.com/franqulator/cuefinger/assets/97669947/e87ebb69-b063-4a8e-bf6a-6c4ff87dd4a5)
+
+![cuefinger_select](https://github.com/franqulator/cuefinger/assets/97669947/5115fa2c-a8d6-4e1a-9cb0-71d016cf0544)
+
+![cuefinger_settings](https://github.com/franqulator/cuefinger/assets/97669947/fbeda2a5-7f02-41a3-9b41-019b9477e5ba)
