@@ -1,20 +1,31 @@
-Cuefinger 1
+Cuefinger 1.x
 
-Cuefinger 1 gives you the possibility to remote control Universal Audio's
-Console Application via Network (TCP).
+---
 
-Cuefinger 1 is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+With Cuefinger you can remote control Universal Audio's Console Application via LAN/Wifi.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+In a recording studio this gives the studio musician the possibility to access the cue mix via a linux, android or windows tablet/phone. As an example, you could use an UA Apollo interface with 4 cue busses in combination with 4 tablets/phones allowing 4 musicians to control their cue mix individually. Features:
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+- Volume, Pan, Mute, Solo, Pre/Post of the Monitor, the CUE- and AUX-Mixes
+- Responsive design allows mixing also on tiny screens
+- Show only the channels you need via select channels
+- Reorder channels
+- Mix groups
+- Color coding
+- Lock to mix (e.g. allow access only to CUE 1)
+- Mute All button
+- Easily switch between servers
+- Low on CPU usage and uses GPU acceleration
+
+I use cuefinger in my studio since a few years now. Until now I couldn't find the time to publish it for others to use, but better late than never. Cuefinger runs in my studio on 3 low budget HP Stream 7 tablets with Linux Mint and I also use an old win10 tablet (32bit). They remotely control my cascaded Apollo Silver and Apollo 16 black. I also tested it with Apollo Solo. There is no iOS Version since I have no experience in writing for this platform.
+
+I hope you find this software useful, feel free to contact me. You can donate to value countless hours of work by buying my music.
+
+Cuefinger 1 is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.
 
 ---
 
@@ -36,6 +47,10 @@ https://github.com/raduvarga/UA-Midi-Control
 
 ---
 
-https://github.com/franqulator/cuefinger
+Donations
 
-Copyright © 2024 by Frank Brempel
+If you like and use Cuefinger you can donate by buying one of my songs on franqulator.de (via franqulator.bandcamp.com).
+
+---
+
+https://github.com/franqulator/cuefinger
