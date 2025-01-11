@@ -1,3 +1,13 @@
+--- v1.3.8 ---
+- Bugfix: missing redraw after renaming channel
+- Bugfix: wrong page after selecting channel/channel width in some situtations
+- Bugfix: unhide all channels also did unhide locked channels
+- Bugfix: cue/aux Buttons wouldn't be drawn after connecting in some situtations
+- Bugfix: show-hide-state of aux/monitor fader wouldn't be restored on reconnect
+- Update auf SDL 2.30.11
+- Setting timeout from 1 to 3 s
+- Fixed initial (only displayed) fader jump
+
 --- v1.3.7 ---
 - Bugfix: Monitor-Channel missing after reset channel order
 

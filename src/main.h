@@ -43,7 +43,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.7";
+const string APP_VERSION = "1.3.8";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -77,7 +77,7 @@ https://github.com/franqulator/cuefinger";
 
 #define UA_MAX_SERVER_LIST	3 //könnte mehr sein, wenn mir eine GUI-Lösung einfällt
 #define UA_TCP_PORT		"4710"
-#define SERVER_TEST_TIMEOUT			1000
+#define SERVER_TEST_TIMEOUT			3000
 
 #define UA_MAX_SERVER_LIST_SETTING	7 
 

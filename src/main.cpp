@@ -23,6 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <mutex>
 
 bool g_running;
+bool g_loading;
 
 mutex g_mutex_serverList;
 mutex g_mutex_uaDevices;
@@ -44,6 +45,7 @@ int g_userEventBeginNum = 0;
 #define EVENT_RESET_ORDER				13
 #define EVENT_DEVICE_ONLINE				14
 #define EVENT_UPDATE_CONNECT_BUTTONS	15
+#define EVENT_BROWSE_TO_CHANNEL			16
 
 GFXEngine *gfx = NULL;
 
@@ -304,6 +306,9 @@ int calculateChannelsPerPage() {
 }
 
 int maxPages(bool onlyVisible) {
+	if (g_loading)
+		return -1;
+
 	int maxPages = (getActiveChannelsCount(onlyVisible)) / g_channels_per_page;
 	if ((getActiveChannelsCount(onlyVisible) % g_channels_per_page) == 0) {
 		maxPages--;
@@ -312,6 +317,9 @@ int maxPages(bool onlyVisible) {
 }
 
 void updateMaxPages(bool onlyVisible) {
+	if (g_loading)
+		return;
+
 	int max_pages = maxPages(onlyVisible);
 	if (g_page >= max_pages) {
 		g_page = max_pages;
@@ -323,6 +331,9 @@ void updateMaxPages(bool onlyVisible) {
 }
 
 bool pageLeft() {
+	if (g_loading)
+		return false;
+
 	if (g_page > 0) {
 		g_page--;
 		pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
@@ -338,6 +349,9 @@ bool pageLeft() {
 }
 
 bool pageRight() {
+	if (g_loading)
+		return false;
+
 	if (g_page < maxPages(!g_btnSelectChannels->isHighlighted())) {
 		g_page++;
 		pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
@@ -352,7 +366,10 @@ bool pageRight() {
 	return false;
 }
 
-void updateLayout() {
+void updateLayout(bool force = false) {
+
+	if (g_loading && !force)
+		return;
 
 	g_channels_per_page = calculateChannelsPerPage();
 	
@@ -815,7 +832,7 @@ Touchpoint::Touchpoint() {
 
 Module::Module(const string &id) {
 	this->id = id;
-	this->level = 0.0;
+	this->level = NAN;
 	this->mute = false;
 	this->pan = 0.0;
 	this->pan2 = 0.0;
@@ -1278,16 +1295,19 @@ string Channel::getName() {
 void Channel::setName(const string &name) {
 	this->name = name;
 	this->updateProperties();
+	setRedrawWindow(true);
 }
 
 void Channel::setStereoname(const string &stereoname) {
 	this->stereoname = stereoname;
 	this->updateProperties();
+	setRedrawWindow(true);
 }
 
 void Channel::setStereo(bool stereo) {
 	this->stereo = stereo;
 	this->updateProperties();
+	setRedrawWindow(true);
 }
 
 void Channel::getColoredGfx(GFXSurface **gsLabel, GFXSurface** gsFader) {
@@ -1708,7 +1728,7 @@ bool getRedrawWindow()
 Uint32 timerCallbackSelectAllChannels(Uint32 interval, void* param) {
 	if (g_selectAllChannelsCountdown == 5) { // select all
 		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-			it->second->selected_to_show = true;
+			it->second->selected_to_show = !it->second->isOverriddenHide();
 		}
 	}
 	else if (g_selectAllChannelsCountdown == 1) { // select none
@@ -1717,7 +1737,7 @@ Uint32 timerCallbackSelectAllChannels(Uint32 interval, void* param) {
 		g_timerSelectAllChannels = 0;
 
 		for (unordered_map<string, Channel*>::iterator it = g_channelsById.begin(); it != g_channelsById.end(); ++it) {
-			it->second->selected_to_show = false;
+			it->second->selected_to_show = it->second->isOverriddenShow();
 		}
 
 		setRedrawWindow(true);
@@ -1963,7 +1983,6 @@ int SDLCALL getServerListThread(void *param)
 			}
 		}
 	}
-	
 	g_btnSimulation->setVisible(g_ua_serverList.empty());
 	setRedrawWindow(true);
 
@@ -2276,11 +2295,10 @@ void tcpClientProc(int msg, const string &data)
 									if (element["data"].get(result) == 0) {
 										channel->mute = result;
 										if (channel->type == AUX || channel->type == MASTER) {
-											if (channel->type == MASTER) {
-												setLoadingState(false);
+											if (!channel->active) {
+												channel->active = true;
+												pushEvent(EVENT_CHANNEL_STATE_CHANGED);
 											}
-											channel->active = true;
-											pushEvent(EVENT_CHANNEL_STATE_CHANGED);
 										}
 										setRedrawWindow(true);
 									}
@@ -2605,11 +2623,13 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 		drawScaleMark(x, y + o, -84, g_faderrail_height);
 
 		//tracker
-		stretch = Vector2D(g_fadertracker_width, g_fadertracker_height);
+		if (!isnan(mod->level)) {
+			stretch = Vector2D(g_fadertracker_width, g_fadertracker_height);
 
-		gfx->Draw(gsFader, x + (width - g_fadertracker_width) / 2.0f,
-			y + height - (float)toMeterScale(mod->level) * (height - g_fadertracker_height) - g_fadertracker_height, NULL,
-			GFX_NONE, 1.0f, 0, NULL, &stretch);
+			gfx->Draw(gsFader, x + (width - g_fadertracker_width) / 2.0f,
+				y + height - (float)toMeterScale(mod->level) * (height - g_fadertracker_height) - g_fadertracker_height, NULL,
+				GFX_NONE, 1.0f, 0, NULL, &stretch);
+		}
 
 		//Clip LED
 		gfx->DrawShape(GFX_RECTANGLE, METER_COLOR_BORDER, x + g_channel_width * 0.75f - 1.0f,
@@ -2817,7 +2837,7 @@ void browseToSelectedChannel(int index) {
 	if (g_btnSelectChannels->isHighlighted()) {
 		int i = index;
 		for (map<int, Channel*>::iterator it = g_channelsInOrder.begin(); it != g_channelsInOrder.end(); ++it) {
-			if (i < 0) {
+			if (i <= 0) {
 				break;
 			}
 			if (it->second->isVisible(true)) {
@@ -3132,7 +3152,6 @@ void draw() {
 	gfx->Update();
 }
 
-bool g_loading = false;
 void setLoadingState(bool loading) {
 	g_loading = loading;
 }
@@ -3940,8 +3959,8 @@ void onStateChanged_btnSelectChannels(Button *btn) {
 		if (!(btn->getState() & CHECKED)) {
 			g_btnReorderChannels->setCheck(false);
 			g_visibleChannelsCount = -1;
-			updateMaxPages(false);
 			browseToSelectedChannel(g_browseToChannel);
+			updateMaxPages(false);
 			g_browseToChannel = getMiddleSelectedChannel();
 			pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 		}
@@ -4000,8 +4019,8 @@ void onStateChanged_btnChannelWidth(Button* btn) {
 
 		updateLayout();
 		updateChannelWidthButton();
-		updateMaxPages(!g_btnSelectChannels->isHighlighted());
 		browseToSelectedChannel(g_browseToChannel);
+		updateMaxPages(!g_btnSelectChannels->isHighlighted());
 		pushEvent(EVENT_UPDATE_SUBSCRIPTIONS);
 	}
 }
@@ -4322,7 +4341,6 @@ void onStateChanged_btnSimulation(Button* btn) {
 				channel->setStereoname(names[n]);
 				channel->pan = -1.0;
 				channel->pan2 = 1.0;
-				id++;
 			}
 			else {
 				channel->setName(names[n]);
@@ -4340,10 +4358,17 @@ void onStateChanged_btnSimulation(Button* btn) {
 			}
 
 			g_channelsById.insert({ g_ua_devices.front()->id + ".input." + channel->id, channel });
-			g_channelsInOrder.insert({ n, channel });
+			g_channelsInOrder.insert({ id, channel });
 			id++;
-
 			g_ua_devices.front()->channelsTotal++;
+
+			if (channel->stereo) {
+				Channel* channel = new Channel(g_ua_devices.front(), to_string(id), INPUT);
+				g_channelsById.insert({ g_ua_devices.front()->id + ".input." + channel->id, channel });
+				g_channelsInOrder.insert({ id, channel });
+				id++;
+				g_ua_devices.front()->channelsTotal++;
+			}
 		}
 		for (int n = 0; n < 2; n++) {
 			Channel* channel = new Channel(g_ua_devices.front(), to_string(n), AUX);
@@ -5805,14 +5830,17 @@ int main(int argc, char* argv[]) {
 							UADevice* dev = new UADevice(*it);
 							if (dev) {
 								g_ua_devices.push_back(dev);
-								tcpClientSend("get /devices/" + dev->id + "/inputs");
 							}
 						}
-						g_mutex_uaDevices.unlock();
 						if (!g_ua_devices.empty()) {
 							tcpClientSend("get /devices/0/auxs");
 							tcpClientSend("get /devices/0/outputs");
 						}
+						for (auto it = g_ua_devices.begin(); it != g_ua_devices.end(); ++it) {
+							tcpClientSend("get /devices/" + (*it)->id + "/inputs");
+						}
+						g_mutex_uaDevices.unlock();
+
 						SAFE_DELETE(strDevices);
 						break;
 					}
@@ -5835,6 +5863,7 @@ int main(int argc, char* argv[]) {
 								Button* btn = addSendButton(name);
 								loadServerSettings(g_ua_server_connected, btn);
 							}
+							updateLayout(true);
 							setRedrawWindow(true);
 						}
 						SAFE_DELETE(cueBusCount);
@@ -5871,6 +5900,10 @@ int main(int argc, char* argv[]) {
 							}
 							if (dev == g_ua_devices.back()) {
 								loadServerSettings(g_ua_server_connected);
+								int* index = new int;
+								*index = g_browseToChannel;
+								pushEvent(EVENT_BROWSE_TO_CHANNEL, index);
+								setLoadingState(false);
 							}
 						}
 						SAFE_DELETE(devStr);
@@ -5936,6 +5969,13 @@ int main(int argc, char* argv[]) {
 						}
 						SAFE_DELETE(devStr);
 						SAFE_DELETE(pIds);
+						break;
+					}
+					case EVENT_BROWSE_TO_CHANNEL: {
+						int* index = (int*)e.user.data1;
+						g_browseToChannel = *index;
+						browseToSelectedChannel(g_browseToChannel);
+						SAFE_DELETE(index);
 						break;
 					}
 					case EVENT_CHANNEL_STATE_CHANGED:
