@@ -1,3 +1,6 @@
+--- v1.3.9 ---
+- Added 'Dim' button for monitor channel
+
 --- v1.3.8 ---
 - Bugfix: missing redraw after renaming channel
 - Bugfix: wrong page after selecting channel/channel width in some situtations

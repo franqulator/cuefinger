@@ -984,6 +984,7 @@ Channel::Channel(UADevice* device, const string &id, int type) : Module(id) {
 	this->device = device;
 	this->type = type;
 	this->solo = false;
+	this->dim = false;
 	this->post_fader = false;
 	if (this->type == AUX || this->type == MASTER) {
 		this->hidden = false;
@@ -1117,6 +1118,18 @@ bool Channel::isTouchOnPostFader(Vector2D* pos)
 		&& pos->getY() > y && pos->getY() < y + g_channel_btn_size);
 }
 
+bool Channel::isTouchOnDim(Vector2D* pos)
+{
+	if (this->type != MASTER)
+		return false;
+
+	float x = (g_channel_width / 2.0f - g_channel_btn_size) / 2.0f;
+	float y = g_fader_label_height + g_channel_pan_height;
+
+	return (pos->getX() > x && pos->getX() < x + g_channel_btn_size
+		&& pos->getY() > y && pos->getY() < y + g_channel_btn_size);
+}
+
 void Channel::changePan(double pan_change, bool absolute)
 {
 	double _pan = this->pan + pan_change;
@@ -1235,6 +1248,21 @@ void Channel::pressSolo(int state)
 		value = "false";
 
 	string msg = "set /devices/" + this->device->id + "/inputs/" + this->id + "/Solo/value/ " + value;
+	tcpClientSend(msg);
+}
+
+void Channel::pressDim(int state)
+{
+	if (state == SWITCH)
+		this->dim = !this->dim;
+	else
+		this->dim = (bool)state;
+
+	string value = "true";
+	if (!this->dim)
+		value = "false";
+
+	string msg = "set /devices/" + this->device->id + "/outputs/" + this->id + "/DimOn/value/ " + value;
 	tcpClientSend(msg);
 }
 
@@ -1442,6 +1470,13 @@ void Channel::updateSubscription(bool subscribe, int flags)
 		}
 	}
 
+	if ((flags & DIM) && ((bool)(this->subscriptions & DIM) != subscribeMix)) {
+		if (this->type == MASTER) {
+			tcpClientSend(root + "/DimOn/");
+			this->subscriptions ^= DIM;
+		}
+	}
+
 	if ((flags & PAN) && ((bool)(this->subscriptions & PAN) != subscribeMix)) {
 		if (this->type == INPUT) {
 			tcpClientSend(root + "/Pan/");
@@ -1533,7 +1568,7 @@ void updateSubscriptions() {
 				}
 				count++;
 			}
-			it->second->updateSubscription(subscribe, LEVEL | METER | PAN | SOLO | SEND_POST | (subscribe ? 0 : ALL_MIXES));
+			it->second->updateSubscription(subscribe, LEVEL | METER | PAN | SOLO | SEND_POST | DIM | (subscribe ? 0 : ALL_MIXES));
 		}
 
 		// dragged channel on reorder pageflip
@@ -2287,6 +2322,23 @@ void tcpClientProc(int msg, const string &data)
 									setRedrawWindow(true);
 								}
 							}
+							else if (path_parameter[4] == "DimOn")
+							{
+								if (path_parameter[5] == "value")
+								{
+									bool result;
+									if (element["data"].get(result) == 0) {
+										channel->dim = result;
+										if (channel->type == MASTER) {
+											if (!channel->active) {
+												channel->active = true;
+												pushEvent(EVENT_CHANNEL_STATE_CHANGED);
+											}
+										}
+										setRedrawWindow(true);
+									}
+								}
+								}
 							else if (path_parameter[4] == "Mute")
 							{
 								if (path_parameter[5] == "value")
@@ -2526,7 +2578,7 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 		//SOLO
 		if (g_btnMix->isHighlighted()) {
 			int btn_switch = 0;
-			if ((this->type == AUX && !this->post_fader) || (this->type != AUX && this->solo)) {
+			if ((this->type == AUX && !this->post_fader) || (this->type != AUX && this->solo) || (this->type == MASTER && this->dim)) {
 				btn_switch = 1;
 			}
 
@@ -2536,15 +2588,17 @@ void Channel::draw(float _x, float _y, float _width, float _height) {
 				gsBtn = g_gsButtonBlue[btn_switch];
 				txt = "PRE";
 			}
-
-			if (this->type != MASTER) {
-				stretch = Vector2D(g_channel_btn_size, g_channel_btn_size);
-				gfx->Draw(gsBtn, x + x_offset, y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
-
-				sz = gfx->GetTextBlockSize(g_fntChannelBtn, txt, GFX_CENTER);
-				gfx->Write(g_fntChannelBtn, x + x_offset + g_channel_btn_size / 2, y + (g_channel_btn_size - sz.getY()) / 2, txt, GFX_CENTER);
+			else if (this->type == MASTER) {
+				gsBtn = g_gsButtonYellow[btn_switch];
+				txt = "DIM";
 			}
-		}
+
+			stretch = Vector2D(g_channel_btn_size, g_channel_btn_size);
+			gfx->Draw(gsBtn, x + x_offset, y, NULL, GFX_NONE, 1.0, 0, NULL, &stretch);
+
+			sz = gfx->GetTextBlockSize(g_fntChannelBtn, txt, GFX_CENTER);
+			gfx->Write(g_fntChannelBtn, x + x_offset + g_channel_btn_size / 2, y + (g_channel_btn_size - sz.getY()) / 2, txt, GFX_CENTER);
+	}
 
 		//MUTE
 		int btn_switch = 0;
@@ -3485,6 +3539,23 @@ void onTouchDown(Vector2D *mouse_pt, SDL_TouchFingerEvent *touchinput)
 				else {
 					channel->pressPostFader();
 				}
+				setRedrawWindow(true);
+				g_touchpointChannels.insert(channel);
+			}
+		}
+		else if (channel->isTouchOnDim(&relative_pos_pt) && channel->type == MASTER)
+		{
+			if (g_selectedMixBus == "MIX") {
+				if (touchinput)
+				{
+					channel->touch_point.id = touchinput->touchId;
+					channel->touch_point.finger_id = touchinput->fingerId;
+				}
+				else
+					channel->touch_point.is_mouse = true;
+				channel->touch_point.action = TOUCH_ACTION_POST_FADER;
+
+				channel->pressDim();
 				setRedrawWindow(true);
 				g_touchpointChannels.insert(channel);
 			}

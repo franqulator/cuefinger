@@ -43,7 +43,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace simdjson;
 
-const string APP_VERSION = "1.3.8";
+const string APP_VERSION = "1.3.9";
 const string APP_NAME = "Cuefinger";
 const string WND_TITLE = APP_NAME + " " + APP_VERSION;
 const string INFO_TEXT = APP_NAME + " " + APP_VERSION + "\n\
@@ -133,7 +133,7 @@ https://github.com/franqulator/cuefinger";
 #define CHECK		1
 #define RADIO		2
 
-#define ALL				0b000111111111
+#define ALL				0b001111111111
 #define LEVEL			0b000000000001
 #define PAN				0b000000000010
 #define METER			0b000000000100
@@ -143,7 +143,8 @@ https://github.com/franqulator/cuefinger";
 #define NAME			0b000001000000
 #define STATE			0b000010000000
 #define STEREO			0b000100000000
-#define ALL_MIXES		0b001000000000
+#define DIM				0b001000000000
+#define ALL_MIXES		0b010000000000
 
 #define SAFE_DELETE(a) if( (a) != NULL ) delete (a); (a) = NULL;
 
@@ -296,6 +297,7 @@ public:
 	UADevice* device;
 	string properties;
 	bool solo;
+	bool dim;
 	bool post_fader;
 	unordered_map<string, Send*> sendsByName;
 	unordered_map<string, Send*> sendsById;
@@ -320,9 +322,11 @@ public:
 	bool isTouchOnMute(Vector2D *pos);
 	bool isTouchOnSolo(Vector2D *pos);
 	bool isTouchOnPostFader(Vector2D* pos);
+	bool isTouchOnDim(Vector2D* pos);
 	bool isTouchOnGroup1(Vector2D *pos);
 	bool isTouchOnGroup2(Vector2D *pos);
 	void pressSolo(int state = SWITCH);
+	void pressDim(int state = SWITCH);
 	void pressPostFader(int state = SWITCH);
 	bool isOverriddenShow();
 	bool isOverriddenHide();

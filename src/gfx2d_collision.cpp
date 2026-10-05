@@ -1,11 +1,11 @@
-//Version 5.0 - 2023-11-24
+//Version 5.1 (cuefinger) - 2025-02-03
 
 /*
 This file is part of Cuefinger 1
 
 Cuefinger 1 gives you the possibility to remote control Universal Audio's
 Console Application via Network (TCP).
-Copyright © 2024 Frank Brempel
+Copyright © 2025 Frank Brempel
 
 Cuefinger 1 is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -127,7 +127,9 @@ bool GFXEngine::CreateCollisionData(GFXSurface *gs, bool borderCheck)
 			for (int n = 0; n < gs->w * gs->h; n++)
 			{
 				unsigned char* p = (unsigned char*)&gs->bgra[n];
-				gs->collision_array[n] = (p[3] & 0x80); // alpha >= 128
+			//	gs->collision_array[n] = (p[3] & 0x80); // alpha >= 128
+
+				gs->collision_array[n] = (bool)p[3];
 
 				int x = n % gs->w;
 				int y = n / gs->w;
